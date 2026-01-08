@@ -418,6 +418,94 @@ install_vscode_extensions() {
     fi
 
     log_success "VS Code extensions installation completed"
+
+    # Configure VS Code user settings
+    configure_vscode_settings
+}
+
+configure_vscode_settings() {
+    log_info "4.4 Configuring VS Code user settings..."
+
+    local settings_dir="$HOME/.config/Code/User"
+    local settings_file="$settings_dir/settings.json"
+
+    # Create settings directory if it doesn't exist
+    mkdir -p "$settings_dir"
+
+    # Write settings file
+    cat > "$settings_file" << 'VSCODE_SETTINGS'
+{
+  "editor.defaultFormatter": "vscode.typescript-language-features",
+  "git.confirmSync": false,
+  "github.experimental.multipleAccounts": true,
+  "editor.unicodeHighlight.allowedCharacters": {
+    "​": true
+  },
+  "editor.codeActionsOnSave": {
+    "source.fixAll.eslint": "explicit",
+    "source.fixAll.stylelint": "never",
+    "source.fixAll.tslint": "explicit"
+  },
+  "css.validate": true,
+  "less.validate": false,
+  "scss.validate": true,
+  "security.workspace.trust.untrustedFiles": "open",
+  "[scss]": {
+    "editor.defaultFormatter": "vscode.css-language-features"
+  },
+  "[javascript]": {
+    "editor.defaultFormatter": "vscode.typescript-language-features"
+  },
+  "[html]": {
+    "editor.defaultFormatter": "vscode.html-language-features"
+  },
+  "editor.formatOnSave": true,
+  "[markdown]": {
+    "editor.rulers": [80]
+  },
+  "eslint.validate": ["javascript", "javascriptreact", "markdown", "typescript", "typescriptreact"],
+  "stylelint.validate": ["scss"],
+  "[typescript]": {
+    "editor.defaultFormatter": "vscode.typescript-language-features"
+  },
+  "[json]": {
+    "editor.defaultFormatter": "vscode.typescript-language-features"
+  },
+  "workbench.colorTheme": "Visual Studio Light",
+  "editor.fontSize": 13,
+  "editor.minimap.enabled": false,
+  "telemetry.telemetryLevel": "off",
+  "git.suggestSmartCommit": false,
+  "extensions.ignoreRecommendations": true,
+  "workbench.layoutControl.enabled": false,
+  "window.customTitleBarVisibility": "windowed",
+  "window.titleBarStyle": "custom",
+  "githubPullRequests.fileListLayout": "flat",
+  "workbench.editor.enablePreview": false,
+  "workbench.startupEditor": "none",
+  "editor.unicodeHighlight.ambiguousCharacters": false,
+  "workbench.editor.centeredLayoutAutoResize": false,
+  "githubPullRequests.pullBranch": "never",
+  "diffEditor.ignoreTrimWhitespace": false,
+  "diffEditor.hideUnchangedRegions.enabled": true,
+  "terminal.integrated.env.linux": {},
+  "git.openRepositoryInParentFolders": "never",
+  "gitblame.inlineMessageEnabled": true,
+  "githubPullRequests.createOnPublishBranch": "never",
+  "terminal.integrated.stickyScroll.enabled": false,
+  "claudeCode.selectedModel": "default",
+  "editor.stickyScroll.enabled": false,
+  "editor.stickyScroll.scrollWithEditor": false,
+  "workbench.tree.enableStickyScroll": false,
+  "workbench.settings.showAISearchToggle": false,
+  "chatgpt.cliExecutable": "",
+  "chat.disableAIFeatures": true,
+  "claudeCode.preferredLocation": "panel",
+  "gitblame.revsFile": []
+}
+VSCODE_SETTINGS
+
+    log_success "VS Code user settings configured"
 }
 
 #===============================================================================

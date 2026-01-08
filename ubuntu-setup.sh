@@ -8,6 +8,7 @@
 #   - CLI tools (Codex, Gemini CLI, Claude CLI)
 #   - Chrome, Cursor, VSCode with extensions
 #   - Python 3, RealVNC Connect
+#   - GNOME Shell Extensions
 #   - Firefox removal
 #===============================================================================
 
@@ -336,10 +337,64 @@ install_python() {
 }
 
 #===============================================================================
-# 6. RealVNC Connect Installation
+# 6. GNOME Shell Extensions
+#===============================================================================
+install_gnome_extensions() {
+    log_step "6. Installing GNOME Shell Extensions"
+
+    # Check if GNOME is installed
+    if ! command_exists gnome-shell; then
+        log_warning "GNOME Shell not detected, skipping extensions installation..."
+        return
+    fi
+
+    log_info "Installing GNOME Shell Extensions packages..."
+
+    # Install Extension Manager (modern way to manage extensions)
+    if package_installed gnome-shell-extension-manager; then
+        log_warning "Extension Manager already installed, skipping..."
+    else
+        sudo apt-get install -y gnome-shell-extension-manager 2>/dev/null || \
+        log_warning "Extension Manager not available in repositories"
+    fi
+
+    # Install GNOME Shell Extensions package (includes common extensions)
+    if package_installed gnome-shell-extensions; then
+        log_warning "GNOME Shell Extensions already installed, skipping..."
+    else
+        sudo apt-get install -y gnome-shell-extensions
+        log_success "GNOME Shell Extensions installed"
+    fi
+
+    # Install browser connector for extensions.gnome.org
+    if package_installed gnome-browser-connector; then
+        log_warning "GNOME Browser Connector already installed, skipping..."
+    else
+        sudo apt-get install -y gnome-browser-connector 2>/dev/null || \
+        sudo apt-get install -y chrome-gnome-shell 2>/dev/null || \
+        log_warning "Browser connector not available"
+    fi
+
+    # Install gnome-tweaks for additional customization
+    if package_installed gnome-tweaks; then
+        log_warning "GNOME Tweaks already installed, skipping..."
+    else
+        sudo apt-get install -y gnome-tweaks
+        log_success "GNOME Tweaks installed"
+    fi
+
+    log_success "GNOME Shell Extensions setup completed"
+    log_info "You can manage extensions via:"
+    echo "  - Extension Manager app"
+    echo "  - https://extensions.gnome.org (with browser)"
+    echo "  - gnome-tweaks"
+}
+
+#===============================================================================
+# 7. RealVNC Connect Installation
 #===============================================================================
 install_realvnc() {
-    log_step "6. Installing RealVNC Connect"
+    log_step "7. Installing RealVNC Connect"
 
     if package_installed realvnc-vnc-server || command_exists vncserver-x11; then
         log_warning "RealVNC already installed, skipping..."
@@ -369,10 +424,10 @@ install_realvnc() {
 }
 
 #===============================================================================
-# 7. CLI Login Commands
+# 8. CLI Login Commands
 #===============================================================================
 run_cli_logins() {
-    log_step "7. CLI Login Commands"
+    log_step "8. CLI Login Commands"
 
     log_info "Running CLI login commands..."
     log_info "Each CLI will open a browser for authentication."
@@ -414,10 +469,10 @@ run_cli_logins() {
 }
 
 #===============================================================================
-# 8. Firefox Removal
+# 9. Firefox Removal
 #===============================================================================
 remove_firefox() {
-    log_step "8. Removing Firefox"
+    log_step "9. Removing Firefox"
 
     if ! command_exists firefox && ! snap list firefox &>/dev/null 2>&1; then
         log_warning "Firefox not found, skipping removal..."
@@ -502,6 +557,9 @@ print_summary() {
     command_exists cursor && echo -e "  ${GREEN}✓${NC} Cursor IDE"
     command_exists code && echo -e "  ${GREEN}✓${NC} VS Code"
     command_exists python3 && echo -e "  ${GREEN}✓${NC} Python $(python3 --version 2>&1 | cut -d' ' -f2)"
+    package_installed gnome-shell-extensions && echo -e "  ${GREEN}✓${NC} GNOME Shell Extensions"
+    package_installed gnome-shell-extension-manager && echo -e "  ${GREEN}✓${NC} GNOME Extension Manager"
+    package_installed gnome-tweaks && echo -e "  ${GREEN}✓${NC} GNOME Tweaks"
     (package_installed realvnc-vnc-server || command_exists vncserver-x11) && echo -e "  ${GREEN}✓${NC} RealVNC Connect"
 
     echo ""
@@ -539,9 +597,10 @@ main() {
     install_cursor          # 3. Cursor IDE
     install_vscode          # 4. VS Code + Extensions
     install_python          # 5. Python 3
-    install_realvnc         # 6. RealVNC Connect
-    run_cli_logins          # 7. CLI Logins
-    remove_firefox          # 8. Firefox Removal
+    install_gnome_extensions # 6. GNOME Shell Extensions
+    install_realvnc         # 7. RealVNC Connect
+    run_cli_logins          # 8. CLI Logins
+    remove_firefox          # 9. Firefox Removal
 
     # Print summary
     print_summary

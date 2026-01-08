@@ -7,7 +7,7 @@
 #   - NVM, Node.js 22, Yarn
 #   - CLI tools (Codex, Gemini CLI, Claude CLI)
 #   - Chrome (apt), Cursor (deb), VSCode (apt) with extensions
-#   - Python 3, RealVNC Connect (deb), DBeaver CE (snap)
+#   - Python 3, RealVNC Connect (deb), DBeaver CE (apt)
 #   - GNOME Shell Extensions + Dash to Dock configuration
 #   - Firefox removal (snap/deb/flatpak detection)
 #===============================================================================
@@ -588,41 +588,31 @@ install_realvnc() {
 }
 
 #===============================================================================
-# 8. DBeaver CE Installation (via snap)
+# 8. DBeaver CE Installation (via apt repository)
 #===============================================================================
 install_dbeaver() {
     log_step "8. Installing DBeaver Community Edition"
 
-    if snap list dbeaver-ce &>/dev/null 2>&1 || command_exists dbeaver; then
+    if package_installed dbeaver-ce || command_exists dbeaver; then
         log_warning "DBeaver CE already installed, skipping..."
         return
     fi
 
-    log_info "Installing DBeaver CE via snap..."
+    log_info "Installing DBeaver CE via apt repository..."
 
-    if command_exists snap; then
-        if retry_snap_install dbeaver-ce; then
-            log_success "DBeaver CE installed successfully (via snap)"
-        else
-            log_warning "DBeaver CE installation skipped after 3 failed attempts"
-        fi
+    # Add DBeaver repository with retry
+    if ! retry_command "Adding DBeaver GPG key" sudo wget -O /usr/share/keyrings/dbeaver.gpg.key https://dbeaver.io/debs/dbeaver.gpg.key; then
+        log_warning "DBeaver installation skipped - could not add GPG key"
+        return
+    fi
+
+    echo "deb [signed-by=/usr/share/keyrings/dbeaver.gpg.key] https://dbeaver.io/debs/dbeaver-ce /" | sudo tee /etc/apt/sources.list.d/dbeaver.list > /dev/null
+
+    sudo apt-get update
+    if retry_apt_install dbeaver-ce; then
+        log_success "DBeaver CE installed successfully (via apt repository)"
     else
-        log_warning "Snap not available. Installing via apt repository..."
-
-        # Add DBeaver repository with retry
-        if ! retry_command "Adding DBeaver GPG key" sudo wget -O /usr/share/keyrings/dbeaver.gpg.key https://dbeaver.io/debs/dbeaver.gpg.key; then
-            log_warning "DBeaver installation skipped - could not add GPG key"
-            return
-        fi
-
-        echo "deb [signed-by=/usr/share/keyrings/dbeaver.gpg.key] https://dbeaver.io/debs/dbeaver-ce /" | sudo tee /etc/apt/sources.list.d/dbeaver.list > /dev/null
-
-        sudo apt-get update
-        if retry_apt_install dbeaver-ce; then
-            log_success "DBeaver CE installed successfully (via apt repository)"
-        else
-            log_warning "DBeaver CE installation skipped after 3 failed attempts"
-        fi
+        log_warning "DBeaver CE installation skipped after 3 failed attempts"
     fi
 }
 
@@ -814,7 +804,7 @@ print_summary() {
     package_installed gnome-tweaks && echo -e "  ${GREEN}✓${NC} GNOME Tweaks"
     dconf list /org/gnome/shell/extensions/dash-to-dock/ &>/dev/null && echo -e "  ${GREEN}✓${NC} Dash to Dock (configured)"
     (package_installed realvnc-connect || command_exists vncserver-x11) && echo -e "  ${GREEN}✓${NC} RealVNC Connect"
-    (snap list dbeaver-ce &>/dev/null 2>&1 || command_exists dbeaver) && echo -e "  ${GREEN}✓${NC} DBeaver CE"
+    (package_installed dbeaver-ce || command_exists dbeaver) && echo -e "  ${GREEN}✓${NC} DBeaver CE"
 
     echo ""
     echo -e "${YELLOW}Note: You may need to restart your terminal or run:${NC}"
@@ -853,7 +843,7 @@ main() {
     install_python          # 5. Python 3
     install_gnome_extensions # 6. GNOME Shell Extensions + Dash to Dock
     install_realvnc         # 7. RealVNC Connect (deb)
-    install_dbeaver         # 8. DBeaver CE (snap)
+    install_dbeaver         # 8. DBeaver CE (apt)
     run_cli_logins          # 9. CLI Logins
     remove_firefox          # 10. Firefox Removal
 

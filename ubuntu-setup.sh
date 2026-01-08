@@ -516,72 +516,55 @@ install_gnome_extensions() {
 }
 
 #===============================================================================
-# 6.1 Dash to Dock Configuration
+# 6.1 Dash to Dock Configuration (using dconf)
 #===============================================================================
 configure_dash_to_dock() {
     log_info "6.1 Configuring Dash to Dock settings..."
 
-    # Check if gsettings is available
-    if ! command_exists gsettings; then
-        log_warning "gsettings not available, skipping Dash to Dock configuration..."
+    # Check if dconf is available
+    if ! command_exists dconf; then
+        log_warning "dconf not available, skipping Dash to Dock configuration..."
         return
     fi
 
-    # Check if Dash to Dock schema exists
-    if ! gsettings list-schemas 2>/dev/null | grep -q "org.gnome.shell.extensions.dash-to-dock"; then
-        log_warning "Dash to Dock extension not installed or schema not found, skipping configuration..."
-        return
-    fi
+    log_info "Applying Dash to Dock settings via dconf..."
 
-    local DOCK_SCHEMA="org.gnome.shell.extensions.dash-to-dock"
-
-    log_info "Applying Dash to Dock settings..."
-
-    # Animation and theme
-    gsettings set $DOCK_SCHEMA animate-show-apps true
-    gsettings set $DOCK_SCHEMA apply-custom-theme false
-    gsettings set $DOCK_SCHEMA custom-theme-shrink true
-
-    # Appearance
-    gsettings set $DOCK_SCHEMA background-opacity 1.0
-    gsettings set $DOCK_SCHEMA border-radius 0
-    gsettings set $DOCK_SCHEMA max-alpha 0.80000000000000004
-    gsettings set $DOCK_SCHEMA transparency-mode 'FIXED'
-
-    # Position and size
-    gsettings set $DOCK_SCHEMA dock-position 'BOTTOM'
-    gsettings set $DOCK_SCHEMA dock-fixed true
-    gsettings set $DOCK_SCHEMA extend-height true
-    gsettings set $DOCK_SCHEMA height-fraction 0.90000000000000002
-    gsettings set $DOCK_SCHEMA floating-margin 0
-    gsettings set $DOCK_SCHEMA dash-max-icon-size 32
-    gsettings set $DOCK_SCHEMA icon-size-fixed true
-
-    # Behavior
-    gsettings set $DOCK_SCHEMA click-action 'minimize-or-previews'
-    gsettings set $DOCK_SCHEMA disable-overview-on-startup true
-    gsettings set $DOCK_SCHEMA hot-keys false
-    gsettings set $DOCK_SCHEMA intellihide-mode 'FOCUS_APPLICATION_WINDOWS'
-
-    # Multi-monitor
-    gsettings set $DOCK_SCHEMA multi-monitor true
-    gsettings set $DOCK_SCHEMA preferred-monitor -2
-    gsettings set $DOCK_SCHEMA preferred-monitor-by-connector 'Virtual1'
-    gsettings set $DOCK_SCHEMA isolate-monitors false
-    gsettings set $DOCK_SCHEMA isolate-workspaces false
-
-    # Icons and indicators
-    gsettings set $DOCK_SCHEMA running-indicator-style 'DASHES'
-    gsettings set $DOCK_SCHEMA show-apps-always-in-the-edge false
-    gsettings set $DOCK_SCHEMA show-apps-at-top true
-    gsettings set $DOCK_SCHEMA show-favorites true
-    gsettings set $DOCK_SCHEMA show-running true
-    gsettings set $DOCK_SCHEMA show-windows-preview true
-
-    # Mounts and trash
-    gsettings set $DOCK_SCHEMA show-mounts true
-    gsettings set $DOCK_SCHEMA show-mounts-only-mounted false
-    gsettings set $DOCK_SCHEMA show-trash false
+    # Create temporary config file and load with dconf
+    cat << 'DOCKCONF' | dconf load /org/gnome/shell/extensions/dash-to-dock/
+[/]
+animate-show-apps=true
+apply-custom-theme=false
+background-opacity=1.0
+border-radius=0
+click-action='minimize-or-previews'
+custom-theme-shrink=true
+dash-max-icon-size=32
+disable-overview-on-startup=true
+dock-fixed=true
+dock-position='BOTTOM'
+extend-height=true
+floating-margin=0
+height-fraction=0.90000000000000002
+hot-keys=false
+icon-size-fixed=true
+intellihide-mode='FOCUS_APPLICATION_WINDOWS'
+isolate-monitors=false
+isolate-workspaces=false
+max-alpha=0.80000000000000004
+multi-monitor=true
+preferred-monitor=-2
+preferred-monitor-by-connector='Virtual1'
+running-indicator-style='DASHES'
+show-apps-always-in-the-edge=false
+show-apps-at-top=true
+show-favorites=true
+show-mounts=true
+show-mounts-only-mounted=false
+show-running=true
+show-trash=false
+show-windows-preview=true
+transparency-mode='FIXED'
+DOCKCONF
 
     log_success "Dash to Dock configured successfully"
 }
@@ -836,7 +819,7 @@ print_summary() {
     package_installed gnome-shell-extensions && echo -e "  ${GREEN}✓${NC} GNOME Shell Extensions"
     package_installed gnome-shell-extension-manager && echo -e "  ${GREEN}✓${NC} GNOME Extension Manager"
     package_installed gnome-tweaks && echo -e "  ${GREEN}✓${NC} GNOME Tweaks"
-    gsettings list-schemas 2>/dev/null | grep -q "org.gnome.shell.extensions.dash-to-dock" && echo -e "  ${GREEN}✓${NC} Dash to Dock (configured)"
+    dconf list /org/gnome/shell/extensions/dash-to-dock/ &>/dev/null && echo -e "  ${GREEN}✓${NC} Dash to Dock (configured)"
     (snap list realvnc-vnc-server &>/dev/null 2>&1 || package_installed realvnc-vnc-server || command_exists vncserver-x11) && echo -e "  ${GREEN}✓${NC} RealVNC Connect"
     (snap list dbeaver-ce &>/dev/null 2>&1 || command_exists dbeaver) && echo -e "  ${GREEN}✓${NC} DBeaver CE"
 

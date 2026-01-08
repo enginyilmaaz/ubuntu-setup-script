@@ -405,12 +405,14 @@ install_vscode() {
 install_vscode_extensions() {
     log_info "4.1-4.3 Installing VS Code Extensions..."
 
-    # 4.1 Gemini Code Assist
-    log_info "4.1 Installing Gemini Code Assist extension..."
-    if code --list-extensions 2>/dev/null | grep -qi "google.geminicodeassist"; then
-        log_warning "Gemini Code Assist already installed, skipping..."
+    # 4.1 Gemini CLI Companion
+    log_info "4.1 Installing Gemini CLI Companion extension..."
+    if code --list-extensions 2>/dev/null | grep -qi "anthropics.gemini-cli-companion"; then
+        log_warning "Gemini CLI Companion already installed, skipping..."
     else
-        code --install-extension google.geminicodeassist --force 2>/dev/null || log_warning "Could not install Gemini extension"
+        code --install-extension anthropics.gemini-cli-companion --force 2>/dev/null || \
+        code --install-extension gemini.gemini-cli-companion --force 2>/dev/null || \
+        log_warning "Could not install Gemini CLI Companion extension"
     fi
 
     # 4.2 Claude Code (Claude Dev)

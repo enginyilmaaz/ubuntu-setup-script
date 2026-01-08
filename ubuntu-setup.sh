@@ -386,7 +386,7 @@ install_vscode() {
 }
 
 install_vscode_extensions() {
-    log_info "4.1-4.3 Installing VS Code Extensions..."
+    log_info "4.1-4.4 Installing VS Code Extensions..."
 
     # 4.1 Gemini CLI VS Code Companion
     log_info "4.1 Installing Gemini CLI VS Code Companion extension..."
@@ -417,6 +417,15 @@ install_vscode_extensions() {
         log_warning "Could not install ChatGPT extension"
     fi
 
+    # 4.4 Python Extension
+    log_info "4.4 Installing Python extension..."
+    if code --list-extensions 2>/dev/null | grep -qi "ms-python.python"; then
+        log_warning "Python extension already installed, skipping..."
+    else
+        code --install-extension ms-python.python --force 2>/dev/null || \
+        log_warning "Could not install Python extension"
+    fi
+
     log_success "VS Code extensions installation completed"
 
     # Configure VS Code user settings
@@ -424,7 +433,7 @@ install_vscode_extensions() {
 }
 
 configure_vscode_settings() {
-    log_info "4.4 Configuring VS Code user settings..."
+    log_info "4.5 Configuring VS Code user settings..."
 
     local settings_dir="$HOME/.config/Code/User"
     local settings_file="$settings_dir/settings.json"

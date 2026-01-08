@@ -6,8 +6,8 @@
 # Description: Automates Ubuntu post-installation setup including:
 #   - NVM, Node.js 22, Yarn
 #   - CLI tools (Codex, Gemini CLI, Claude CLI)
-#   - Chrome (apt), Cursor (AppImage), VSCode (apt) with extensions
-#   - Python 3, RealVNC Connect (snap), DBeaver CE (snap)
+#   - Chrome (apt), Cursor (deb), VSCode (apt) with extensions
+#   - Python 3, RealVNC Connect (deb), DBeaver CE (snap)
 #   - GNOME Shell Extensions + Dash to Dock configuration
 #   - Firefox removal (snap/deb/flatpak detection)
 #===============================================================================
@@ -318,52 +318,35 @@ install_chrome() {
 }
 
 #===============================================================================
-# 3. Cursor IDE Installation (AppImage with timeout)
+# 3. Cursor IDE Installation (via deb)
 #===============================================================================
 install_cursor() {
     log_step "3. Installing Cursor IDE"
 
-    if command_exists cursor || [ -f /opt/cursor/cursor.appimage ]; then
+    if command_exists cursor || dpkg -l cursor 2>/dev/null | grep -q "^ii"; then
         log_warning "Cursor already installed, skipping..."
         return
     fi
 
-    local temp_file="/tmp/cursor.appimage"
+    local temp_file="/tmp/cursor.deb"
     local download_url
 
-    # Cursor uses AppImage format
+    # Cursor deb packages
     if [ "$DEB_ARCH" == "amd64" ]; then
-        download_url="https://downloader.cursor.sh/linux/appImage/x64"
+        download_url="https://api2.cursor.sh/updates/download/golden/linux-x64-deb/cursor/latest"
     else
-        download_url="https://downloader.cursor.sh/linux/appImage/arm64"
+        download_url="https://api2.cursor.sh/updates/download/golden/linux-arm64-deb/cursor/latest"
     fi
 
     # Download with retry (3 attempts, 5s delay)
-    if ! retry_curl_download "$download_url" "$temp_file" "Downloading Cursor AppImage"; then
+    if ! retry_curl_download "$download_url" "$temp_file" "Downloading Cursor deb"; then
         log_warning "Cursor installation skipped after 3 failed attempts. Install manually from https://cursor.sh"
         return
     fi
 
     log_info "Installing Cursor..."
-    chmod +x "$temp_file"
-
-    # Move to /opt and create symlink
-    sudo mkdir -p /opt/cursor
-    sudo mv "$temp_file" /opt/cursor/cursor.appimage
-    sudo ln -sf /opt/cursor/cursor.appimage /usr/local/bin/cursor
-
-    # Create desktop entry
-    cat << EOF | sudo tee /usr/share/applications/cursor.desktop > /dev/null
-[Desktop Entry]
-Name=Cursor
-Comment=Cursor AI IDE
-Exec=/opt/cursor/cursor.appimage --no-sandbox %F
-Icon=cursor
-Terminal=false
-Type=Application
-Categories=Development;IDE;
-StartupWMClass=Cursor
-EOF
+    sudo DEBIAN_FRONTEND=noninteractive apt-get install -y "$temp_file"
+    rm -f "$temp_file"
 
     log_success "Cursor installed successfully"
 }
@@ -571,28 +554,37 @@ DOCKCONF
 }
 
 #===============================================================================
-# 7. RealVNC Connect Installation (via snap)
+# 7. RealVNC Connect Installation (via deb)
 #===============================================================================
 install_realvnc() {
     log_step "7. Installing RealVNC Connect"
 
-    if snap list realvnc-vnc-server &>/dev/null 2>&1 || package_installed realvnc-vnc-server || command_exists vncserver-x11; then
+    if package_installed realvnc-connect || command_exists vncserver-x11; then
         log_warning "RealVNC already installed, skipping..."
         return
     fi
 
-    log_info "Installing RealVNC Connect via snap..."
+    local temp_file="/tmp/realvnc-connect.deb"
+    local download_url
 
-    # Install via snap with retry (preferred method)
-    if command_exists snap; then
-        if retry_snap_install realvnc-vnc-server "--classic"; then
-            log_success "RealVNC Connect installed successfully (via snap)"
-        else
-            log_warning "RealVNC installation skipped after 3 failed attempts. Install manually from https://www.realvnc.com/en/connect/download/vnc/"
-        fi
+    # RealVNC Connect deb packages
+    if [ "$DEB_ARCH" == "amd64" ]; then
+        download_url="https://downloads.realvnc.com/download/file/realvnc-connect/RealVNC-Connect-8.2.2-Linux-x64.deb"
     else
-        log_warning "Snap not available. Please install RealVNC manually from https://www.realvnc.com/en/connect/download/vnc/"
+        download_url="https://downloads.realvnc.com/download/file/realvnc-connect/RealVNC-Connect-8.2.2-Linux-ARM64.deb"
     fi
+
+    # Download with retry (3 attempts, 5s delay)
+    if ! retry_curl_download "$download_url" "$temp_file" "Downloading RealVNC Connect deb"; then
+        log_warning "RealVNC installation skipped after 3 failed attempts. Install manually from https://www.realvnc.com/en/connect/download/vnc/"
+        return
+    fi
+
+    log_info "Installing RealVNC Connect..."
+    sudo DEBIAN_FRONTEND=noninteractive apt-get install -y "$temp_file"
+    rm -f "$temp_file"
+
+    log_success "RealVNC Connect installed successfully"
 }
 
 #===============================================================================
@@ -821,7 +813,7 @@ print_summary() {
     package_installed gnome-shell-extension-manager && echo -e "  ${GREEN}✓${NC} GNOME Extension Manager"
     package_installed gnome-tweaks && echo -e "  ${GREEN}✓${NC} GNOME Tweaks"
     dconf list /org/gnome/shell/extensions/dash-to-dock/ &>/dev/null && echo -e "  ${GREEN}✓${NC} Dash to Dock (configured)"
-    (snap list realvnc-vnc-server &>/dev/null 2>&1 || package_installed realvnc-vnc-server || command_exists vncserver-x11) && echo -e "  ${GREEN}✓${NC} RealVNC Connect"
+    (package_installed realvnc-connect || command_exists vncserver-x11) && echo -e "  ${GREEN}✓${NC} RealVNC Connect"
     (snap list dbeaver-ce &>/dev/null 2>&1 || command_exists dbeaver) && echo -e "  ${GREEN}✓${NC} DBeaver CE"
 
     echo ""
@@ -856,11 +848,11 @@ main() {
     # Run installations
     install_nvm_nodejs      # 1. NVM, Node.js, Yarn, CLI tools
     install_chrome          # 2. Google Chrome (apt repo)
-    install_cursor          # 3. Cursor IDE (AppImage)
+    install_cursor          # 3. Cursor IDE (deb)
     install_vscode          # 4. VS Code + Extensions (apt repo)
     install_python          # 5. Python 3
     install_gnome_extensions # 6. GNOME Shell Extensions + Dash to Dock
-    install_realvnc         # 7. RealVNC Connect (snap)
+    install_realvnc         # 7. RealVNC Connect (deb)
     install_dbeaver         # 8. DBeaver CE (snap)
     run_cli_logins          # 9. CLI Logins
     remove_firefox          # 10. Firefox Removal

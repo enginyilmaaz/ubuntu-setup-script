@@ -214,24 +214,56 @@ install_chrome() {
 }
 
 #===============================================================================
-# 3. Cursor IDE Installation
+# 3. Cursor IDE Installation (AppImage with timeout)
 #===============================================================================
 install_cursor() {
     log_step "3. Installing Cursor IDE"
 
-    if command_exists cursor; then
+    if command_exists cursor || [ -f /opt/cursor/cursor.appimage ]; then
         log_warning "Cursor already installed, skipping..."
         return
     fi
 
-    log_info "Downloading Cursor..."
+    log_info "Downloading Cursor AppImage (this may take a while)..."
     local temp_file="/tmp/cursor.appimage"
+    local download_url
 
     # Cursor uses AppImage format
     if [ "$DEB_ARCH" == "amd64" ]; then
-        download_file "https://downloader.cursor.sh/linux/appImage/x64" "$temp_file"
+        download_url="https://downloader.cursor.sh/linux/appImage/x64"
     else
-        download_file "https://downloader.cursor.sh/linux/appImage/arm64" "$temp_file"
+        download_url="https://downloader.cursor.sh/linux/appImage/arm64"
+    fi
+
+    # Download with timeout and retry
+    local max_attempts=2
+    local attempt=1
+
+    while [ $attempt -le $max_attempts ]; do
+        log_info "Download attempt $attempt of $max_attempts..."
+
+        if curl -L --progress-bar --connect-timeout 30 --max-time 300 -o "$temp_file" "$download_url"; then
+            # Verify file was downloaded and has content
+            if [ -s "$temp_file" ]; then
+                log_success "Download completed"
+                break
+            fi
+        fi
+
+        log_warning "Download attempt $attempt failed"
+        rm -f "$temp_file"
+        ((attempt++))
+
+        if [ $attempt -le $max_attempts ]; then
+            log_info "Retrying in 5 seconds..."
+            sleep 5
+        fi
+    done
+
+    # Check if download succeeded
+    if [ ! -s "$temp_file" ]; then
+        log_warning "Could not download Cursor. You can install it manually from https://cursor.sh"
+        return
     fi
 
     log_info "Installing Cursor..."
@@ -243,7 +275,7 @@ install_cursor() {
     sudo ln -sf /opt/cursor/cursor.appimage /usr/local/bin/cursor
 
     # Create desktop entry
-    cat << EOF | sudo tee /usr/share/applications/cursor.desktop
+    cat << EOF | sudo tee /usr/share/applications/cursor.desktop > /dev/null
 [Desktop Entry]
 Name=Cursor
 Comment=Cursor AI IDE

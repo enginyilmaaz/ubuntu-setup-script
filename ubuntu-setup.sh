@@ -405,13 +405,12 @@ install_vscode() {
 install_vscode_extensions() {
     log_info "4.1-4.3 Installing VS Code Extensions..."
 
-    # 4.1 Gemini CLI Companion
-    log_info "4.1 Installing Gemini CLI Companion extension..."
-    if code --list-extensions 2>/dev/null | grep -qi "anthropics.gemini-cli-companion"; then
+    # 4.1 Gemini CLI VS Code Companion
+    log_info "4.1 Installing Gemini CLI VS Code Companion extension..."
+    if code --list-extensions 2>/dev/null | grep -qi "Google.gemini-cli-vscode-ide-companion"; then
         log_warning "Gemini CLI Companion already installed, skipping..."
     else
-        code --install-extension anthropics.gemini-cli-companion --force 2>/dev/null || \
-        code --install-extension gemini.gemini-cli-companion --force 2>/dev/null || \
+        code --install-extension Google.gemini-cli-vscode-ide-companion --force 2>/dev/null || \
         log_warning "Could not install Gemini CLI Companion extension"
     fi
 
@@ -619,12 +618,12 @@ install_dbeaver() {
         log_warning "Snap not available. Installing via apt repository..."
 
         # Add DBeaver repository with retry
-        if ! retry_command "Adding DBeaver GPG key" bash -c 'curl -fsSL https://dbeaver.io/debs/dbeaver.gpg.key | sudo gpg --dearmor -o /usr/share/keyrings/dbeaver.gpg'; then
+        if ! retry_command "Adding DBeaver GPG key" sudo wget -O /usr/share/keyrings/dbeaver.gpg.key https://dbeaver.io/debs/dbeaver.gpg.key; then
             log_warning "DBeaver installation skipped - could not add GPG key"
             return
         fi
 
-        echo "deb [signed-by=/usr/share/keyrings/dbeaver.gpg] https://dbeaver.io/debs/dbeaver-ce /" | sudo tee /etc/apt/sources.list.d/dbeaver.list > /dev/null
+        echo "deb [signed-by=/usr/share/keyrings/dbeaver.gpg.key] https://dbeaver.io/debs/dbeaver-ce /" | sudo tee /etc/apt/sources.list.d/dbeaver.list > /dev/null
 
         sudo apt-get update
         if retry_apt_install dbeaver-ce; then

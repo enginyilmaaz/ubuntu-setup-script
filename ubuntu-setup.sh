@@ -7,7 +7,7 @@
 #   - NVM, Node.js 22, Yarn
 #   - CLI tools (Codex, Gemini CLI, Claude CLI)
 #   - Chrome (apt), Cursor (deb), VSCode (apt) with extensions
-#   - Python 3, RealVNC Connect (deb), DBeaver CE (apt)
+#   - Python 3, RealVNC Connect (deb), DBeaver CE (apt), VLC (apt)
 #   - GNOME Shell Extensions + Dash to Dock configuration
 #   - Firefox removal (snap/deb/flatpak detection)
 #===============================================================================
@@ -714,10 +714,29 @@ install_dbeaver() {
 }
 
 #===============================================================================
-# 9. CLI Login Commands
+# 9. VLC Media Player Installation (via apt)
+#===============================================================================
+install_vlc() {
+    log_step "9. Installing VLC Media Player"
+
+    if command_exists vlc; then
+        log_warning "VLC already installed, skipping..."
+        return
+    fi
+
+    log_info "Installing VLC via apt..."
+    if retry_apt_install vlc; then
+        log_success "VLC Media Player installed successfully"
+    else
+        log_warning "VLC installation skipped after 3 failed attempts"
+    fi
+}
+
+#===============================================================================
+# 10. CLI Login Commands
 #===============================================================================
 run_cli_logins() {
-    log_step "9. CLI Login Commands"
+    log_step "10. CLI Login Commands"
 
     log_info "Running CLI login commands..."
     log_info "Each CLI will open a browser for authentication."
@@ -759,10 +778,10 @@ run_cli_logins() {
 }
 
 #===============================================================================
-# 10. Firefox Removal (detects snap, deb, flatpak)
+# 11. Firefox Removal (detects snap, deb, flatpak)
 #===============================================================================
 remove_firefox() {
-    log_step "10. Removing Firefox"
+    log_step "11. Removing Firefox"
 
     local firefox_found=false
     local firefox_snap=false
@@ -902,6 +921,7 @@ print_summary() {
     dconf list /org/gnome/shell/extensions/dash-to-dock/ &>/dev/null && echo -e "  ${GREEN}✓${NC} Dash to Dock (configured)"
     (package_installed realvnc-connect || command_exists vncserver-x11) && echo -e "  ${GREEN}✓${NC} RealVNC Connect"
     (package_installed dbeaver-ce || command_exists dbeaver) && echo -e "  ${GREEN}✓${NC} DBeaver CE"
+    command_exists vlc && echo -e "  ${GREEN}✓${NC} VLC Media Player"
 
     echo ""
     echo -e "${YELLOW}Note: You may need to restart your terminal or run:${NC}"
@@ -941,8 +961,9 @@ main() {
     install_gnome_extensions # 6. GNOME Shell Extensions + Dash to Dock
     install_realvnc         # 7. RealVNC Connect (deb)
     install_dbeaver         # 8. DBeaver CE (apt)
-    run_cli_logins          # 9. CLI Logins
-    remove_firefox          # 10. Firefox Removal
+    install_vlc             # 9. VLC Media Player (apt)
+    run_cli_logins          # 10. CLI Logins
+    remove_firefox          # 11. Firefox Removal
 
     # Print summary
     print_summary

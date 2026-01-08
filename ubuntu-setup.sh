@@ -8,7 +8,7 @@
 #   - CLI tools (Codex, Gemini CLI, Claude CLI)
 #   - Chrome, Cursor, VSCode with extensions
 #   - Python 3, RealVNC Connect
-#   - GNOME Shell Extensions
+#   - GNOME Shell Extensions + Dash to Dock configuration
 #   - Firefox removal
 #===============================================================================
 
@@ -388,6 +388,80 @@ install_gnome_extensions() {
     echo "  - Extension Manager app"
     echo "  - https://extensions.gnome.org (with browser)"
     echo "  - gnome-tweaks"
+
+    # Configure Dash to Dock settings
+    configure_dash_to_dock
+}
+
+#===============================================================================
+# 6.1 Dash to Dock Configuration
+#===============================================================================
+configure_dash_to_dock() {
+    log_info "6.1 Configuring Dash to Dock settings..."
+
+    # Check if gsettings is available
+    if ! command_exists gsettings; then
+        log_warning "gsettings not available, skipping Dash to Dock configuration..."
+        return
+    fi
+
+    # Check if Dash to Dock schema exists
+    if ! gsettings list-schemas 2>/dev/null | grep -q "org.gnome.shell.extensions.dash-to-dock"; then
+        log_warning "Dash to Dock extension not installed or schema not found, skipping configuration..."
+        return
+    fi
+
+    local DOCK_SCHEMA="org.gnome.shell.extensions.dash-to-dock"
+
+    log_info "Applying Dash to Dock settings..."
+
+    # Animation and theme
+    gsettings set $DOCK_SCHEMA animate-show-apps true
+    gsettings set $DOCK_SCHEMA apply-custom-theme false
+    gsettings set $DOCK_SCHEMA custom-theme-shrink true
+
+    # Appearance
+    gsettings set $DOCK_SCHEMA background-opacity 1.0
+    gsettings set $DOCK_SCHEMA border-radius 0
+    gsettings set $DOCK_SCHEMA max-alpha 0.80000000000000004
+    gsettings set $DOCK_SCHEMA transparency-mode 'FIXED'
+
+    # Position and size
+    gsettings set $DOCK_SCHEMA dock-position 'BOTTOM'
+    gsettings set $DOCK_SCHEMA dock-fixed true
+    gsettings set $DOCK_SCHEMA extend-height true
+    gsettings set $DOCK_SCHEMA height-fraction 0.90000000000000002
+    gsettings set $DOCK_SCHEMA floating-margin 0
+    gsettings set $DOCK_SCHEMA dash-max-icon-size 32
+    gsettings set $DOCK_SCHEMA icon-size-fixed true
+
+    # Behavior
+    gsettings set $DOCK_SCHEMA click-action 'minimize-or-previews'
+    gsettings set $DOCK_SCHEMA disable-overview-on-startup true
+    gsettings set $DOCK_SCHEMA hot-keys false
+    gsettings set $DOCK_SCHEMA intellihide-mode 'FOCUS_APPLICATION_WINDOWS'
+
+    # Multi-monitor
+    gsettings set $DOCK_SCHEMA multi-monitor true
+    gsettings set $DOCK_SCHEMA preferred-monitor -2
+    gsettings set $DOCK_SCHEMA preferred-monitor-by-connector 'Virtual1'
+    gsettings set $DOCK_SCHEMA isolate-monitors false
+    gsettings set $DOCK_SCHEMA isolate-workspaces false
+
+    # Icons and indicators
+    gsettings set $DOCK_SCHEMA running-indicator-style 'DASHES'
+    gsettings set $DOCK_SCHEMA show-apps-always-in-the-edge false
+    gsettings set $DOCK_SCHEMA show-apps-at-top true
+    gsettings set $DOCK_SCHEMA show-favorites true
+    gsettings set $DOCK_SCHEMA show-running true
+    gsettings set $DOCK_SCHEMA show-windows-preview true
+
+    # Mounts and trash
+    gsettings set $DOCK_SCHEMA show-mounts true
+    gsettings set $DOCK_SCHEMA show-mounts-only-mounted false
+    gsettings set $DOCK_SCHEMA show-trash false
+
+    log_success "Dash to Dock configured successfully"
 }
 
 #===============================================================================
@@ -560,6 +634,7 @@ print_summary() {
     package_installed gnome-shell-extensions && echo -e "  ${GREEN}✓${NC} GNOME Shell Extensions"
     package_installed gnome-shell-extension-manager && echo -e "  ${GREEN}✓${NC} GNOME Extension Manager"
     package_installed gnome-tweaks && echo -e "  ${GREEN}✓${NC} GNOME Tweaks"
+    gsettings list-schemas 2>/dev/null | grep -q "org.gnome.shell.extensions.dash-to-dock" && echo -e "  ${GREEN}✓${NC} Dash to Dock (configured)"
     (package_installed realvnc-vnc-server || command_exists vncserver-x11) && echo -e "  ${GREEN}✓${NC} RealVNC Connect"
 
     echo ""

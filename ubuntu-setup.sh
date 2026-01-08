@@ -6,10 +6,10 @@
 # Description: Automates Ubuntu post-installation setup including:
 #   - NVM, Node.js 22, Yarn
 #   - CLI tools (Codex, Gemini CLI, Claude CLI)
-#   - Chrome, Cursor, VSCode with extensions
-#   - Python 3, RealVNC Connect
+#   - Chrome (apt), Cursor (AppImage), VSCode (apt) with extensions
+#   - Python 3, RealVNC Connect (snap), DBeaver CE (snap)
 #   - GNOME Shell Extensions + Dash to Dock configuration
-#   - Firefox removal
+#   - Firefox removal (snap/deb/flatpak detection)
 #===============================================================================
 
 set -e
@@ -188,7 +188,7 @@ install_nvm_nodejs() {
 }
 
 #===============================================================================
-# 2. Google Chrome Installation
+# 2. Google Chrome Installation (via apt repository)
 #===============================================================================
 install_chrome() {
     log_step "2. Installing Google Chrome"
@@ -198,16 +198,19 @@ install_chrome() {
         return
     fi
 
-    log_info "Downloading Google Chrome..."
-    local temp_deb="/tmp/google-chrome.deb"
+    log_info "Adding Google Chrome repository..."
 
-    download_file "https://dl.google.com/linux/direct/google-chrome-stable_current_${DEB_ARCH}.deb" "$temp_deb"
+    # Add Google's signing key
+    curl -fsSL https://dl.google.com/linux/linux_signing_key.pub | sudo gpg --dearmor -o /usr/share/keyrings/google-chrome.gpg
 
-    log_info "Installing Google Chrome..."
-    sudo DEBIAN_FRONTEND=noninteractive apt-get install -y "$temp_deb"
+    # Add repository
+    echo "deb [arch=${DEB_ARCH} signed-by=/usr/share/keyrings/google-chrome.gpg] http://dl.google.com/linux/chrome/deb/ stable main" | sudo tee /etc/apt/sources.list.d/google-chrome.list > /dev/null
 
-    rm -f "$temp_deb"
-    log_success "Google Chrome installed successfully"
+    # Update and install
+    sudo apt-get update
+    sudo apt-get install -y google-chrome-stable
+
+    log_success "Google Chrome installed successfully (via apt repository)"
 }
 
 #===============================================================================
@@ -256,7 +259,7 @@ EOF
 }
 
 #===============================================================================
-# 4. Visual Studio Code Installation
+# 4. Visual Studio Code Installation (via apt repository)
 #===============================================================================
 install_vscode() {
     log_step "4. Installing Visual Studio Code"
@@ -264,16 +267,19 @@ install_vscode() {
     if command_exists code; then
         log_warning "VS Code already installed, skipping installation..."
     else
-        log_info "Downloading Visual Studio Code..."
-        local temp_deb="/tmp/vscode.deb"
+        log_info "Adding Microsoft VS Code repository..."
 
-        download_file "https://code.visualstudio.com/sha/download?build=stable&os=linux-deb-${DEB_ARCH}" "$temp_deb"
+        # Add Microsoft's signing key
+        curl -fsSL https://packages.microsoft.com/keys/microsoft.asc | sudo gpg --dearmor -o /usr/share/keyrings/microsoft.gpg
 
-        log_info "Installing VS Code..."
-        sudo DEBIAN_FRONTEND=noninteractive apt-get install -y "$temp_deb"
+        # Add repository
+        echo "deb [arch=${DEB_ARCH} signed-by=/usr/share/keyrings/microsoft.gpg] https://packages.microsoft.com/repos/code stable main" | sudo tee /etc/apt/sources.list.d/vscode.list > /dev/null
 
-        rm -f "$temp_deb"
-        log_success "VS Code installed successfully"
+        # Update and install
+        sudo apt-get update
+        sudo apt-get install -y code
+
+        log_success "VS Code installed successfully (via apt repository)"
     fi
 
     # Install extensions
@@ -465,43 +471,67 @@ configure_dash_to_dock() {
 }
 
 #===============================================================================
-# 7. RealVNC Connect Installation
+# 7. RealVNC Connect Installation (via snap)
 #===============================================================================
 install_realvnc() {
     log_step "7. Installing RealVNC Connect"
 
-    if package_installed realvnc-vnc-server || command_exists vncserver-x11; then
+    if snap list realvnc-vnc-server &>/dev/null 2>&1 || package_installed realvnc-vnc-server || command_exists vncserver-x11; then
         log_warning "RealVNC already installed, skipping..."
         return
     fi
 
-    log_info "Downloading RealVNC Connect..."
-    local temp_deb="/tmp/realvnc.deb"
+    log_info "Installing RealVNC Connect via snap..."
 
-    # RealVNC download URL
-    if [ "$DEB_ARCH" == "amd64" ]; then
-        download_file "https://downloads.realvnc.com/download/file/vnc.files/VNC-Server-7.12.1-Linux-x64.deb" "$temp_deb" || \
-        download_file "https://www.realvnc.com/download/file/vnc.files/VNC-Server-7.12.1-Linux-x64.deb" "$temp_deb"
+    # Install via snap (preferred method)
+    if command_exists snap; then
+        sudo snap install realvnc-vnc-server --classic || {
+            log_warning "Snap installation failed, trying alternative..."
+            # Fallback: try apt if available
+            sudo apt-get install -y realvnc-vnc-server 2>/dev/null || \
+            log_warning "Could not install RealVNC. Please install manually from https://www.realvnc.com/en/connect/download/vnc/"
+            return
+        }
+        log_success "RealVNC Connect installed successfully (via snap)"
     else
-        download_file "https://downloads.realvnc.com/download/file/vnc.files/VNC-Server-7.12.1-Linux-ARM64.deb" "$temp_deb" || \
-        download_file "https://www.realvnc.com/download/file/vnc.files/VNC-Server-7.12.1-Linux-ARM64.deb" "$temp_deb"
-    fi
-
-    if [ -f "$temp_deb" ]; then
-        log_info "Installing RealVNC Connect..."
-        sudo DEBIAN_FRONTEND=noninteractive apt-get install -y "$temp_deb"
-        rm -f "$temp_deb"
-        log_success "RealVNC Connect installed successfully"
-    else
-        log_warning "Could not download RealVNC. Please install manually from https://www.realvnc.com/en/connect/download/vnc/"
+        log_warning "Snap not available. Please install RealVNC manually from https://www.realvnc.com/en/connect/download/vnc/"
     fi
 }
 
 #===============================================================================
-# 8. CLI Login Commands
+# 8. DBeaver CE Installation (via snap)
+#===============================================================================
+install_dbeaver() {
+    log_step "8. Installing DBeaver Community Edition"
+
+    if snap list dbeaver-ce &>/dev/null 2>&1 || command_exists dbeaver; then
+        log_warning "DBeaver CE already installed, skipping..."
+        return
+    fi
+
+    log_info "Installing DBeaver CE via snap..."
+
+    if command_exists snap; then
+        sudo snap install dbeaver-ce
+        log_success "DBeaver CE installed successfully (via snap)"
+    else
+        log_warning "Snap not available. Installing via apt repository..."
+
+        # Add DBeaver repository
+        curl -fsSL https://dbeaver.io/debs/dbeaver.gpg.key | sudo gpg --dearmor -o /usr/share/keyrings/dbeaver.gpg
+        echo "deb [signed-by=/usr/share/keyrings/dbeaver.gpg] https://dbeaver.io/debs/dbeaver-ce /" | sudo tee /etc/apt/sources.list.d/dbeaver.list > /dev/null
+
+        sudo apt-get update
+        sudo apt-get install -y dbeaver-ce
+        log_success "DBeaver CE installed successfully (via apt repository)"
+    fi
+}
+
+#===============================================================================
+# 9. CLI Login Commands
 #===============================================================================
 run_cli_logins() {
-    log_step "8. CLI Login Commands"
+    log_step "9. CLI Login Commands"
 
     log_info "Running CLI login commands..."
     log_info "Each CLI will open a browser for authentication."
@@ -543,12 +573,47 @@ run_cli_logins() {
 }
 
 #===============================================================================
-# 9. Firefox Removal
+# 10. Firefox Removal (detects snap, deb, flatpak)
 #===============================================================================
 remove_firefox() {
-    log_step "9. Removing Firefox"
+    log_step "10. Removing Firefox"
 
-    if ! command_exists firefox && ! snap list firefox &>/dev/null 2>&1; then
+    local firefox_found=false
+    local firefox_snap=false
+    local firefox_deb=false
+    local firefox_flatpak=false
+
+    # Detect Firefox installation type
+    log_info "Detecting Firefox installation..."
+
+    # Check snap
+    if snap list firefox &>/dev/null 2>&1; then
+        firefox_snap=true
+        firefox_found=true
+        log_info "  Found: Firefox (snap)"
+    fi
+
+    # Check deb/apt
+    if dpkg -l firefox 2>/dev/null | grep -q "^ii"; then
+        firefox_deb=true
+        firefox_found=true
+        log_info "  Found: Firefox (deb/apt)"
+    fi
+
+    # Check flatpak
+    if command_exists flatpak && flatpak list 2>/dev/null | grep -qi firefox; then
+        firefox_flatpak=true
+        firefox_found=true
+        log_info "  Found: Firefox (flatpak)"
+    fi
+
+    # Check if firefox command exists but no package found
+    if ! $firefox_found && command_exists firefox; then
+        firefox_found=true
+        log_info "  Found: Firefox (unknown source)"
+    fi
+
+    if ! $firefox_found; then
         log_warning "Firefox not found, skipping removal..."
         return
     fi
@@ -560,19 +625,33 @@ remove_firefox() {
         log_info "Removing Firefox..."
 
         # Remove snap version
-        if snap list firefox &>/dev/null 2>&1; then
-            sudo snap remove firefox
+        if $firefox_snap; then
+            log_info "  Removing Firefox snap..."
+            sudo snap remove --purge firefox
         fi
 
-        # Remove apt version
-        if dpkg -l firefox &>/dev/null 2>&1; then
+        # Remove deb/apt version
+        if $firefox_deb; then
+            log_info "  Removing Firefox deb..."
             sudo apt-get remove -y firefox
+            sudo apt-get purge -y firefox
             sudo apt-get autoremove -y
         fi
 
         # Remove flatpak version
-        if flatpak list 2>/dev/null | grep -qi firefox; then
+        if $firefox_flatpak; then
+            log_info "  Removing Firefox flatpak..."
             flatpak uninstall -y org.mozilla.firefox
+        fi
+
+        # Clean up Firefox user data (optional)
+        if [ -d "$HOME/.mozilla/firefox" ]; then
+            read -p "Do you want to remove Firefox user data too? (y/n): " -n 1 -r
+            echo ""
+            if [[ $REPLY =~ ^[Yy]$ ]]; then
+                rm -rf "$HOME/.mozilla/firefox"
+                log_info "  Firefox user data removed"
+            fi
         fi
 
         log_success "Firefox removed successfully"
@@ -635,7 +714,8 @@ print_summary() {
     package_installed gnome-shell-extension-manager && echo -e "  ${GREEN}✓${NC} GNOME Extension Manager"
     package_installed gnome-tweaks && echo -e "  ${GREEN}✓${NC} GNOME Tweaks"
     gsettings list-schemas 2>/dev/null | grep -q "org.gnome.shell.extensions.dash-to-dock" && echo -e "  ${GREEN}✓${NC} Dash to Dock (configured)"
-    (package_installed realvnc-vnc-server || command_exists vncserver-x11) && echo -e "  ${GREEN}✓${NC} RealVNC Connect"
+    (snap list realvnc-vnc-server &>/dev/null 2>&1 || package_installed realvnc-vnc-server || command_exists vncserver-x11) && echo -e "  ${GREEN}✓${NC} RealVNC Connect"
+    (snap list dbeaver-ce &>/dev/null 2>&1 || command_exists dbeaver) && echo -e "  ${GREEN}✓${NC} DBeaver CE"
 
     echo ""
     echo -e "${YELLOW}Note: You may need to restart your terminal or run:${NC}"
@@ -668,14 +748,15 @@ main() {
 
     # Run installations
     install_nvm_nodejs      # 1. NVM, Node.js, Yarn, CLI tools
-    install_chrome          # 2. Google Chrome
-    install_cursor          # 3. Cursor IDE
-    install_vscode          # 4. VS Code + Extensions
+    install_chrome          # 2. Google Chrome (apt repo)
+    install_cursor          # 3. Cursor IDE (AppImage)
+    install_vscode          # 4. VS Code + Extensions (apt repo)
     install_python          # 5. Python 3
-    install_gnome_extensions # 6. GNOME Shell Extensions
-    install_realvnc         # 7. RealVNC Connect
-    run_cli_logins          # 8. CLI Logins
-    remove_firefox          # 9. Firefox Removal
+    install_gnome_extensions # 6. GNOME Shell Extensions + Dash to Dock
+    install_realvnc         # 7. RealVNC Connect (snap)
+    install_dbeaver         # 8. DBeaver CE (snap)
+    run_cli_logins          # 9. CLI Logins
+    remove_firefox          # 10. Firefox Removal
 
     # Print summary
     print_summary

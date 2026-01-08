@@ -119,6 +119,93 @@ install_deb() {
     sudo dpkg -i "$deb_file" || sudo apt-get install -f -y
 }
 
+# Retry function - runs command with 3 attempts and 5s delay
+# Usage: retry_command "description" command args...
+# Returns: 0 on success, 1 on failure after all attempts
+retry_command() {
+    local description="$1"
+    shift
+    local max_attempts=3
+    local attempt=1
+    local delay=5
+
+    while [ $attempt -le $max_attempts ]; do
+        log_info "Attempt $attempt of $max_attempts: $description"
+
+        if "$@"; then
+            return 0
+        fi
+
+        log_warning "Attempt $attempt failed"
+        ((attempt++))
+
+        if [ $attempt -le $max_attempts ]; then
+            log_info "Retrying in ${delay}s..."
+            sleep $delay
+        fi
+    done
+
+    log_warning "All $max_attempts attempts failed for: $description"
+    return 1
+}
+
+# Retry apt install with 3 attempts
+retry_apt_install() {
+    local package="$1"
+    retry_command "Installing $package" sudo apt-get install -y "$package"
+}
+
+# Retry snap install with 3 attempts
+retry_snap_install() {
+    local package="$1"
+    local flags="${2:-}"
+    if [ -n "$flags" ]; then
+        retry_command "Installing $package (snap)" sudo snap install "$package" $flags
+    else
+        retry_command "Installing $package (snap)" sudo snap install "$package"
+    fi
+}
+
+# Retry npm install with 3 attempts
+retry_npm_install() {
+    local package="$1"
+    retry_command "Installing $package (npm)" npm install -g "$package"
+}
+
+# Retry curl download with 3 attempts
+retry_curl_download() {
+    local url="$1"
+    local output="$2"
+    local description="${3:-Downloading file}"
+
+    local max_attempts=3
+    local attempt=1
+    local delay=5
+
+    while [ $attempt -le $max_attempts ]; do
+        log_info "Attempt $attempt of $max_attempts: $description"
+
+        if curl -L --progress-bar --connect-timeout 30 --max-time 300 -o "$output" "$url"; then
+            if [ -s "$output" ]; then
+                log_success "Download completed"
+                return 0
+            fi
+        fi
+
+        log_warning "Download attempt $attempt failed"
+        rm -f "$output"
+        ((attempt++))
+
+        if [ $attempt -le $max_attempts ]; then
+            log_info "Retrying in ${delay}s..."
+            sleep $delay
+        fi
+    done
+
+    log_warning "All download attempts failed"
+    return 1
+}
+
 #===============================================================================
 # 1. NVM, Node.js 22, Yarn Installation
 #===============================================================================
@@ -155,8 +242,11 @@ install_nvm_nodejs() {
     if command_exists yarn; then
         log_warning "Yarn already installed ($(yarn -v)), skipping..."
     else
-        npm install -g yarn
-        log_success "Yarn installed successfully ($(yarn -v))"
+        if retry_npm_install yarn; then
+            log_success "Yarn installed successfully"
+        else
+            log_warning "Yarn installation skipped after 3 failed attempts"
+        fi
     fi
 
     # 1.3 Install Codex CLI
@@ -164,8 +254,11 @@ install_nvm_nodejs() {
     if command_exists codex; then
         log_warning "Codex CLI already installed, skipping..."
     else
-        npm install -g @openai/codex
-        log_success "Codex CLI installed successfully"
+        if retry_npm_install @openai/codex; then
+            log_success "Codex CLI installed successfully"
+        else
+            log_warning "Codex CLI installation skipped after 3 failed attempts"
+        fi
     fi
 
     # 1.4 Install Gemini CLI
@@ -173,8 +266,11 @@ install_nvm_nodejs() {
     if command_exists gemini; then
         log_warning "Gemini CLI already installed, skipping..."
     else
-        npm install -g @google/gemini-cli
-        log_success "Gemini CLI installed successfully"
+        if retry_npm_install @google/gemini-cli; then
+            log_success "Gemini CLI installed successfully"
+        else
+            log_warning "Gemini CLI installation skipped after 3 failed attempts"
+        fi
     fi
 
     # 1.5 Install Claude CLI
@@ -182,8 +278,11 @@ install_nvm_nodejs() {
     if command_exists claude; then
         log_warning "Claude CLI already installed, skipping..."
     else
-        npm install -g @anthropic-ai/claude-code
-        log_success "Claude CLI installed successfully"
+        if retry_npm_install @anthropic-ai/claude-code; then
+            log_success "Claude CLI installed successfully"
+        else
+            log_warning "Claude CLI installation skipped after 3 failed attempts"
+        fi
     fi
 }
 
@@ -200,17 +299,22 @@ install_chrome() {
 
     log_info "Adding Google Chrome repository..."
 
-    # Add Google's signing key
-    curl -fsSL https://dl.google.com/linux/linux_signing_key.pub | sudo gpg --dearmor -o /usr/share/keyrings/google-chrome.gpg
+    # Add Google's signing key (with retry)
+    if ! retry_command "Adding Chrome GPG key" bash -c 'curl -fsSL https://dl.google.com/linux/linux_signing_key.pub | sudo gpg --dearmor -o /usr/share/keyrings/google-chrome.gpg'; then
+        log_warning "Chrome installation skipped - could not add GPG key"
+        return
+    fi
 
     # Add repository
     echo "deb [arch=${DEB_ARCH} signed-by=/usr/share/keyrings/google-chrome.gpg] http://dl.google.com/linux/chrome/deb/ stable main" | sudo tee /etc/apt/sources.list.d/google-chrome.list > /dev/null
 
-    # Update and install
+    # Update and install with retry
     sudo apt-get update
-    sudo apt-get install -y google-chrome-stable
-
-    log_success "Google Chrome installed successfully (via apt repository)"
+    if retry_apt_install google-chrome-stable; then
+        log_success "Google Chrome installed successfully (via apt repository)"
+    else
+        log_warning "Chrome installation skipped after 3 failed attempts"
+    fi
 }
 
 #===============================================================================
@@ -224,7 +328,6 @@ install_cursor() {
         return
     fi
 
-    log_info "Downloading Cursor AppImage (this may take a while)..."
     local temp_file="/tmp/cursor.appimage"
     local download_url
 
@@ -235,34 +338,9 @@ install_cursor() {
         download_url="https://downloader.cursor.sh/linux/appImage/arm64"
     fi
 
-    # Download with timeout and retry
-    local max_attempts=2
-    local attempt=1
-
-    while [ $attempt -le $max_attempts ]; do
-        log_info "Download attempt $attempt of $max_attempts..."
-
-        if curl -L --progress-bar --connect-timeout 30 --max-time 300 -o "$temp_file" "$download_url"; then
-            # Verify file was downloaded and has content
-            if [ -s "$temp_file" ]; then
-                log_success "Download completed"
-                break
-            fi
-        fi
-
-        log_warning "Download attempt $attempt failed"
-        rm -f "$temp_file"
-        ((attempt++))
-
-        if [ $attempt -le $max_attempts ]; then
-            log_info "Retrying in 5 seconds..."
-            sleep 5
-        fi
-    done
-
-    # Check if download succeeded
-    if [ ! -s "$temp_file" ]; then
-        log_warning "Could not download Cursor. You can install it manually from https://cursor.sh"
+    # Download with retry (3 attempts, 5s delay)
+    if ! retry_curl_download "$download_url" "$temp_file" "Downloading Cursor AppImage"; then
+        log_warning "Cursor installation skipped after 3 failed attempts. Install manually from https://cursor.sh"
         return
     fi
 
@@ -301,17 +379,23 @@ install_vscode() {
     else
         log_info "Adding Microsoft VS Code repository..."
 
-        # Add Microsoft's signing key
-        curl -fsSL https://packages.microsoft.com/keys/microsoft.asc | sudo gpg --dearmor -o /usr/share/keyrings/microsoft.gpg
+        # Add Microsoft's signing key (with retry)
+        if ! retry_command "Adding VS Code GPG key" bash -c 'curl -fsSL https://packages.microsoft.com/keys/microsoft.asc | sudo gpg --dearmor -o /usr/share/keyrings/microsoft.gpg'; then
+            log_warning "VS Code installation skipped - could not add GPG key"
+            return
+        fi
 
         # Add repository
         echo "deb [arch=${DEB_ARCH} signed-by=/usr/share/keyrings/microsoft.gpg] https://packages.microsoft.com/repos/code stable main" | sudo tee /etc/apt/sources.list.d/vscode.list > /dev/null
 
-        # Update and install
+        # Update and install with retry
         sudo apt-get update
-        sudo apt-get install -y code
-
-        log_success "VS Code installed successfully (via apt repository)"
+        if retry_apt_install code; then
+            log_success "VS Code installed successfully (via apt repository)"
+        else
+            log_warning "VS Code installation skipped after 3 failed attempts"
+            return
+        fi
     fi
 
     # Install extensions
@@ -515,16 +599,13 @@ install_realvnc() {
 
     log_info "Installing RealVNC Connect via snap..."
 
-    # Install via snap (preferred method)
+    # Install via snap with retry (preferred method)
     if command_exists snap; then
-        sudo snap install realvnc-vnc-server --classic || {
-            log_warning "Snap installation failed, trying alternative..."
-            # Fallback: try apt if available
-            sudo apt-get install -y realvnc-vnc-server 2>/dev/null || \
-            log_warning "Could not install RealVNC. Please install manually from https://www.realvnc.com/en/connect/download/vnc/"
-            return
-        }
-        log_success "RealVNC Connect installed successfully (via snap)"
+        if retry_snap_install realvnc-vnc-server "--classic"; then
+            log_success "RealVNC Connect installed successfully (via snap)"
+        else
+            log_warning "RealVNC installation skipped after 3 failed attempts. Install manually from https://www.realvnc.com/en/connect/download/vnc/"
+        fi
     else
         log_warning "Snap not available. Please install RealVNC manually from https://www.realvnc.com/en/connect/download/vnc/"
     fi
@@ -544,18 +625,28 @@ install_dbeaver() {
     log_info "Installing DBeaver CE via snap..."
 
     if command_exists snap; then
-        sudo snap install dbeaver-ce
-        log_success "DBeaver CE installed successfully (via snap)"
+        if retry_snap_install dbeaver-ce; then
+            log_success "DBeaver CE installed successfully (via snap)"
+        else
+            log_warning "DBeaver CE installation skipped after 3 failed attempts"
+        fi
     else
         log_warning "Snap not available. Installing via apt repository..."
 
-        # Add DBeaver repository
-        curl -fsSL https://dbeaver.io/debs/dbeaver.gpg.key | sudo gpg --dearmor -o /usr/share/keyrings/dbeaver.gpg
+        # Add DBeaver repository with retry
+        if ! retry_command "Adding DBeaver GPG key" bash -c 'curl -fsSL https://dbeaver.io/debs/dbeaver.gpg.key | sudo gpg --dearmor -o /usr/share/keyrings/dbeaver.gpg'; then
+            log_warning "DBeaver installation skipped - could not add GPG key"
+            return
+        fi
+
         echo "deb [signed-by=/usr/share/keyrings/dbeaver.gpg] https://dbeaver.io/debs/dbeaver-ce /" | sudo tee /etc/apt/sources.list.d/dbeaver.list > /dev/null
 
         sudo apt-get update
-        sudo apt-get install -y dbeaver-ce
-        log_success "DBeaver CE installed successfully (via apt repository)"
+        if retry_apt_install dbeaver-ce; then
+            log_success "DBeaver CE installed successfully (via apt repository)"
+        else
+            log_warning "DBeaver CE installation skipped after 3 failed attempts"
+        fi
     fi
 }
 

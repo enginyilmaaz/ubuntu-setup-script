@@ -7,7 +7,7 @@
 #   - NVM, Node.js 22, Yarn
 #   - CLI tools (Codex, Gemini CLI, Claude CLI)
 #   - Chrome (apt), Cursor (deb), VSCode (apt) with extensions
-#   - Python 3, RealVNC Connect (deb), DBeaver CE (apt), VLC (apt)
+#   - Python 3, RealVNC Connect (deb), DBeaver CE (apt), VLC (apt), Docker (apt)
 #   - GNOME Shell Extensions + Dash to Dock configuration
 #   - Firefox removal (snap/deb/flatpak detection)
 #===============================================================================
@@ -733,10 +733,48 @@ install_vlc() {
 }
 
 #===============================================================================
-# 10. CLI Login Commands
+# 10. Docker Installation (via apt repository)
+#===============================================================================
+install_docker() {
+    log_step "10. Installing Docker"
+
+    if command_exists docker; then
+        log_warning "Docker already installed ($(docker --version)), skipping..."
+        return
+    fi
+
+    log_info "Installing Docker via official apt repository..."
+
+    # Add Docker's official GPG key
+    if ! retry_command "Adding Docker GPG key" bash -c 'curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /usr/share/keyrings/docker.gpg'; then
+        log_warning "Docker installation skipped - could not add GPG key"
+        return
+    fi
+
+    # Add Docker repository
+    echo "deb [arch=${DEB_ARCH} signed-by=/usr/share/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu ${OS_CODENAME} stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+
+    # Update and install Docker
+    sudo apt-get update
+    if retry_apt_install docker-ce; then
+        # Install additional Docker components
+        sudo apt-get install -y docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+
+        # Add current user to docker group (no sudo needed for docker commands)
+        sudo usermod -aG docker $USER
+
+        log_success "Docker installed successfully"
+        log_info "Note: Log out and back in for docker group to take effect"
+    else
+        log_warning "Docker installation skipped after 3 failed attempts"
+    fi
+}
+
+#===============================================================================
+# 11. CLI Login Commands
 #===============================================================================
 run_cli_logins() {
-    log_step "10. CLI Login Commands"
+    log_step "11. CLI Login Commands"
 
     log_info "Running CLI login commands..."
     log_info "Each CLI will open a browser for authentication."
@@ -778,10 +816,10 @@ run_cli_logins() {
 }
 
 #===============================================================================
-# 11. Firefox Removal (detects snap, deb, flatpak)
+# 12. Firefox Removal (detects snap, deb, flatpak)
 #===============================================================================
 remove_firefox() {
-    log_step "11. Removing Firefox"
+    log_step "12. Removing Firefox"
 
     local firefox_found=false
     local firefox_snap=false
@@ -922,6 +960,7 @@ print_summary() {
     (package_installed realvnc-connect || command_exists vncserver-x11) && echo -e "  ${GREEN}✓${NC} RealVNC Connect"
     (package_installed dbeaver-ce || command_exists dbeaver) && echo -e "  ${GREEN}✓${NC} DBeaver CE"
     command_exists vlc && echo -e "  ${GREEN}✓${NC} VLC Media Player"
+    command_exists docker && echo -e "  ${GREEN}✓${NC} Docker $(docker --version 2>&1 | cut -d' ' -f3 | tr -d ',')"
 
     echo ""
     echo -e "${YELLOW}Note: You may need to restart your terminal or run:${NC}"
@@ -962,8 +1001,9 @@ main() {
     install_realvnc         # 7. RealVNC Connect (deb)
     install_dbeaver         # 8. DBeaver CE (apt)
     install_vlc             # 9. VLC Media Player (apt)
-    run_cli_logins          # 10. CLI Logins
-    remove_firefox          # 11. Firefox Removal
+    install_docker          # 10. Docker (apt)
+    run_cli_logins          # 11. CLI Logins
+    remove_firefox          # 12. Firefox Removal
 
     # Print summary
     print_summary

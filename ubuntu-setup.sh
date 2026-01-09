@@ -776,32 +776,66 @@ install_docker() {
 run_cli_logins() {
     log_step "11. CLI Login Commands"
 
-    log_info "Running CLI login commands..."
-    log_info "Each CLI will open a browser for authentication."
+    # Reload NVM
+    export NVM_DIR="$HOME/.nvm"
+    [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+
+    local need_login=false
+
+    # Check Claude CLI auth status
+    if command_exists claude; then
+        if claude auth status &>/dev/null; then
+            log_warning "Claude CLI already authenticated, skipping..."
+        else
+            log_info "Claude CLI needs authentication"
+            need_login=true
+        fi
+    fi
+
+    # Check Gemini CLI auth status
+    if command_exists gemini; then
+        if gemini auth status &>/dev/null; then
+            log_warning "Gemini CLI already authenticated, skipping..."
+        else
+            log_info "Gemini CLI needs authentication"
+            need_login=true
+        fi
+    fi
+
+    # Check Codex CLI auth status
+    if command_exists codex; then
+        if codex auth status &>/dev/null; then
+            log_warning "Codex CLI already authenticated, skipping..."
+        else
+            log_info "Codex CLI needs authentication"
+            need_login=true
+        fi
+    fi
+
+    if ! $need_login; then
+        log_success "All CLI tools already authenticated"
+        return
+    fi
 
     echo ""
     read -p "Do you want to login to CLI tools now? (y/n): " -n 1 -r
     echo ""
 
     if [[ $REPLY =~ ^[Yy]$ ]]; then
-        # Reload NVM
-        export NVM_DIR="$HOME/.nvm"
-        [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
-
         # Claude CLI login
-        if command_exists claude; then
+        if command_exists claude && ! claude auth status &>/dev/null; then
             log_info "Starting Claude CLI login..."
             claude auth login || log_warning "Claude login skipped or failed"
         fi
 
         # Gemini CLI login
-        if command_exists gemini; then
+        if command_exists gemini && ! gemini auth status &>/dev/null; then
             log_info "Starting Gemini CLI login..."
             gemini auth login || log_warning "Gemini login skipped or failed"
         fi
 
         # Codex CLI login
-        if command_exists codex; then
+        if command_exists codex && ! codex auth status &>/dev/null; then
             log_info "Starting Codex CLI login..."
             codex auth login || log_warning "Codex login skipped or failed"
         fi

@@ -6,7 +6,7 @@
 # Description: Automates Ubuntu post-installation setup including:
 #   - NVM, Node.js 22, Yarn
 #   - CLI tools (Codex, Gemini CLI, Claude CLI)
-#   - Chrome (apt), Cursor (deb), VSCode (apt) with extensions
+#   - Chrome (apt), Cursor (deb), Antigravity (apt), VSCode (apt) with extensions
 #   - Python 3, RealVNC Connect (deb), DBeaver CE (apt), VLC (apt), Docker (apt)
 #   - GNOME Shell Extensions + Dash to Dock configuration
 #   - Firefox removal (snap/deb/flatpak detection)
@@ -352,10 +352,44 @@ install_cursor() {
 }
 
 #===============================================================================
-# 4. Visual Studio Code Installation (via apt repository)
+# 4. Antigravity Installation (via apt repository)
+#===============================================================================
+install_antigravity() {
+    log_step "4. Installing Antigravity"
+
+    if command_exists antigravity; then
+        log_warning "Antigravity already installed, skipping..."
+        return
+    fi
+
+    log_info "Installing Antigravity via apt repository..."
+
+    # Create keyrings directory
+    sudo mkdir -p /etc/apt/keyrings
+
+    # Add Antigravity GPG key
+    if ! retry_command "Adding Antigravity GPG key" bash -c 'curl -fsSL https://us-central1-apt.pkg.dev/doc/repo-signing-key.gpg | sudo gpg --dearmor --yes -o /etc/apt/keyrings/antigravity-repo-key.gpg'; then
+        log_warning "Antigravity installation skipped - could not add GPG key"
+        return
+    fi
+
+    # Add repository
+    echo "deb [signed-by=/etc/apt/keyrings/antigravity-repo-key.gpg] https://us-central1-apt.pkg.dev/projects/antigravity-auto-updater-dev/ antigravity-debian main" | sudo tee /etc/apt/sources.list.d/antigravity.list > /dev/null
+
+    # Update and install
+    sudo apt-get update
+    if retry_apt_install antigravity; then
+        log_success "Antigravity installed successfully (via apt repository)"
+    else
+        log_warning "Antigravity installation skipped after 3 failed attempts"
+    fi
+}
+
+#===============================================================================
+# 5. Visual Studio Code Installation (via apt repository)
 #===============================================================================
 install_vscode() {
-    log_step "4. Installing Visual Studio Code"
+    log_step "5. Installing Visual Studio Code"
 
     if command_exists code; then
         log_warning "VS Code already installed, skipping installation..."
@@ -386,10 +420,10 @@ install_vscode() {
 }
 
 install_vscode_extensions() {
-    log_info "4.1-4.4 Installing VS Code Extensions..."
+    log_info "5.1-5.4 Installing VS Code Extensions..."
 
-    # 4.1 Gemini CLI VS Code Companion
-    log_info "4.1 Installing Gemini CLI VS Code Companion extension..."
+    # 5.1 Gemini CLI VS Code Companion
+    log_info "5.1 Installing Gemini CLI VS Code Companion extension..."
     if code --list-extensions 2>/dev/null | grep -qi "Google.gemini-cli-vscode-ide-companion"; then
         log_warning "Gemini CLI Companion already installed, skipping..."
     else
@@ -397,8 +431,8 @@ install_vscode_extensions() {
         log_warning "Could not install Gemini CLI Companion extension"
     fi
 
-    # 4.2 Claude Code (Claude Dev)
-    log_info "4.2 Installing Claude Code extension..."
+    # 5.2 Claude Code (Claude Dev)
+    log_info "5.2 Installing Claude Code extension..."
     if code --list-extensions 2>/dev/null | grep -qi "anthropic.claude-code"; then
         log_warning "Claude Code already installed, skipping..."
     else
@@ -407,8 +441,8 @@ install_vscode_extensions() {
         log_warning "Could not install Claude extension"
     fi
 
-    # 4.3 ChatGPT/Codex Extension
-    log_info "4.3 Installing ChatGPT extension..."
+    # 5.3 ChatGPT/Codex Extension
+    log_info "5.3 Installing ChatGPT extension..."
     if code --list-extensions 2>/dev/null | grep -qi "openai.chatgpt"; then
         log_warning "ChatGPT extension already installed, skipping..."
     else
@@ -417,8 +451,8 @@ install_vscode_extensions() {
         log_warning "Could not install ChatGPT extension"
     fi
 
-    # 4.4 Python Extension
-    log_info "4.4 Installing Python extension..."
+    # 5.4 Python Extension
+    log_info "5.4 Installing Python extension..."
     if code --list-extensions 2>/dev/null | grep -qi "ms-python.python"; then
         log_warning "Python extension already installed, skipping..."
     else
@@ -433,7 +467,7 @@ install_vscode_extensions() {
 }
 
 configure_vscode_settings() {
-    log_info "4.5 Configuring VS Code user settings..."
+    log_info "5.5 Configuring VS Code user settings..."
 
     local settings_dir="$HOME/.config/Code/User"
     local settings_file="$settings_dir/settings.json"
@@ -518,10 +552,10 @@ VSCODE_SETTINGS
 }
 
 #===============================================================================
-# 5. Python 3 Installation
+# 6. Python 3 Installation
 #===============================================================================
 install_python() {
-    log_step "5. Installing Python 3"
+    log_step "6. Installing Python 3"
 
     if command_exists python3; then
         log_warning "Python 3 already installed ($(python3 --version)), skipping..."
@@ -540,10 +574,10 @@ install_python() {
 }
 
 #===============================================================================
-# 6. GNOME Shell Extensions
+# 7. GNOME Shell Extensions
 #===============================================================================
 install_gnome_extensions() {
-    log_step "6. Installing GNOME Shell Extensions"
+    log_step "7. Installing GNOME Shell Extensions"
 
     # Check if GNOME is installed
     if ! command_exists gnome-shell; then
@@ -597,10 +631,10 @@ install_gnome_extensions() {
 }
 
 #===============================================================================
-# 6.1 Dash to Dock Configuration (using dconf)
+# 7.1 Dash to Dock Configuration (using dconf)
 #===============================================================================
 configure_dash_to_dock() {
-    log_info "6.1 Configuring Dash to Dock settings..."
+    log_info "7.1 Configuring Dash to Dock settings..."
 
     # Check if dconf is available
     if ! command_exists dconf; then
@@ -651,10 +685,10 @@ DOCKCONF
 }
 
 #===============================================================================
-# 7. RealVNC Connect Installation (via deb)
+# 8. RealVNC Connect Installation (via deb)
 #===============================================================================
 install_realvnc() {
-    log_step "7. Installing RealVNC Connect"
+    log_step "8. Installing RealVNC Connect"
 
     if package_installed realvnc-connect || command_exists vncserver-x11; then
         log_warning "RealVNC already installed, skipping..."
@@ -685,10 +719,10 @@ install_realvnc() {
 }
 
 #===============================================================================
-# 8. DBeaver CE Installation (via apt repository)
+# 9. DBeaver CE Installation (via apt repository)
 #===============================================================================
 install_dbeaver() {
-    log_step "8. Installing DBeaver Community Edition"
+    log_step "9. Installing DBeaver Community Edition"
 
     if package_installed dbeaver-ce || command_exists dbeaver; then
         log_warning "DBeaver CE already installed, skipping..."
@@ -714,10 +748,10 @@ install_dbeaver() {
 }
 
 #===============================================================================
-# 9. VLC Media Player Installation (via apt)
+# 10. VLC Media Player Installation (via apt)
 #===============================================================================
 install_vlc() {
-    log_step "9. Installing VLC Media Player"
+    log_step "10. Installing VLC Media Player"
 
     if command_exists vlc; then
         log_warning "VLC already installed, skipping..."
@@ -733,10 +767,10 @@ install_vlc() {
 }
 
 #===============================================================================
-# 10. Docker Installation (via apt repository)
+# 11. Docker Installation (via apt repository)
 #===============================================================================
 install_docker() {
-    log_step "10. Installing Docker"
+    log_step "11. Installing Docker"
 
     if command_exists docker; then
         log_warning "Docker already installed ($(docker --version)), skipping..."
@@ -771,10 +805,10 @@ install_docker() {
 }
 
 #===============================================================================
-# 11. CLI Login Commands
+# 12. CLI Login Commands
 #===============================================================================
 run_cli_logins() {
-    log_step "11. CLI Login Commands"
+    log_step "12. CLI Login Commands"
 
     # Reload NVM
     export NVM_DIR="$HOME/.nvm"
@@ -850,10 +884,10 @@ run_cli_logins() {
 }
 
 #===============================================================================
-# 12. Firefox Removal (detects snap, deb, flatpak)
+# 13. Firefox Removal (detects snap, deb, flatpak)
 #===============================================================================
 remove_firefox() {
-    log_step "12. Removing Firefox"
+    log_step "13. Removing Firefox"
 
     local firefox_found=false
     local firefox_snap=false
@@ -985,6 +1019,7 @@ print_summary() {
     command_exists claude && echo -e "  ${GREEN}✓${NC} Claude CLI"
     (command_exists google-chrome || command_exists google-chrome-stable) && echo -e "  ${GREEN}✓${NC} Google Chrome"
     command_exists cursor && echo -e "  ${GREEN}✓${NC} Cursor IDE"
+    command_exists antigravity && echo -e "  ${GREEN}✓${NC} Antigravity"
     command_exists code && echo -e "  ${GREEN}✓${NC} VS Code"
     command_exists python3 && echo -e "  ${GREEN}✓${NC} Python $(python3 --version 2>&1 | cut -d' ' -f2)"
     package_installed gnome-shell-extensions && echo -e "  ${GREEN}✓${NC} GNOME Shell Extensions"
@@ -1029,15 +1064,16 @@ main() {
     install_nvm_nodejs      # 1. NVM, Node.js, Yarn, CLI tools
     install_chrome          # 2. Google Chrome (apt repo)
     install_cursor          # 3. Cursor IDE (deb)
-    install_vscode          # 4. VS Code + Extensions (apt repo)
-    install_python          # 5. Python 3
-    install_gnome_extensions # 6. GNOME Shell Extensions + Dash to Dock
-    install_realvnc         # 7. RealVNC Connect (deb)
-    install_dbeaver         # 8. DBeaver CE (apt)
-    install_vlc             # 9. VLC Media Player (apt)
-    install_docker          # 10. Docker (apt)
-    run_cli_logins          # 11. CLI Logins
-    remove_firefox          # 12. Firefox Removal
+    install_antigravity     # 4. Antigravity (apt)
+    install_vscode          # 5. VS Code + Extensions (apt repo)
+    install_python          # 6. Python 3
+    install_gnome_extensions # 7. GNOME Shell Extensions + Dash to Dock
+    install_realvnc         # 8. RealVNC Connect (deb)
+    install_dbeaver         # 9. DBeaver CE (apt)
+    install_vlc             # 10. VLC Media Player (apt)
+    install_docker          # 11. Docker (apt)
+    run_cli_logins          # 12. CLI Logins
+    remove_firefox          # 13. Firefox Removal
 
     # Print summary
     print_summary

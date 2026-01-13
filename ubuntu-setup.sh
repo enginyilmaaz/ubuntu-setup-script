@@ -7,13 +7,46 @@
 #   - NVM, Node.js 22, Yarn
 #   - CLI tools (Codex, Gemini CLI, Claude CLI)
 #   - RealVNC Connect (deb) + Wayland Disable
-#   - Chrome (apt), Cursor (deb), Antigravity (apt), VSCode (apt) with extensions
+#   - Chrome/Chromium (apt), Cursor (deb), Antigravity (apt), VSCode (apt)
 #   - Python 3, DBeaver CE (apt), VLC (apt), Docker (apt)
 #   - GNOME Shell Extensions + Dash to Dock configuration
 #   - Firefox removal (snap/deb/flatpak detection)
+#
+# Usage:
+#   ./ubuntu-setup.sh          # Basic install (skips DBeaver, VLC, CLI logins)
+#   ./ubuntu-setup.sh --full   # Full install (includes DBeaver, VLC)
+#   ./ubuntu-setup.sh --login  # Basic install + CLI logins
+#   ./ubuntu-setup.sh --full --login  # Full install + CLI logins
 #===============================================================================
 
 set -e
+
+# Command line flags
+FULL_INSTALL=false
+DO_CLI_LOGIN=false
+
+# Parse command line arguments
+for arg in "$@"; do
+    case $arg in
+        --full)
+            FULL_INSTALL=true
+            ;;
+        --login)
+            DO_CLI_LOGIN=true
+            ;;
+        --help|-h)
+            echo "Usage: $0 [OPTIONS]"
+            echo ""
+            echo "Options:"
+            echo "  --full    Full install (includes DBeaver CE, VLC)"
+            echo "  --login   Run CLI login prompts (Claude, Gemini, Codex)"
+            echo "  --help    Show this help message"
+            echo ""
+            echo "Default (no options): Basic install without DBeaver, VLC, and CLI logins"
+            exit 0
+            ;;
+    esac
+done
 
 # Colors for output
 RED='\033[0;31m'
@@ -290,31 +323,51 @@ install_nvm_nodejs() {
 #===============================================================================
 # 3. Google Chrome Installation (via apt repository)
 #===============================================================================
+# Global flag to track if browser was installed successfully
+BROWSER_INSTALLED=false
+
 install_chrome() {
-    log_step "3. Installing Google Chrome"
+    log_step "3. Installing Browser (Chrome/Chromium)"
 
-    if command_exists google-chrome || command_exists google-chrome-stable; then
-        log_warning "Google Chrome already installed, skipping..."
+    # Check if any browser already installed
+    if command_exists google-chrome || command_exists google-chrome-stable || command_exists chromium-browser || command_exists chromium; then
+        log_warning "Browser already installed, skipping..."
+        BROWSER_INSTALLED=true
         return
     fi
 
-    log_info "Adding Google Chrome repository..."
+    if [ "$DEB_ARCH" == "amd64" ]; then
+        # AMD64: Install Google Chrome
+        log_info "Installing Google Chrome (AMD64)..."
 
-    # Add Google's signing key (with retry)
-    if ! retry_command "Adding Chrome GPG key" bash -c 'curl -fsSL https://dl.google.com/linux/linux_signing_key.pub | sudo gpg --dearmor -o /usr/share/keyrings/google-chrome.gpg'; then
-        log_warning "Chrome installation skipped - could not add GPG key"
-        return
-    fi
+        # Add Google's signing key (with retry)
+        if ! retry_command "Adding Chrome GPG key" bash -c 'curl -fsSL https://dl.google.com/linux/linux_signing_key.pub | sudo gpg --dearmor -o /usr/share/keyrings/google-chrome.gpg'; then
+            log_warning "Chrome installation skipped - could not add GPG key"
+            return
+        fi
 
-    # Add repository
-    echo "deb [arch=${DEB_ARCH} signed-by=/usr/share/keyrings/google-chrome.gpg] http://dl.google.com/linux/chrome/deb/ stable main" | sudo tee /etc/apt/sources.list.d/google-chrome.list > /dev/null
+        # Add repository
+        echo "deb [arch=${DEB_ARCH} signed-by=/usr/share/keyrings/google-chrome.gpg] http://dl.google.com/linux/chrome/deb/ stable main" | sudo tee /etc/apt/sources.list.d/google-chrome.list > /dev/null
 
-    # Update and install with retry
-    sudo apt-get update
-    if retry_apt_install google-chrome-stable; then
-        log_success "Google Chrome installed successfully (via apt repository)"
+        # Update and install with retry
+        sudo apt-get update
+        if retry_apt_install google-chrome-stable; then
+            log_success "Google Chrome installed successfully (via apt repository)"
+            BROWSER_INSTALLED=true
+        else
+            log_warning "Chrome installation failed after 3 attempts"
+        fi
     else
-        log_warning "Chrome installation skipped after 3 failed attempts"
+        # ARM64: Install Chromium (Chrome not available for ARM64)
+        log_info "Installing Chromium (ARM64 - Chrome not available)..."
+
+        if retry_apt_install chromium-browser; then
+            log_success "Chromium installed successfully"
+            BROWSER_INSTALLED=true
+        else
+            log_warning "Chromium installation failed after 3 attempts"
+            log_info "Firefox will be kept as the default browser"
+        fi
     fi
 }
 
@@ -969,6 +1022,12 @@ run_cli_logins() {
 remove_firefox() {
     log_step "13. Removing Firefox"
 
+    # Don't remove Firefox if no alternative browser was installed
+    if ! $BROWSER_INSTALLED; then
+        log_warning "No alternative browser installed, keeping Firefox..."
+        return
+    fi
+
     local firefox_found=false
     local firefox_snap=false
     local firefox_deb=false
@@ -1102,6 +1161,7 @@ print_summary() {
     command_exists gemini && echo -e "  ${GREEN}✓${NC} Gemini CLI"
     command_exists claude && echo -e "  ${GREEN}✓${NC} Claude CLI"
     (command_exists google-chrome || command_exists google-chrome-stable) && echo -e "  ${GREEN}✓${NC} Google Chrome"
+    (command_exists chromium-browser || command_exists chromium) && echo -e "  ${GREEN}✓${NC} Chromium"
     command_exists cursor && echo -e "  ${GREEN}✓${NC} Cursor IDE"
     command_exists antigravity && echo -e "  ${GREEN}✓${NC} Antigravity"
     command_exists code && echo -e "  ${GREEN}✓${NC} VS Code"
@@ -1143,19 +1203,45 @@ main() {
     # Install prerequisites
     install_prerequisites
 
+    # Show install mode
+    if $FULL_INSTALL; then
+        log_info "Running FULL install (includes DBeaver, VLC)"
+    else
+        log_info "Running BASIC install (use --full for DBeaver, VLC)"
+    fi
+    if $DO_CLI_LOGIN; then
+        log_info "CLI logins enabled (--login)"
+    fi
+    echo ""
+
     # Run installations
     install_realvnc         # 1. RealVNC Connect (deb) + Wayland Disable
     install_nvm_nodejs      # 2. NVM, Node.js, Yarn, CLI tools
-    install_chrome          # 3. Google Chrome (apt repo)
+    install_chrome          # 3. Chrome/Chromium (apt)
     install_cursor          # 4. Cursor IDE (deb)
     install_antigravity     # 5. Antigravity (apt)
     install_vscode          # 6. VS Code + Extensions (apt repo)
     install_python          # 7. Python 3
     install_gnome_extensions # 8. GNOME Shell Extensions + Dash to Dock
-    install_dbeaver         # 9. DBeaver CE (apt)
-    install_vlc             # 10. VLC Media Player (apt)
+
+    # Optional: DBeaver and VLC (only with --full)
+    if $FULL_INSTALL; then
+        install_dbeaver     # 9. DBeaver CE (apt)
+        install_vlc         # 10. VLC Media Player (apt)
+    else
+        log_info "Skipping DBeaver CE (use --full to install)"
+        log_info "Skipping VLC (use --full to install)"
+    fi
+
     install_docker          # 11. Docker (apt)
-    run_cli_logins          # 12. CLI Logins
+
+    # Optional: CLI logins (only with --login)
+    if $DO_CLI_LOGIN; then
+        run_cli_logins      # 12. CLI Logins
+    else
+        log_info "Skipping CLI logins (use --login to enable)"
+    fi
+
     remove_firefox          # 13. Firefox Removal
 
     # Print summary

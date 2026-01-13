@@ -6,8 +6,9 @@
 # Description: Automates Ubuntu post-installation setup including:
 #   - NVM, Node.js 22, Yarn
 #   - CLI tools (Codex, Gemini CLI, Claude CLI)
+#   - RealVNC Connect (deb) + Wayland Disable
 #   - Chrome (apt), Cursor (deb), Antigravity (apt), VSCode (apt) with extensions
-#   - Python 3, RealVNC Connect (deb), DBeaver CE (apt), VLC (apt), Docker (apt)
+#   - Python 3, DBeaver CE (apt), VLC (apt), Docker (apt)
 #   - GNOME Shell Extensions + Dash to Dock configuration
 #   - Firefox removal (snap/deb/flatpak detection)
 #===============================================================================
@@ -207,13 +208,13 @@ retry_curl_download() {
 }
 
 #===============================================================================
-# 1. NVM, Node.js 22, Yarn Installation
+# 2. NVM, Node.js 22, Yarn Installation
 #===============================================================================
 install_nvm_nodejs() {
-    log_step "1. Installing NVM, Node.js 22, and Yarn"
+    log_step "2. Installing NVM, Node.js 22, and Yarn"
 
-    # 1.0 Install NVM
-    log_info "1.0 Installing NVM..."
+    # 2.0 Install NVM
+    log_info "2.0 Installing NVM..."
     if [ -d "$HOME/.nvm" ]; then
         log_warning "NVM already installed, skipping..."
     else
@@ -226,8 +227,8 @@ install_nvm_nodejs() {
     [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
     [ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"
 
-    # 1.1 Install Node.js 22
-    log_info "1.1 Installing Node.js 22..."
+    # 2.1 Install Node.js 22
+    log_info "2.1 Installing Node.js 22..."
     if command_exists node && [[ "$(node -v)" == v22* ]]; then
         log_warning "Node.js 22 already installed ($(node -v)), skipping..."
     else
@@ -237,8 +238,8 @@ install_nvm_nodejs() {
         log_success "Node.js 22 installed successfully ($(node -v))"
     fi
 
-    # 1.2 Install Yarn globally
-    log_info "1.2 Installing Yarn globally..."
+    # 2.2 Install Yarn globally
+    log_info "2.2 Installing Yarn globally..."
     if command_exists yarn; then
         log_warning "Yarn already installed ($(yarn -v)), skipping..."
     else
@@ -249,8 +250,8 @@ install_nvm_nodejs() {
         fi
     fi
 
-    # 1.3 Install Codex CLI
-    log_info "1.3 Installing Codex CLI (OpenAI)..."
+    # 2.3 Install Codex CLI
+    log_info "2.3 Installing Codex CLI (OpenAI)..."
     if command_exists codex; then
         log_warning "Codex CLI already installed, skipping..."
     else
@@ -261,8 +262,8 @@ install_nvm_nodejs() {
         fi
     fi
 
-    # 1.4 Install Gemini CLI
-    log_info "1.4 Installing Gemini CLI..."
+    # 2.4 Install Gemini CLI
+    log_info "2.4 Installing Gemini CLI..."
     if command_exists gemini; then
         log_warning "Gemini CLI already installed, skipping..."
     else
@@ -273,8 +274,8 @@ install_nvm_nodejs() {
         fi
     fi
 
-    # 1.5 Install Claude CLI
-    log_info "1.5 Installing Claude CLI..."
+    # 2.5 Install Claude CLI
+    log_info "2.5 Installing Claude CLI..."
     if command_exists claude; then
         log_warning "Claude CLI already installed, skipping..."
     else
@@ -287,10 +288,10 @@ install_nvm_nodejs() {
 }
 
 #===============================================================================
-# 2. Google Chrome Installation (via apt repository)
+# 3. Google Chrome Installation (via apt repository)
 #===============================================================================
 install_chrome() {
-    log_step "2. Installing Google Chrome"
+    log_step "3. Installing Google Chrome"
 
     if command_exists google-chrome || command_exists google-chrome-stable; then
         log_warning "Google Chrome already installed, skipping..."
@@ -318,10 +319,10 @@ install_chrome() {
 }
 
 #===============================================================================
-# 3. Cursor IDE Installation (via deb)
+# 4. Cursor IDE Installation (via deb)
 #===============================================================================
 install_cursor() {
-    log_step "3. Installing Cursor IDE"
+    log_step "4. Installing Cursor IDE"
 
     if command_exists cursor || dpkg -l cursor 2>/dev/null | grep -q "^ii"; then
         log_warning "Cursor already installed, skipping..."
@@ -352,10 +353,10 @@ install_cursor() {
 }
 
 #===============================================================================
-# 4. Antigravity Installation (via apt repository)
+# 5. Antigravity Installation (via apt repository)
 #===============================================================================
 install_antigravity() {
-    log_step "4. Installing Antigravity"
+    log_step "5. Installing Antigravity"
 
     if command_exists antigravity; then
         log_warning "Antigravity already installed, skipping..."
@@ -386,10 +387,10 @@ install_antigravity() {
 }
 
 #===============================================================================
-# 5. Visual Studio Code Installation (via apt repository)
+# 6. Visual Studio Code Installation (via apt repository)
 #===============================================================================
 install_vscode() {
-    log_step "5. Installing Visual Studio Code"
+    log_step "6. Installing Visual Studio Code"
 
     if command_exists code; then
         log_warning "VS Code already installed, skipping installation..."
@@ -420,10 +421,10 @@ install_vscode() {
 }
 
 install_vscode_extensions() {
-    log_info "5.1-5.4 Installing VS Code Extensions..."
+    log_info "6.1-6.4 Installing VS Code Extensions..."
 
-    # 5.1 Gemini CLI VS Code Companion
-    log_info "5.1 Installing Gemini CLI VS Code Companion extension..."
+    # 6.1 Gemini CLI VS Code Companion
+    log_info "6.1 Installing Gemini CLI VS Code Companion extension..."
     if code --list-extensions 2>/dev/null | grep -qi "Google.gemini-cli-vscode-ide-companion"; then
         log_warning "Gemini CLI Companion already installed, skipping..."
     else
@@ -431,8 +432,8 @@ install_vscode_extensions() {
         log_warning "Could not install Gemini CLI Companion extension"
     fi
 
-    # 5.2 Claude Code (Claude Dev)
-    log_info "5.2 Installing Claude Code extension..."
+    # 6.2 Claude Code (Claude Dev)
+    log_info "6.2 Installing Claude Code extension..."
     if code --list-extensions 2>/dev/null | grep -qi "anthropic.claude-code"; then
         log_warning "Claude Code already installed, skipping..."
     else
@@ -441,8 +442,8 @@ install_vscode_extensions() {
         log_warning "Could not install Claude extension"
     fi
 
-    # 5.3 ChatGPT/Codex Extension
-    log_info "5.3 Installing ChatGPT extension..."
+    # 6.3 ChatGPT/Codex Extension
+    log_info "6.3 Installing ChatGPT extension..."
     if code --list-extensions 2>/dev/null | grep -qi "openai.chatgpt"; then
         log_warning "ChatGPT extension already installed, skipping..."
     else
@@ -451,8 +452,8 @@ install_vscode_extensions() {
         log_warning "Could not install ChatGPT extension"
     fi
 
-    # 5.4 Python Extension
-    log_info "5.4 Installing Python extension..."
+    # 6.4 Python Extension
+    log_info "6.4 Installing Python extension..."
     if code --list-extensions 2>/dev/null | grep -qi "ms-python.python"; then
         log_warning "Python extension already installed, skipping..."
     else
@@ -467,7 +468,7 @@ install_vscode_extensions() {
 }
 
 configure_vscode_settings() {
-    log_info "5.5 Configuring VS Code user settings..."
+    log_info "6.5 Configuring VS Code user settings..."
 
     local settings_dir="$HOME/.config/Code/User"
     local settings_file="$settings_dir/settings.json"
@@ -552,10 +553,10 @@ VSCODE_SETTINGS
 }
 
 #===============================================================================
-# 6. Python 3 Installation
+# 7. Python 3 Installation
 #===============================================================================
 install_python() {
-    log_step "6. Installing Python 3"
+    log_step "7. Installing Python 3"
 
     if command_exists python3; then
         log_warning "Python 3 already installed ($(python3 --version)), skipping..."
@@ -574,10 +575,10 @@ install_python() {
 }
 
 #===============================================================================
-# 7. GNOME Shell Extensions
+# 8. GNOME Shell Extensions
 #===============================================================================
 install_gnome_extensions() {
-    log_step "7. Installing GNOME Shell Extensions"
+    log_step "8. Installing GNOME Shell Extensions"
 
     # Check if GNOME is installed
     if ! command_exists gnome-shell; then
@@ -631,10 +632,10 @@ install_gnome_extensions() {
 }
 
 #===============================================================================
-# 7.1 Dash to Dock Configuration (using dconf)
+# 8.1 Dash to Dock Configuration (using dconf)
 #===============================================================================
 configure_dash_to_dock() {
-    log_info "7.1 Configuring Dash to Dock settings..."
+    log_info "8.1 Configuring Dash to Dock settings..."
 
     # Check if dconf is available
     if ! command_exists dconf; then
@@ -685,37 +686,69 @@ DOCKCONF
 }
 
 #===============================================================================
-# 8. RealVNC Connect Installation (via deb)
+# 1. RealVNC Connect Installation (via deb) + Wayland Disable
 #===============================================================================
 install_realvnc() {
-    log_step "8. Installing RealVNC Connect"
+    log_step "1. Installing RealVNC Connect"
 
     if package_installed realvnc-connect || command_exists vncserver-x11; then
-        log_warning "RealVNC already installed, skipping..."
-        return
-    fi
-
-    local temp_file="/tmp/realvnc-connect.deb"
-    local download_url
-
-    # RealVNC Connect deb packages
-    if [ "$DEB_ARCH" == "amd64" ]; then
-        download_url="https://downloads.realvnc.com/download/file/realvnc-connect/RealVNC-Connect-8.2.2-Linux-x64.deb"
+        log_warning "RealVNC already installed, skipping installation..."
     else
-        download_url="https://downloads.realvnc.com/download/file/realvnc-connect/RealVNC-Connect-8.2.2-Linux-ARM64.deb"
+        local temp_file="/tmp/realvnc-connect.deb"
+        local download_url
+
+        # RealVNC Connect deb packages
+        if [ "$DEB_ARCH" == "amd64" ]; then
+            download_url="https://downloads.realvnc.com/download/file/realvnc-connect/RealVNC-Connect-8.2.2-Linux-x64.deb"
+        else
+            download_url="https://downloads.realvnc.com/download/file/realvnc-connect/RealVNC-Connect-8.2.2-Linux-ARM64.deb"
+        fi
+
+        # Download with retry (3 attempts, 5s delay)
+        if ! retry_curl_download "$download_url" "$temp_file" "Downloading RealVNC Connect deb"; then
+            log_warning "RealVNC installation skipped after 3 failed attempts. Install manually from https://www.realvnc.com/en/connect/download/vnc/"
+        else
+            log_info "Installing RealVNC Connect..."
+            sudo DEBIAN_FRONTEND=noninteractive apt-get install -y "$temp_file"
+            rm -f "$temp_file"
+            log_success "RealVNC Connect installed successfully"
+        fi
     fi
 
-    # Download with retry (3 attempts, 5s delay)
-    if ! retry_curl_download "$download_url" "$temp_file" "Downloading RealVNC Connect deb"; then
-        log_warning "RealVNC installation skipped after 3 failed attempts. Install manually from https://www.realvnc.com/en/connect/download/vnc/"
+    # Disable Wayland for VNC compatibility
+    disable_wayland
+}
+
+disable_wayland() {
+    log_info "1.1 Disabling Wayland for VNC compatibility..."
+
+    local gdm_config="/etc/gdm3/custom.conf"
+
+    if [ ! -f "$gdm_config" ]; then
+        log_warning "GDM config not found, skipping Wayland disable..."
         return
     fi
 
-    log_info "Installing RealVNC Connect..."
-    sudo DEBIAN_FRONTEND=noninteractive apt-get install -y "$temp_file"
-    rm -f "$temp_file"
+    # Check if Wayland is already disabled
+    if grep -q "^WaylandEnable=false" "$gdm_config"; then
+        log_warning "Wayland already disabled, skipping..."
+        return
+    fi
 
-    log_success "RealVNC Connect installed successfully"
+    # Backup original config
+    sudo cp "$gdm_config" "$gdm_config.backup"
+
+    # Enable the WaylandEnable=false line (uncomment if commented, or add if missing)
+    if grep -q "^#WaylandEnable=false" "$gdm_config"; then
+        sudo sed -i 's/^#WaylandEnable=false/WaylandEnable=false/' "$gdm_config"
+    elif grep -q "^\[daemon\]" "$gdm_config"; then
+        sudo sed -i '/^\[daemon\]/a WaylandEnable=false' "$gdm_config"
+    else
+        echo -e "[daemon]\nWaylandEnable=false" | sudo tee -a "$gdm_config" > /dev/null
+    fi
+
+    log_success "Wayland disabled successfully"
+    log_info "Note: Restart required for changes to take effect"
 }
 
 #===============================================================================
@@ -1003,6 +1036,10 @@ print_summary() {
     echo -e "${GREEN}Installed Components:${NC}"
     echo ""
 
+    # RealVNC & Wayland
+    (package_installed realvnc-connect || command_exists vncserver-x11) && echo -e "  ${GREEN}✓${NC} RealVNC Connect"
+    grep -q "^WaylandEnable=false" /etc/gdm3/custom.conf 2>/dev/null && echo -e "  ${GREEN}✓${NC} Wayland Disabled"
+
     # NVM & Node
     if [ -d "$HOME/.nvm" ]; then
         echo -e "  ${GREEN}✓${NC} NVM"
@@ -1026,7 +1063,6 @@ print_summary() {
     package_installed gnome-shell-extension-manager && echo -e "  ${GREEN}✓${NC} GNOME Extension Manager"
     package_installed gnome-tweaks && echo -e "  ${GREEN}✓${NC} GNOME Tweaks"
     dconf list /org/gnome/shell/extensions/dash-to-dock/ &>/dev/null && echo -e "  ${GREEN}✓${NC} Dash to Dock (configured)"
-    (package_installed realvnc-connect || command_exists vncserver-x11) && echo -e "  ${GREEN}✓${NC} RealVNC Connect"
     (package_installed dbeaver-ce || command_exists dbeaver) && echo -e "  ${GREEN}✓${NC} DBeaver CE"
     command_exists vlc && echo -e "  ${GREEN}✓${NC} VLC Media Player"
     command_exists docker && echo -e "  ${GREEN}✓${NC} Docker $(docker --version 2>&1 | cut -d' ' -f3 | tr -d ',')"
@@ -1061,14 +1097,14 @@ main() {
     install_prerequisites
 
     # Run installations
-    install_nvm_nodejs      # 1. NVM, Node.js, Yarn, CLI tools
-    install_chrome          # 2. Google Chrome (apt repo)
-    install_cursor          # 3. Cursor IDE (deb)
-    install_antigravity     # 4. Antigravity (apt)
-    install_vscode          # 5. VS Code + Extensions (apt repo)
-    install_python          # 6. Python 3
-    install_gnome_extensions # 7. GNOME Shell Extensions + Dash to Dock
-    install_realvnc         # 8. RealVNC Connect (deb)
+    install_realvnc         # 1. RealVNC Connect (deb) + Wayland Disable
+    install_nvm_nodejs      # 2. NVM, Node.js, Yarn, CLI tools
+    install_chrome          # 3. Google Chrome (apt repo)
+    install_cursor          # 4. Cursor IDE (deb)
+    install_antigravity     # 5. Antigravity (apt)
+    install_vscode          # 6. VS Code + Extensions (apt repo)
+    install_python          # 7. Python 3
+    install_gnome_extensions # 8. GNOME Shell Extensions + Dash to Dock
     install_dbeaver         # 9. DBeaver CE (apt)
     install_vlc             # 10. VLC Media Player (apt)
     install_docker          # 11. Docker (apt)

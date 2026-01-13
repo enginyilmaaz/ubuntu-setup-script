@@ -790,21 +790,40 @@ install_dbeaver() {
         return
     fi
 
-    log_info "Installing DBeaver CE via apt repository..."
+    if [ "$DEB_ARCH" == "amd64" ]; then
+        # AMD64: Use apt repository
+        log_info "Installing DBeaver CE via apt repository..."
 
-    # Add DBeaver repository with retry
-    if ! retry_command "Adding DBeaver GPG key" sudo wget -O /usr/share/keyrings/dbeaver.gpg.key https://dbeaver.io/debs/dbeaver.gpg.key; then
-        log_warning "DBeaver installation skipped - could not add GPG key"
-        return
-    fi
+        # Add DBeaver repository with retry
+        if ! retry_command "Adding DBeaver GPG key" sudo wget -O /usr/share/keyrings/dbeaver.gpg.key https://dbeaver.io/debs/dbeaver.gpg.key; then
+            log_warning "DBeaver installation skipped - could not add GPG key"
+            return
+        fi
 
-    echo "deb [signed-by=/usr/share/keyrings/dbeaver.gpg.key] https://dbeaver.io/debs/dbeaver-ce /" | sudo tee /etc/apt/sources.list.d/dbeaver.list > /dev/null
+        echo "deb [signed-by=/usr/share/keyrings/dbeaver.gpg.key] https://dbeaver.io/debs/dbeaver-ce /" | sudo tee /etc/apt/sources.list.d/dbeaver.list > /dev/null
 
-    sudo apt-get update
-    if retry_apt_install dbeaver-ce; then
-        log_success "DBeaver CE installed successfully (via apt repository)"
+        sudo apt-get update
+        if retry_apt_install dbeaver-ce; then
+            log_success "DBeaver CE installed successfully (via apt repository)"
+        else
+            log_warning "DBeaver CE installation skipped after 3 failed attempts"
+        fi
     else
-        log_warning "DBeaver CE installation skipped after 3 failed attempts"
+        # ARM64: Use deb package directly
+        log_info "Installing DBeaver CE via deb package (ARM64)..."
+
+        local temp_file="/tmp/dbeaver-ce.deb"
+        local download_url="https://dbeaver.io/files/dbeaver-ce_latest_arm64.deb"
+
+        if ! retry_curl_download "$download_url" "$temp_file" "Downloading DBeaver CE deb"; then
+            log_warning "DBeaver installation skipped after 3 failed attempts. Install manually from https://dbeaver.io/download/"
+            return
+        fi
+
+        log_info "Installing DBeaver CE..."
+        sudo DEBIAN_FRONTEND=noninteractive apt-get install -y "$temp_file"
+        rm -f "$temp_file"
+        log_success "DBeaver CE installed successfully (via deb package)"
     fi
 }
 

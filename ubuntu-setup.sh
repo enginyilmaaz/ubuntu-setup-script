@@ -694,24 +694,52 @@ install_realvnc() {
     if package_installed realvnc-connect || command_exists vncserver-x11; then
         log_warning "RealVNC already installed, skipping installation..."
     else
-        local temp_file="/tmp/realvnc-connect.deb"
-        local download_url
-
-        # RealVNC Connect deb packages
         if [ "$DEB_ARCH" == "amd64" ]; then
-            download_url="https://downloads.realvnc.com/download/file/realvnc-connect/RealVNC-Connect-8.2.2-Linux-x64.deb"
-        else
-            download_url="https://downloads.realvnc.com/download/file/realvnc-connect/RealVNC-Connect-8.2.2-Linux-ARM64.deb"
-        fi
+            # AMD64: Use deb package
+            local temp_file="/tmp/realvnc-connect.deb"
+            local download_url="https://downloads.realvnc.com/download/file/realvnc-connect/RealVNC-Connect-8.2.2-Linux-x64.deb"
 
-        # Download with retry (3 attempts, 5s delay)
-        if ! retry_curl_download "$download_url" "$temp_file" "Downloading RealVNC Connect deb"; then
-            log_warning "RealVNC installation skipped after 3 failed attempts. Install manually from https://www.realvnc.com/en/connect/download/vnc/"
+            if ! retry_curl_download "$download_url" "$temp_file" "Downloading RealVNC Connect deb"; then
+                log_warning "RealVNC installation skipped after 3 failed attempts. Install manually from https://www.realvnc.com/en/connect/download/vnc/"
+            else
+                log_info "Installing RealVNC Connect..."
+                sudo DEBIAN_FRONTEND=noninteractive apt-get install -y "$temp_file"
+                rm -f "$temp_file"
+                log_success "RealVNC Connect installed successfully"
+            fi
         else
-            log_info "Installing RealVNC Connect..."
-            sudo DEBIAN_FRONTEND=noninteractive apt-get install -y "$temp_file"
-            rm -f "$temp_file"
-            log_success "RealVNC Connect installed successfully"
+            # ARM64: Use tar.gz installer
+            local temp_file="/tmp/realvnc-connect.tar.gz"
+            local temp_dir="/tmp/realvnc-installer"
+            local download_url="https://downloads.realvnc.com/download/file/vnc.files/VNC-Connect-Installer-2.3.0-Linux-ARM64.tar.gz"
+
+            if ! retry_curl_download "$download_url" "$temp_file" "Downloading RealVNC Connect tar.gz"; then
+                log_warning "RealVNC installation skipped after 3 failed attempts. Install manually from https://www.realvnc.com/en/connect/download/vnc/"
+            else
+                log_info "Extracting and installing RealVNC Connect..."
+                mkdir -p "$temp_dir"
+                tar -xzf "$temp_file" -C "$temp_dir"
+
+                # Run installer
+                cd "$temp_dir"
+                if [ -f "vncinstall" ]; then
+                    sudo ./vncinstall
+                elif [ -f "VNC-Connect-Installer"* ]; then
+                    sudo ./VNC-Connect-Installer*
+                else
+                    # Find and run any installer script
+                    local installer=$(find . -maxdepth 1 -type f -executable | head -1)
+                    if [ -n "$installer" ]; then
+                        sudo "$installer"
+                    else
+                        log_warning "Could not find RealVNC installer"
+                    fi
+                fi
+                cd - > /dev/null
+
+                rm -rf "$temp_file" "$temp_dir"
+                log_success "RealVNC Connect installed successfully"
+            fi
         fi
     fi
 

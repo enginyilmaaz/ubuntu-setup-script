@@ -13,8 +13,8 @@
 #   - Firefox removal (snap/deb/flatpak detection)
 #
 # Usage:
-#   ./ubuntu-setup.sh          # Basic install (skips DBeaver, VLC, CLI logins)
-#   ./ubuntu-setup.sh --full   # Full install (includes DBeaver, VLC)
+#   ./ubuntu-setup.sh          # Basic install (skips DBeaver, VLC, Cloudflared, CLI logins)
+#   ./ubuntu-setup.sh --full   # Full install (includes DBeaver, VLC, Cloudflared)
 #   ./ubuntu-setup.sh --login  # Basic install + CLI logins
 #   ./ubuntu-setup.sh --full --login  # Full install + CLI logins
 #===============================================================================
@@ -38,7 +38,7 @@ for arg in "$@"; do
             echo "Usage: $0 [OPTIONS]"
             echo ""
             echo "Options:"
-            echo "  --full    Full install (includes DBeaver CE, VLC)"
+            echo "  --full    Full install (includes DBeaver CE, VLC, Cloudflared)"
             echo "  --login   Run CLI login prompts (Claude, Gemini, Codex)"
             echo "  --help    Show this help message"
             echo ""
@@ -909,10 +909,42 @@ install_vlc() {
 }
 
 #===============================================================================
-# 11. Docker Installation (via apt repository)
+# 11. Cloudflared (Cloudflare Connector) Installation (via apt repository)
+#===============================================================================
+install_cloudflared() {
+    log_step "11. Installing Cloudflared (Cloudflare Connector)"
+
+    if command_exists cloudflared; then
+        log_warning "Cloudflared already installed ($(cloudflared --version 2>&1 | head -1)), skipping..."
+        return
+    fi
+
+    log_info "Installing Cloudflared via official apt repository..."
+
+    # Add Cloudflare GPG key
+    sudo mkdir -p --mode=0755 /usr/share/keyrings
+    if ! retry_command "Adding Cloudflare GPG key" bash -c 'curl -fsSL https://pkg.cloudflare.com/cloudflare-public-v2.gpg | sudo tee /usr/share/keyrings/cloudflare-public-v2.gpg >/dev/null'; then
+        log_warning "Cloudflared installation skipped - could not add GPG key"
+        return
+    fi
+
+    # Add Cloudflare repository
+    echo 'deb [signed-by=/usr/share/keyrings/cloudflare-public-v2.gpg] https://pkg.cloudflare.com/cloudflared any main' | sudo tee /etc/apt/sources.list.d/cloudflared.list > /dev/null
+
+    # Update and install cloudflared
+    sudo apt-get update
+    if retry_apt_install cloudflared; then
+        log_success "Cloudflared installed successfully"
+    else
+        log_warning "Cloudflared installation skipped after 3 failed attempts"
+    fi
+}
+
+#===============================================================================
+# 12. Docker Installation (via apt repository)
 #===============================================================================
 install_docker() {
-    log_step "11. Installing Docker"
+    log_step "12. Installing Docker"
 
     if command_exists docker; then
         log_warning "Docker already installed ($(docker --version)), skipping..."
@@ -947,10 +979,10 @@ install_docker() {
 }
 
 #===============================================================================
-# 12. CLI Login Commands
+# 13. CLI Login Commands
 #===============================================================================
 run_cli_logins() {
-    log_step "12. CLI Login Commands"
+    log_step "13. CLI Login Commands"
 
     # Reload NVM
     export NVM_DIR="$HOME/.nvm"
@@ -1026,10 +1058,10 @@ run_cli_logins() {
 }
 
 #===============================================================================
-# 13. Firefox Removal (detects snap, deb, flatpak)
+# 14. Firefox Removal (detects snap, deb, flatpak)
 #===============================================================================
 remove_firefox() {
-    log_step "13. Removing Firefox"
+    log_step "14. Removing Firefox"
 
     # Don't remove Firefox if no alternative browser was installed
     if ! $BROWSER_INSTALLED; then
@@ -1181,6 +1213,7 @@ print_summary() {
     dconf list /org/gnome/shell/extensions/dash-to-dock/ &>/dev/null && echo -e "  ${GREEN}✓${NC} Dash to Dock (configured)"
     (package_installed dbeaver-ce || command_exists dbeaver) && echo -e "  ${GREEN}✓${NC} DBeaver CE"
     command_exists vlc && echo -e "  ${GREEN}✓${NC} VLC Media Player"
+    command_exists cloudflared && echo -e "  ${GREEN}✓${NC} Cloudflared $(cloudflared --version 2>&1 | head -1 | cut -d' ' -f3)"
     command_exists docker && echo -e "  ${GREEN}✓${NC} Docker $(docker --version 2>&1 | cut -d' ' -f3 | tr -d ',')"
 
     echo ""
@@ -1214,9 +1247,9 @@ main() {
 
     # Show install mode
     if $FULL_INSTALL; then
-        log_info "Running FULL install (includes DBeaver, VLC)"
+        log_info "Running FULL install (includes DBeaver, VLC, Cloudflared)"
     else
-        log_info "Running BASIC install (use --full for DBeaver, VLC)"
+        log_info "Running BASIC install (use --full for DBeaver, VLC, Cloudflared)"
     fi
     if $DO_CLI_LOGIN; then
         log_info "CLI logins enabled (--login)"
@@ -1233,25 +1266,27 @@ main() {
     install_python          # 7. Python 3
     install_gnome_extensions # 8. GNOME Shell Extensions + Dash to Dock
 
-    # Optional: DBeaver and VLC (only with --full)
+    # Optional: DBeaver, VLC, Cloudflared (only with --full)
     if $FULL_INSTALL; then
         install_dbeaver     # 9. DBeaver CE (apt)
         install_vlc         # 10. VLC Media Player (apt)
+        install_cloudflared # 11. Cloudflared (apt)
     else
         log_info "Skipping DBeaver CE (use --full to install)"
         log_info "Skipping VLC (use --full to install)"
+        log_info "Skipping Cloudflared (use --full to install)"
     fi
 
-    install_docker          # 11. Docker (apt)
+    install_docker          # 12. Docker (apt)
 
     # Optional: CLI logins (only with --login)
     if $DO_CLI_LOGIN; then
-        run_cli_logins      # 12. CLI Logins
+        run_cli_logins      # 13. CLI Logins
     else
         log_info "Skipping CLI logins (use --login to enable)"
     fi
 
-    remove_firefox          # 13. Firefox Removal
+    remove_firefox          # 14. Firefox Removal
 
     # Print summary
     print_summary

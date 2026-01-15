@@ -39,6 +39,8 @@ DO_REMOVE_FIREFOX=false
 SHOW_BACKUP_GNOME=false
 RESTORE_GNOME=false
 SHOW_HELP=false
+SHOW_MENU=false
+APPLY_JETSON_FIX=false
 
 # Parse command line arguments
 for arg in "$@"; do
@@ -96,6 +98,12 @@ for arg in "$@"; do
             ;;
         --help|-h)
             SHOW_HELP=true
+            ;;
+        --menu)
+            SHOW_MENU=true
+            ;;
+        --jetson-fix)
+            APPLY_JETSON_FIX=true
             ;;
         *)
             echo "Unknown option: $arg"
@@ -253,12 +261,37 @@ show_help() {
     echo "      Restore GNOME desktop to previous state"
     echo "      - Restores from ~/.gnome_conf_backup/gnome-backup/"
     echo ""
-    echo -e "${GREEN}OTHER:${NC}"
+    echo -e "${GREEN}MENU & INTERACTIVE:${NC}"
+    echo ""
+    echo -e "  ${YELLOW}--menu${NC}"
+    echo "      Open full interactive menu"
+    echo "      - Install applications"
+    echo "      - Remove applications"
+    echo "      - Manage backups"
+    echo "      - System info"
+    echo ""
+    echo -e "  ${YELLOW}(no arguments)${NC}"
+    echo "      Open interactive app selection"
+    echo "      - Select apps with numbers"
+    echo "      - Shows OS info and architecture"
+    echo ""
+    echo -e "${GREEN}SPECIAL:${NC}"
+    echo ""
+    echo -e "  ${YELLOW}--jetson-fix${NC}"
+    echo "      Apply Jetson snapd fix manually"
+    echo "      - Required for browsers on Jetson devices"
+    echo "      - Usually auto-detected"
     echo ""
     echo -e "  ${YELLOW}--help, -h${NC}"
     echo "      Show this help message"
     echo ""
     echo -e "${GREEN}EXAMPLES:${NC}"
+    echo ""
+    echo "  # Interactive menu"
+    echo "  $0"
+    echo ""
+    echo "  # Full menu system"
+    echo "  $0 --menu"
     echo ""
     echo "  # Install everything"
     echo "  $0 --all"
@@ -281,6 +314,680 @@ show_help() {
     echo "  - GNOME backup is created automatically before any GNOME changes"
     echo "  - Backups stored in: ~/.gnome_conf_backup/"
     echo ""
+}
+
+#===============================================================================
+# Interactive Menu System
+#===============================================================================
+
+# Detect system info for display (without logging)
+detect_system_silent() {
+    if [ -f /etc/os-release ]; then
+        . /etc/os-release
+        OS_NAME=$NAME
+        OS_VERSION=$VERSION_ID
+        OS_CODENAME=$VERSION_CODENAME
+    else
+        OS_NAME="Unknown"
+        OS_VERSION="Unknown"
+        OS_CODENAME="Unknown"
+    fi
+
+    ARCH=$(uname -m)
+    case $ARCH in
+        x86_64) DEB_ARCH="amd64" ;;
+        aarch64) DEB_ARCH="arm64" ;;
+        armv7l) DEB_ARCH="armhf" ;;
+        *) DEB_ARCH="unknown" ;;
+    esac
+
+    # Detect Jetson
+    IS_JETSON=false
+    if [ -f /etc/nv_tegra_release ] || ([ -d /sys/devices/soc0 ] && grep -qi "nvidia" /sys/devices/soc0/family 2>/dev/null); then
+        IS_JETSON=true
+    fi
+}
+
+# Show system info header
+show_system_header() {
+    echo -e "${CYAN}╔═══════════════════════════════════════════════════════════════════════════╗${NC}"
+    echo -e "${CYAN}║              Ubuntu Post-Installation Setup Script                        ║${NC}"
+    echo -e "${CYAN}╚═══════════════════════════════════════════════════════════════════════════╝${NC}"
+    echo ""
+    echo -e "${GREEN}System Information:${NC}"
+    echo -e "  OS:           ${YELLOW}$OS_NAME $OS_VERSION${NC} ($OS_CODENAME)"
+    echo -e "  Architecture: ${YELLOW}$ARCH${NC} ($DEB_ARCH)"
+    if $IS_JETSON; then
+        echo -e "  Device:       ${YELLOW}NVIDIA Jetson${NC}"
+    fi
+    echo ""
+}
+
+# Interactive app selection menu
+show_interactive_install_menu() {
+    detect_system_silent
+
+    # App selection array
+    declare -A APPS
+    APPS[1]="VNC:RealVNC Connect (Remote Desktop):INSTALL_VNC"
+    APPS[2]="NodeJS:NVM + Node.js 22 + Yarn + CLI Tools:INSTALL_NODEJS"
+    APPS[3]="Chrome:Google Chrome / Chromium:INSTALL_CHROME"
+    APPS[4]="Cursor:Cursor IDE (AI Code Editor):INSTALL_CURSOR"
+    APPS[5]="Antigravity:Antigravity Tool:INSTALL_ANTIGRAVITY"
+    APPS[6]="VSCode:Visual Studio Code + Extensions:INSTALL_VSCODE"
+    APPS[7]="Python:Python 3 + pip + venv:INSTALL_PYTHON"
+    APPS[8]="GNOME:GNOME Extensions + Dash to Dock:INSTALL_GNOME"
+    APPS[9]="DBeaver:DBeaver CE (Database Tool):INSTALL_DBEAVER"
+    APPS[10]="VLC:VLC Media Player:INSTALL_VLC"
+    APPS[11]="Cloudflared:Cloudflare Tunnel Client:INSTALL_CLOUDFLARED"
+    APPS[12]="Docker:Docker Engine + Compose:INSTALL_DOCKER"
+    APPS[13]="JetsonFix:Jetson Snapd Fix (Browser Fix):APPLY_JETSON_FIX"
+
+    # Selected apps array
+    declare -A SELECTED
+    for i in {1..13}; do
+        SELECTED[$i]=false
+    done
+
+    while true; do
+        clear
+        show_system_header
+
+        echo -e "${GREEN}Select applications to install:${NC}"
+        echo -e "${YELLOW}(Enter numbers separated by space, 'a' for all, 'c' to confirm, 'q' to quit)${NC}"
+        echo ""
+
+        for i in {1..13}; do
+            IFS=':' read -r name desc var <<< "${APPS[$i]}"
+            if ${SELECTED[$i]}; then
+                echo -e "  ${GREEN}[$i] ✓ $name${NC} - $desc"
+            else
+                echo -e "  ${BLUE}[$i]${NC}   $name - $desc"
+            fi
+        done
+
+        echo ""
+        echo -e "  ${YELLOW}[a]${NC}   Select ALL"
+        echo -e "  ${YELLOW}[n]${NC}   Select NONE (clear)"
+        echo -e "  ${GREEN}[c]${NC}   CONFIRM and install"
+        echo -e "  ${RED}[q]${NC}   QUIT"
+        echo ""
+
+        # Show selected count
+        local count=0
+        for i in {1..13}; do
+            ${SELECTED[$i]} && ((count++))
+        done
+        echo -e "${CYAN}Selected: $count applications${NC}"
+        echo ""
+
+        read -p "Enter choice: " choice
+
+        case $choice in
+            q|Q)
+                echo "Exiting..."
+                exit 0
+                ;;
+            c|C)
+                if [ $count -eq 0 ]; then
+                    echo -e "${RED}No applications selected. Please select at least one.${NC}"
+                    sleep 1
+                    continue
+                fi
+                # Set the install flags based on selection
+                for i in {1..13}; do
+                    IFS=':' read -r name desc var <<< "${APPS[$i]}"
+                    if ${SELECTED[$i]}; then
+                        eval "$var=true"
+                    fi
+                done
+                return 0
+                ;;
+            a|A)
+                for i in {1..13}; do
+                    SELECTED[$i]=true
+                done
+                ;;
+            n|N)
+                for i in {1..13}; do
+                    SELECTED[$i]=false
+                done
+                ;;
+            *)
+                # Parse space-separated numbers
+                for num in $choice; do
+                    if [[ "$num" =~ ^[0-9]+$ ]] && [ "$num" -ge 1 ] && [ "$num" -le 13 ]; then
+                        if ${SELECTED[$num]}; then
+                            SELECTED[$num]=false
+                        else
+                            SELECTED[$num]=true
+                        fi
+                    fi
+                done
+                ;;
+        esac
+    done
+}
+
+# Full menu system
+show_full_menu() {
+    detect_system_silent
+
+    while true; do
+        clear
+        show_system_header
+
+        echo -e "${GREEN}Main Menu:${NC}"
+        echo ""
+        echo -e "  ${BLUE}[1]${NC}  Install Applications"
+        echo -e "  ${BLUE}[2]${NC}  Remove Applications"
+        echo -e "  ${BLUE}[3]${NC}  Backups"
+        echo -e "  ${BLUE}[4]${NC}  System Info"
+        echo ""
+        echo -e "  ${RED}[q]${NC}  Quit"
+        echo ""
+
+        read -p "Enter choice: " choice
+
+        case $choice in
+            1) menu_install_apps ;;
+            2) menu_remove_apps ;;
+            3) menu_backups ;;
+            4) menu_system_info ;;
+            q|Q) echo "Goodbye!"; exit 0 ;;
+            *) echo -e "${RED}Invalid choice${NC}"; sleep 1 ;;
+        esac
+    done
+}
+
+# Install apps submenu
+menu_install_apps() {
+    show_interactive_install_menu
+
+    echo ""
+    echo -e "${GREEN}Starting installation...${NC}"
+    sleep 1
+
+    # Run the actual installations
+    run_installations
+}
+
+# Remove apps submenu
+menu_remove_apps() {
+    detect_system_silent
+
+    while true; do
+        clear
+        show_system_header
+
+        echo -e "${GREEN}Remove Applications:${NC}"
+        echo ""
+
+        local idx=1
+        declare -A REMOVABLE
+
+        # Check installed apps
+        if command_exists vncserver-x11 || package_installed realvnc-connect; then
+            echo -e "  ${BLUE}[$idx]${NC}  RealVNC Connect"
+            REMOVABLE[$idx]="realvnc"
+            ((idx++))
+        fi
+
+        if [ -d "$HOME/.nvm" ]; then
+            echo -e "  ${BLUE}[$idx]${NC}  NVM + Node.js"
+            REMOVABLE[$idx]="nvm"
+            ((idx++))
+        fi
+
+        if command_exists google-chrome || command_exists google-chrome-stable; then
+            echo -e "  ${BLUE}[$idx]${NC}  Google Chrome"
+            REMOVABLE[$idx]="chrome"
+            ((idx++))
+        fi
+
+        if command_exists chromium-browser || command_exists chromium; then
+            echo -e "  ${BLUE}[$idx]${NC}  Chromium"
+            REMOVABLE[$idx]="chromium"
+            ((idx++))
+        fi
+
+        if command_exists cursor; then
+            echo -e "  ${BLUE}[$idx]${NC}  Cursor IDE"
+            REMOVABLE[$idx]="cursor"
+            ((idx++))
+        fi
+
+        if command_exists code; then
+            echo -e "  ${BLUE}[$idx]${NC}  VS Code"
+            REMOVABLE[$idx]="vscode"
+            ((idx++))
+        fi
+
+        if package_installed dbeaver-ce || command_exists dbeaver; then
+            echo -e "  ${BLUE}[$idx]${NC}  DBeaver CE"
+            REMOVABLE[$idx]="dbeaver"
+            ((idx++))
+        fi
+
+        if command_exists vlc; then
+            echo -e "  ${BLUE}[$idx]${NC}  VLC"
+            REMOVABLE[$idx]="vlc"
+            ((idx++))
+        fi
+
+        if command_exists cloudflared; then
+            echo -e "  ${BLUE}[$idx]${NC}  Cloudflared"
+            REMOVABLE[$idx]="cloudflared"
+            ((idx++))
+        fi
+
+        if command_exists docker; then
+            echo -e "  ${BLUE}[$idx]${NC}  Docker"
+            REMOVABLE[$idx]="docker"
+            ((idx++))
+        fi
+
+        if command_exists firefox; then
+            echo -e "  ${BLUE}[$idx]${NC}  Firefox"
+            REMOVABLE[$idx]="firefox"
+            ((idx++))
+        fi
+
+        if [ $idx -eq 1 ]; then
+            echo -e "  ${YELLOW}No removable applications found.${NC}"
+        fi
+
+        echo ""
+        echo -e "  ${RED}[b]${NC}  Back to main menu"
+        echo ""
+
+        read -p "Enter number to remove (or 'b' to go back): " choice
+
+        if [[ "$choice" == "b" || "$choice" == "B" ]]; then
+            return
+        fi
+
+        if [[ "$choice" =~ ^[0-9]+$ ]] && [ -n "${REMOVABLE[$choice]}" ]; then
+            local app="${REMOVABLE[$choice]}"
+            echo ""
+            read -p "Are you sure you want to remove $app? (y/n): " confirm
+            if [[ "$confirm" =~ ^[Yy]$ ]]; then
+                remove_application "$app"
+                echo ""
+                read -p "Press Enter to continue..."
+            fi
+        fi
+    done
+}
+
+# Remove specific application
+remove_application() {
+    local app=$1
+    echo -e "${BLUE}[INFO]${NC} Removing $app..."
+
+    case $app in
+        realvnc)
+            sudo apt-get remove -y realvnc-connect realvnc-vnc-server 2>/dev/null
+            ;;
+        nvm)
+            rm -rf "$HOME/.nvm"
+            echo -e "${YELLOW}Note: Remove NVM lines from ~/.bashrc manually${NC}"
+            ;;
+        chrome)
+            sudo apt-get remove -y google-chrome-stable 2>/dev/null
+            ;;
+        chromium)
+            sudo apt-get remove -y chromium-browser chromium 2>/dev/null
+            ;;
+        cursor)
+            sudo apt-get remove -y cursor 2>/dev/null
+            ;;
+        vscode)
+            sudo apt-get remove -y code 2>/dev/null
+            ;;
+        dbeaver)
+            sudo apt-get remove -y dbeaver-ce 2>/dev/null
+            ;;
+        vlc)
+            sudo apt-get remove -y vlc 2>/dev/null
+            ;;
+        cloudflared)
+            sudo apt-get remove -y cloudflared 2>/dev/null
+            ;;
+        docker)
+            sudo apt-get remove -y docker-ce docker-ce-cli containerd.io 2>/dev/null
+            ;;
+        firefox)
+            sudo snap remove firefox 2>/dev/null
+            sudo apt-get remove -y firefox 2>/dev/null
+            ;;
+    esac
+
+    echo -e "${GREEN}[SUCCESS]${NC} $app removed"
+}
+
+# Backups submenu
+menu_backups() {
+    while true; do
+        clear
+        show_system_header
+
+        echo -e "${GREEN}Backup Management:${NC}"
+        echo ""
+        echo -e "  ${BLUE}[1]${NC}  Show existing backups"
+        echo -e "  ${BLUE}[2]${NC}  Take new backup"
+        echo -e "  ${BLUE}[3]${NC}  Restore from backup"
+        echo ""
+        echo -e "  ${RED}[b]${NC}  Back to main menu"
+        echo ""
+
+        read -p "Enter choice: " choice
+
+        case $choice in
+            1) show_all_backups ;;
+            2) take_new_backup ;;
+            3) restore_backup_interactive ;;
+            b|B) return ;;
+            *) echo -e "${RED}Invalid choice${NC}"; sleep 1 ;;
+        esac
+    done
+}
+
+# Show all backups
+show_all_backups() {
+    clear
+    show_system_header
+
+    echo -e "${GREEN}Existing Backups:${NC}"
+    echo -e "${YELLOW}Location: $BACKUP_DIR${NC}"
+    echo ""
+
+    if [ ! -d "$BACKUP_DIR" ]; then
+        echo -e "${YELLOW}No backups found.${NC}"
+        echo ""
+        read -p "Press Enter to continue..."
+        return
+    fi
+
+    # List all backup directories
+    local found=false
+    for backup in "$BACKUP_DIR"/*; do
+        if [ -d "$backup" ]; then
+            found=true
+            local name=$(basename "$backup")
+            local timestamp=""
+            if [ -f "$backup/backup-timestamp" ]; then
+                timestamp=$(cat "$backup/backup-timestamp")
+            fi
+            echo -e "  ${CYAN}$name${NC}"
+            [ -n "$timestamp" ] && echo -e "    Created: $timestamp"
+            echo -e "    Files:"
+            ls -la "$backup" 2>/dev/null | tail -n +2 | head -5 | while read line; do
+                echo "      $line"
+            done
+            echo ""
+        fi
+    done
+
+    if ! $found; then
+        echo -e "${YELLOW}No backups found.${NC}"
+    fi
+
+    echo ""
+    read -p "Press Enter to continue..."
+}
+
+# Take new backup
+take_new_backup() {
+    clear
+    show_system_header
+
+    local timestamp=$(date +%Y%m%d_%H%M%S)
+    local backup_name="${timestamp}-backup"
+    local backup_path="$BACKUP_DIR/$backup_name"
+
+    echo -e "${GREEN}Taking New Backup:${NC}"
+    echo -e "Backup name: ${YELLOW}$backup_name${NC}"
+    echo ""
+
+    read -p "Continue? (y/n): " confirm
+    if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
+        return
+    fi
+
+    mkdir -p "$backup_path"
+
+    echo ""
+    echo -e "${BLUE}[INFO]${NC} Backing up GNOME settings..."
+
+    # Backup GNOME settings
+    if command_exists dconf; then
+        if dconf list /org/gnome/shell/extensions/dash-to-dock/ &>/dev/null; then
+            dconf dump /org/gnome/shell/extensions/dash-to-dock/ > "$backup_path/dash-to-dock.dconf"
+            echo -e "${GREEN}[OK]${NC} Dash to Dock"
+        fi
+
+        if dconf list /org/gnome/shell/ &>/dev/null; then
+            dconf dump /org/gnome/shell/ > "$backup_path/gnome-shell.dconf"
+            echo -e "${GREEN}[OK]${NC} GNOME Shell"
+        fi
+
+        if dconf list /org/gnome/desktop/ &>/dev/null; then
+            dconf dump /org/gnome/desktop/ > "$backup_path/gnome-desktop.dconf"
+            echo -e "${GREEN}[OK]${NC} GNOME Desktop"
+        fi
+    fi
+
+    # Backup VS Code settings
+    local vscode_settings="$HOME/.config/Code/User/settings.json"
+    if [ -f "$vscode_settings" ]; then
+        cp "$vscode_settings" "$backup_path/vscode-settings.json"
+        echo -e "${GREEN}[OK]${NC} VS Code settings"
+    fi
+
+    # Save timestamp
+    echo "$timestamp" > "$backup_path/backup-timestamp"
+
+    echo ""
+    echo -e "${GREEN}Backup completed: $backup_path${NC}"
+    echo ""
+    read -p "Press Enter to continue..."
+}
+
+# Restore backup interactive
+restore_backup_interactive() {
+    clear
+    show_system_header
+
+    echo -e "${GREEN}Restore from Backup:${NC}"
+    echo ""
+
+    if [ ! -d "$BACKUP_DIR" ]; then
+        echo -e "${YELLOW}No backups found.${NC}"
+        echo ""
+        read -p "Press Enter to continue..."
+        return
+    fi
+
+    # List available backups
+    declare -A BACKUPS
+    local idx=1
+
+    for backup in "$BACKUP_DIR"/*; do
+        if [ -d "$backup" ]; then
+            local name=$(basename "$backup")
+            local timestamp=""
+            [ -f "$backup/backup-timestamp" ] && timestamp=$(cat "$backup/backup-timestamp")
+
+            echo -e "  ${BLUE}[$idx]${NC}  $name"
+            [ -n "$timestamp" ] && echo -e "        Created: $timestamp"
+            BACKUPS[$idx]="$backup"
+            ((idx++))
+        fi
+    done
+
+    if [ $idx -eq 1 ]; then
+        echo -e "${YELLOW}No backups found.${NC}"
+        echo ""
+        read -p "Press Enter to continue..."
+        return
+    fi
+
+    echo ""
+    echo -e "  ${RED}[b]${NC}  Back"
+    echo ""
+
+    read -p "Select backup to restore: " choice
+
+    if [[ "$choice" == "b" || "$choice" == "B" ]]; then
+        return
+    fi
+
+    if [[ "$choice" =~ ^[0-9]+$ ]] && [ -n "${BACKUPS[$choice]}" ]; then
+        local backup_path="${BACKUPS[$choice]}"
+
+        clear
+        show_system_header
+
+        echo -e "${GREEN}Backup Contents:${NC}"
+        echo -e "Path: ${YELLOW}$backup_path${NC}"
+        echo ""
+
+        # Show backup contents
+        ls -la "$backup_path" 2>/dev/null
+        echo ""
+
+        # Show dconf content preview
+        if [ -f "$backup_path/dash-to-dock.dconf" ]; then
+            echo -e "${CYAN}Dash to Dock settings preview:${NC}"
+            head -20 "$backup_path/dash-to-dock.dconf"
+            echo "..."
+            echo ""
+        fi
+
+        read -p "Restore this backup? (yes/y to confirm): " confirm
+
+        if [[ "$confirm" =~ ^[Yy]([Ee][Ss])?$ ]]; then
+            echo ""
+            echo -e "${BLUE}[INFO]${NC} Restoring backup..."
+
+            # Restore GNOME settings
+            if [ -f "$backup_path/dash-to-dock.dconf" ] && command_exists dconf; then
+                dconf load /org/gnome/shell/extensions/dash-to-dock/ < "$backup_path/dash-to-dock.dconf"
+                echo -e "${GREEN}[OK]${NC} Dash to Dock restored"
+            fi
+
+            if [ -f "$backup_path/gnome-shell.dconf" ] && command_exists dconf; then
+                dconf load /org/gnome/shell/ < "$backup_path/gnome-shell.dconf"
+                echo -e "${GREEN}[OK]${NC} GNOME Shell restored"
+            fi
+
+            if [ -f "$backup_path/gnome-desktop.dconf" ] && command_exists dconf; then
+                dconf load /org/gnome/desktop/ < "$backup_path/gnome-desktop.dconf"
+                echo -e "${GREEN}[OK]${NC} GNOME Desktop restored"
+            fi
+
+            # Restore VS Code settings
+            if [ -f "$backup_path/vscode-settings.json" ]; then
+                local vscode_dir="$HOME/.config/Code/User"
+                mkdir -p "$vscode_dir"
+                cp "$backup_path/vscode-settings.json" "$vscode_dir/settings.json"
+                echo -e "${GREEN}[OK]${NC} VS Code settings restored"
+            fi
+
+            echo ""
+            echo -e "${GREEN}Backup restored successfully!${NC}"
+            echo -e "${YELLOW}Note: You may need to restart GNOME Shell (Alt+F2, 'r') for changes to take effect.${NC}"
+        fi
+
+        echo ""
+        read -p "Press Enter to continue..."
+    fi
+}
+
+# System info menu
+menu_system_info() {
+    clear
+    detect_system_silent
+    show_system_header
+
+    echo -e "${GREEN}Detailed System Information:${NC}"
+    echo ""
+    echo -e "  Kernel:     $(uname -r)"
+    echo -e "  Hostname:   $(hostname)"
+    echo -e "  User:       $USER"
+    echo -e "  Home:       $HOME"
+    echo ""
+
+    echo -e "${GREEN}Installed Applications:${NC}"
+    echo ""
+
+    command_exists vncserver-x11 && echo -e "  ${GREEN}✓${NC} RealVNC"
+    [ -d "$HOME/.nvm" ] && echo -e "  ${GREEN}✓${NC} NVM"
+    command_exists node && echo -e "  ${GREEN}✓${NC} Node.js $(node -v 2>/dev/null)"
+    command_exists yarn && echo -e "  ${GREEN}✓${NC} Yarn"
+    (command_exists google-chrome || command_exists google-chrome-stable) && echo -e "  ${GREEN}✓${NC} Google Chrome"
+    (command_exists chromium-browser || command_exists chromium) && echo -e "  ${GREEN}✓${NC} Chromium"
+    command_exists cursor && echo -e "  ${GREEN}✓${NC} Cursor IDE"
+    command_exists code && echo -e "  ${GREEN}✓${NC} VS Code"
+    command_exists python3 && echo -e "  ${GREEN}✓${NC} Python $(python3 --version 2>&1 | cut -d' ' -f2)"
+    command_exists dbeaver && echo -e "  ${GREEN}✓${NC} DBeaver"
+    command_exists vlc && echo -e "  ${GREEN}✓${NC} VLC"
+    command_exists cloudflared && echo -e "  ${GREEN}✓${NC} Cloudflared"
+    command_exists docker && echo -e "  ${GREEN}✓${NC} Docker"
+    command_exists firefox && echo -e "  ${GREEN}✓${NC} Firefox"
+
+    echo ""
+    read -p "Press Enter to continue..."
+}
+
+# Run installations based on flags
+run_installations() {
+    # Check if running as root
+    if [ "$EUID" -eq 0 ]; then
+        log_error "Please do not run this script as root. Run as normal user."
+        exit 1
+    fi
+
+    # Detect system
+    detect_system
+
+    # Apply Jetson snapd fix if selected
+    if $APPLY_JETSON_FIX; then
+        fix_jetson_snapd
+    fi
+
+    # Install prerequisites
+    install_prerequisites
+
+    # Run installations based on flags
+    $INSTALL_VNC && install_realvnc
+    $INSTALL_NODEJS && install_nvm_nodejs
+    $INSTALL_CHROME && install_chrome
+    $INSTALL_CURSOR && install_cursor
+    $INSTALL_ANTIGRAVITY && install_antigravity
+    $INSTALL_VSCODE && install_vscode
+    $INSTALL_PYTHON && install_python
+    $INSTALL_GNOME && install_gnome_extensions
+    $INSTALL_DBEAVER && install_dbeaver
+    $INSTALL_VLC && install_vlc
+    $INSTALL_CLOUDFLARED && install_cloudflared
+    $INSTALL_DOCKER && install_docker
+
+    # CLI logins (requires nodejs to be installed)
+    if $DO_CLI_LOGIN; then
+        if $INSTALL_NODEJS || command_exists node; then
+            run_cli_logins
+        else
+            log_warning "CLI logins skipped: Node.js not installed. Use --nodejs first."
+        fi
+    fi
+
+    # Firefox removal
+    $DO_REMOVE_FIREFOX && remove_firefox
+
+    # Print summary
+    print_summary
 }
 
 #===============================================================================
@@ -1628,6 +2335,11 @@ main() {
         exit 0
     fi
 
+    if $SHOW_MENU; then
+        show_full_menu
+        exit 0
+    fi
+
     if $SHOW_BACKUP_GNOME; then
         show_gnome_backup
         exit $?
@@ -1643,91 +2355,19 @@ main() {
     if $INSTALL_VNC || $INSTALL_NODEJS || $INSTALL_CHROME || $INSTALL_CURSOR || \
        $INSTALL_ANTIGRAVITY || $INSTALL_VSCODE || $INSTALL_PYTHON || $INSTALL_GNOME || \
        $INSTALL_DBEAVER || $INSTALL_VLC || $INSTALL_CLOUDFLARED || $INSTALL_DOCKER || \
-       $DO_CLI_LOGIN || $DO_REMOVE_FIREFOX; then
+       $DO_CLI_LOGIN || $DO_REMOVE_FIREFOX || $APPLY_JETSON_FIX; then
         has_install=true
     fi
 
-    # If no options provided, show help
+    # If no options provided, show interactive menu
     if ! $has_install; then
-        echo -e "${YELLOW}No installation options specified.${NC}"
-        echo ""
-        echo "Use --all to install everything, or specify individual components."
-        echo "Use --help to see all available options."
-        echo ""
-        echo "Examples:"
-        echo "  $0 --all                    # Install everything"
-        echo "  $0 --nodejs --vscode        # Install Node.js and VS Code"
-        echo "  $0 --help                   # Show all options"
+        show_interactive_install_menu
+        run_installations
         exit 0
     fi
 
-    echo -e "${CYAN}"
-    echo "╔═══════════════════════════════════════════════════════════════╗"
-    echo "║           Ubuntu Post-Installation Setup Script               ║"
-    echo "╚═══════════════════════════════════════════════════════════════╝"
-    echo -e "${NC}"
-
-    # Check if running as root
-    if [ "$EUID" -eq 0 ]; then
-        log_error "Please do not run this script as root. Run as normal user."
-        exit 1
-    fi
-
-    # Detect system
-    detect_system
-
-    # Apply Jetson snapd fix if needed (must be done before browser installation)
-    fix_jetson_snapd
-
-    # Install prerequisites
-    install_prerequisites
-
-    # Show what will be installed
-    log_info "Selected installations:"
-    $INSTALL_VNC && echo "  - RealVNC Connect"
-    $INSTALL_NODEJS && echo "  - Node.js (NVM, Node 22, Yarn, CLI tools)"
-    $INSTALL_CHROME && echo "  - Chrome/Chromium"
-    $INSTALL_CURSOR && echo "  - Cursor IDE"
-    $INSTALL_ANTIGRAVITY && echo "  - Antigravity"
-    $INSTALL_VSCODE && echo "  - VS Code + Extensions"
-    $INSTALL_PYTHON && echo "  - Python 3"
-    $INSTALL_GNOME && echo "  - GNOME Extensions + Dash to Dock"
-    $INSTALL_DBEAVER && echo "  - DBeaver CE"
-    $INSTALL_VLC && echo "  - VLC Media Player"
-    $INSTALL_CLOUDFLARED && echo "  - Cloudflared"
-    $INSTALL_DOCKER && echo "  - Docker"
-    $DO_CLI_LOGIN && echo "  - CLI Logins"
-    $DO_REMOVE_FIREFOX && echo "  - Remove Firefox"
-    echo ""
-
-    # Run installations based on flags
-    $INSTALL_VNC && install_realvnc
-    $INSTALL_NODEJS && install_nvm_nodejs
-    $INSTALL_CHROME && install_chrome
-    $INSTALL_CURSOR && install_cursor
-    $INSTALL_ANTIGRAVITY && install_antigravity
-    $INSTALL_VSCODE && install_vscode
-    $INSTALL_PYTHON && install_python
-    $INSTALL_GNOME && install_gnome_extensions
-    $INSTALL_DBEAVER && install_dbeaver
-    $INSTALL_VLC && install_vlc
-    $INSTALL_CLOUDFLARED && install_cloudflared
-    $INSTALL_DOCKER && install_docker
-
-    # CLI logins (requires nodejs to be installed)
-    if $DO_CLI_LOGIN; then
-        if $INSTALL_NODEJS || command_exists node; then
-            run_cli_logins
-        else
-            log_warning "CLI logins skipped: Node.js not installed. Use --nodejs first."
-        fi
-    fi
-
-    # Firefox removal
-    $DO_REMOVE_FIREFOX && remove_firefox
-
-    # Print summary
-    print_summary
+    # Run installations with command-line flags
+    run_installations
 }
 
 # Run main function

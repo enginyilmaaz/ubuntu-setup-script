@@ -363,49 +363,75 @@ show_system_header() {
     echo ""
 }
 
-# Interactive app selection menu
+# Interactive app selection menu with arrow key navigation
 show_interactive_install_menu() {
     detect_system_silent
 
     # App selection array
-    declare -A APPS
-    APPS[1]="VNC:RealVNC Connect (Remote Desktop):INSTALL_VNC"
-    APPS[2]="NodeJS:NVM + Node.js 22 + Yarn + CLI Tools:INSTALL_NODEJS"
-    APPS[3]="Chrome:Google Chrome / Chromium:INSTALL_CHROME"
-    APPS[4]="Cursor:Cursor IDE (AI Code Editor):INSTALL_CURSOR"
-    APPS[5]="Antigravity:Antigravity Tool:INSTALL_ANTIGRAVITY"
-    APPS[6]="VSCode:Visual Studio Code + Extensions:INSTALL_VSCODE"
-    APPS[7]="Python:Python 3 + pip + venv:INSTALL_PYTHON"
-    APPS[8]="GNOME:GNOME Extensions + Dash to Dock:INSTALL_GNOME"
-    APPS[9]="DBeaver:DBeaver CE (Database Tool):INSTALL_DBEAVER"
-    APPS[10]="VLC:VLC Media Player:INSTALL_VLC"
-    APPS[11]="Cloudflared:Cloudflare Tunnel Client:INSTALL_CLOUDFLARED"
-    APPS[12]="Docker:Docker Engine + Compose:INSTALL_DOCKER"
-    APPS[13]="JetsonFix:Jetson Snapd Fix (Browser Fix):APPLY_JETSON_FIX"
+    declare -a APP_NAMES
+    declare -a APP_DESCS
+    declare -a APP_VARS
+
+    APP_NAMES[1]="VNC";         APP_DESCS[1]="RealVNC Connect (Remote Desktop)";    APP_VARS[1]="INSTALL_VNC"
+    APP_NAMES[2]="NodeJS";      APP_DESCS[2]="NVM + Node.js 22 + Yarn + CLI Tools"; APP_VARS[2]="INSTALL_NODEJS"
+    APP_NAMES[3]="Chrome";      APP_DESCS[3]="Google Chrome / Chromium";            APP_VARS[3]="INSTALL_CHROME"
+    APP_NAMES[4]="Cursor";      APP_DESCS[4]="Cursor IDE (AI Code Editor)";         APP_VARS[4]="INSTALL_CURSOR"
+    APP_NAMES[5]="Antigravity"; APP_DESCS[5]="Antigravity Tool";                    APP_VARS[5]="INSTALL_ANTIGRAVITY"
+    APP_NAMES[6]="VSCode";      APP_DESCS[6]="Visual Studio Code + Extensions";     APP_VARS[6]="INSTALL_VSCODE"
+    APP_NAMES[7]="Python";      APP_DESCS[7]="Python 3 + pip + venv";               APP_VARS[7]="INSTALL_PYTHON"
+    APP_NAMES[8]="GNOME";       APP_DESCS[8]="GNOME Extensions + Dash to Dock";     APP_VARS[8]="INSTALL_GNOME"
+    APP_NAMES[9]="DBeaver";     APP_DESCS[9]="DBeaver CE (Database Tool)";          APP_VARS[9]="INSTALL_DBEAVER"
+    APP_NAMES[10]="VLC";        APP_DESCS[10]="VLC Media Player";                   APP_VARS[10]="INSTALL_VLC"
+    APP_NAMES[11]="Cloudflared"; APP_DESCS[11]="Cloudflare Tunnel Client";          APP_VARS[11]="INSTALL_CLOUDFLARED"
+    APP_NAMES[12]="Docker";     APP_DESCS[12]="Docker Engine + Compose";            APP_VARS[12]="INSTALL_DOCKER"
+    APP_NAMES[13]="JetsonFix";  APP_DESCS[13]="Jetson Snapd Fix (Browser Fix)";     APP_VARS[13]="APPLY_JETSON_FIX"
+
+    local TOTAL_ITEMS=13
 
     # Selected apps array
-    declare -A SELECTED
-    for i in {1..13}; do
-        SELECTED[$i]=false
+    declare -a SELECTED
+    for i in $(seq 1 $TOTAL_ITEMS); do
+        SELECTED[$i]=0
     done
+
+    # Current cursor position
+    local cursor=1
+
+    # Hide cursor
+    tput civis 2>/dev/null
+
+    # Restore cursor on exit
+    trap 'tput cnorm 2>/dev/null' EXIT
 
     while true; do
         clear
         show_system_header
 
         echo -e "${GREEN}═══════════════════════════════════════════════════════════════${NC}"
-        echo -e "${GREEN}        ÇOKLU SEÇİM - Numara girerek seçim yapın${NC}"
+        echo -e "${GREEN}     ↑↓ Ok tuşları ile gezin, SPACE/ENTER ile seçin${NC}"
         echo -e "${GREEN}═══════════════════════════════════════════════════════════════${NC}"
         echo ""
 
-        for i in {1..13}; do
-            IFS=':' read -r name desc var <<< "${APPS[$i]}"
-            # Format number with padding
+        # Draw menu items
+        for i in $(seq 1 $TOTAL_ITEMS); do
+            local name="${APP_NAMES[$i]}"
+            local desc="${APP_DESCS[$i]}"
             local num_display=$(printf "%2d" $i)
-            if ${SELECTED[$i]}; then
-                echo -e "  ${GREEN}[$num_display] [✓]${NC} ${GREEN}$name${NC} - $desc"
+
+            # Check if selected
+            local checkbox="[ ]"
+            local name_color="${NC}"
+            if [ "${SELECTED[$i]}" -eq 1 ]; then
+                checkbox="${GREEN}[✓]${NC}"
+                name_color="${GREEN}"
+            fi
+
+            # Check if cursor is on this item
+            if [ $cursor -eq $i ]; then
+                # Highlighted row (cursor here)
+                echo -e "  ${CYAN}▶${NC} ${BLUE}[$num_display]${NC} $checkbox ${name_color}${name}${NC} - $desc"
             else
-                echo -e "  ${BLUE}[$num_display]${NC} [ ] $name - $desc"
+                echo -e "    ${BLUE}[$num_display]${NC} $checkbox ${name_color}${name}${NC} - $desc"
             fi
         done
 
@@ -415,11 +441,10 @@ show_interactive_install_menu() {
         # Show selected count and names
         local count=0
         local selected_names=""
-        for i in {1..13}; do
-            if ${SELECTED[$i]}; then
+        for i in $(seq 1 $TOTAL_ITEMS); do
+            if [ "${SELECTED[$i]}" -eq 1 ]; then
                 ((count++))
-                IFS=':' read -r name desc var <<< "${APPS[$i]}"
-                selected_names+="$name, "
+                selected_names+="${APP_NAMES[$i]}, "
             fi
         done
 
@@ -432,75 +457,87 @@ show_interactive_install_menu() {
 
         echo -e "${YELLOW}───────────────────────────────────────────────────────────────${NC}"
         echo ""
-        echo -e "  ${CYAN}KULLANIM:${NC}"
-        echo -e "    • Tek seçim:    ${YELLOW}5${NC}       → 5 numarayı seç/kaldır"
-        echo -e "    • Çoklu seçim:  ${YELLOW}1 3 5 7${NC} → 1,3,5,7 numaraları seç/kaldır"
-        echo -e "    • Aralık:       ${YELLOW}1-6${NC}     → 1'den 6'ya kadar seç/kaldır"
-        echo ""
-        echo -e "  ${CYAN}KOMUTLAR:${NC}"
-        echo -e "    ${YELLOW}a${NC} = Hepsini seç   ${YELLOW}n${NC} = Temizle   ${GREEN}c${NC} = ONAYLA & Kur   ${RED}q${NC} = Çıkış"
+        echo -e "  ${CYAN}KONTROLLER:${NC}"
+        echo -e "    ${YELLOW}↑/↓${NC}     Yukarı/Aşağı git"
+        echo -e "    ${YELLOW}SPACE${NC}   Seçimi değiştir"
+        echo -e "    ${YELLOW}a${NC}       Hepsini seç"
+        echo -e "    ${YELLOW}n${NC}       Temizle"
+        echo -e "    ${GREEN}c/ENTER${NC} Onayla ve kur (en az 1 seçili olmalı)"
+        echo -e "    ${RED}q${NC}       Çıkış"
         echo ""
 
-        read -p "➤ Seçim yapın: " choice
+        # Read single keypress
+        read -rsn1 key
 
-        case $choice in
-            q|Q)
-                echo "Çıkılıyor..."
-                exit 0
-                ;;
-            c|C)
-                if [ $count -eq 0 ]; then
-                    echo -e "${RED}Hiçbir uygulama seçilmedi. En az bir tane seçin.${NC}"
-                    sleep 1
-                    continue
-                fi
-                # Set the install flags based on selection
-                for i in {1..13}; do
-                    IFS=':' read -r name desc var <<< "${APPS[$i]}"
-                    if ${SELECTED[$i]}; then
-                        eval "$var=true"
+        # Handle escape sequences for arrow keys
+        if [[ $key == $'\x1b' ]]; then
+            read -rsn2 -t 0.1 key
+            case $key in
+                '[A') # Up arrow
+                    if [ $cursor -gt 1 ]; then
+                        ((cursor--))
                     fi
-                done
-                return 0
-                ;;
-            a|A)
-                for i in {1..13}; do
-                    SELECTED[$i]=true
-                done
-                ;;
-            n|N)
-                for i in {1..13}; do
-                    SELECTED[$i]=false
-                done
-                ;;
-            *)
-                # Parse input - support ranges (1-5) and space-separated numbers
-                for item in $choice; do
-                    # Check if it's a range (e.g., 1-5)
-                    if [[ "$item" =~ ^([0-9]+)-([0-9]+)$ ]]; then
-                        local start=${BASH_REMATCH[1]}
-                        local end=${BASH_REMATCH[2]}
-                        for ((num=start; num<=end; num++)); do
-                            if [ "$num" -ge 1 ] && [ "$num" -le 13 ]; then
-                                if ${SELECTED[$num]}; then
-                                    SELECTED[$num]=false
-                                else
-                                    SELECTED[$num]=true
-                                fi
-                            fi
-                        done
-                    # Single number
-                    elif [[ "$item" =~ ^[0-9]+$ ]] && [ "$item" -ge 1 ] && [ "$item" -le 13 ]; then
-                        local num=$item
-                        if ${SELECTED[$num]}; then
-                            SELECTED[$num]=false
-                        else
-                            SELECTED[$num]=true
+                    ;;
+                '[B') # Down arrow
+                    if [ $cursor -lt $TOTAL_ITEMS ]; then
+                        ((cursor++))
+                    fi
+                    ;;
+            esac
+        else
+            case $key in
+                'q'|'Q')
+                    tput cnorm 2>/dev/null
+                    echo "Çıkılıyor..."
+                    exit 0
+                    ;;
+                'c'|'C'|'')  # c or Enter
+                    if [ $count -eq 0 ]; then
+                        # Flash message
+                        echo -e "${RED}En az bir uygulama seçmelisiniz!${NC}"
+                        sleep 1
+                        continue
+                    fi
+                    # Set the install flags based on selection
+                    for i in $(seq 1 $TOTAL_ITEMS); do
+                        if [ "${SELECTED[$i]}" -eq 1 ]; then
+                            eval "${APP_VARS[$i]}=true"
                         fi
+                    done
+                    tput cnorm 2>/dev/null
+                    return 0
+                    ;;
+                'a'|'A')
+                    for i in $(seq 1 $TOTAL_ITEMS); do
+                        SELECTED[$i]=1
+                    done
+                    ;;
+                'n'|'N')
+                    for i in $(seq 1 $TOTAL_ITEMS); do
+                        SELECTED[$i]=0
+                    done
+                    ;;
+                ' ')  # Space - toggle current item
+                    if [ "${SELECTED[$cursor]}" -eq 1 ]; then
+                        SELECTED[$cursor]=0
+                    else
+                        SELECTED[$cursor]=1
                     fi
-                done
-                ;;
-        esac
+                    ;;
+                # Number keys for quick selection
+                [1-9])
+                    local num=$key
+                    if [ $num -le $TOTAL_ITEMS ]; then
+                        if [ "${SELECTED[$num]}" -eq 1 ]; then
+                            SELECTED[$num]=0
+                        else
+                            SELECTED[$num]=1
+                        fi
+                        cursor=$num
+                    fi
+                    ;;
+            esac
+        fi
     done
 }
 

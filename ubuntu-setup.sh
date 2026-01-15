@@ -408,7 +408,7 @@ show_interactive_install_menu() {
         show_system_header
 
         echo -e "${GREEN}═══════════════════════════════════════════════════════════════${NC}"
-        echo -e "${GREEN}     ↑↓ Ok tuşları ile gezin, SPACE/ENTER ile seçin${NC}"
+        echo -e "${GREEN}     Use ↑↓ arrows to navigate, SPACE/ENTER to select${NC}"
         echo -e "${GREEN}═══════════════════════════════════════════════════════════════${NC}"
         echo ""
 
@@ -450,20 +450,20 @@ show_interactive_install_menu() {
 
         if [ $count -gt 0 ]; then
             selected_names=${selected_names%, }
-            echo -e "  ${GREEN}Seçili ($count):${NC} $selected_names"
+            echo -e "  ${GREEN}Selected ($count):${NC} $selected_names"
         else
-            echo -e "  ${YELLOW}Seçili: Hiçbiri${NC}"
+            echo -e "  ${YELLOW}Selected: None${NC}"
         fi
 
         echo -e "${YELLOW}───────────────────────────────────────────────────────────────${NC}"
         echo ""
-        echo -e "  ${CYAN}KONTROLLER:${NC}"
-        echo -e "    ${YELLOW}↑/↓${NC}     Yukarı/Aşağı git"
-        echo -e "    ${YELLOW}SPACE${NC}   Seçimi değiştir"
-        echo -e "    ${YELLOW}a${NC}       Hepsini seç"
-        echo -e "    ${YELLOW}n${NC}       Temizle"
-        echo -e "    ${GREEN}c/ENTER${NC} Onayla ve kur (en az 1 seçili olmalı)"
-        echo -e "    ${RED}q${NC}       Çıkış"
+        echo -e "  ${CYAN}CONTROLS:${NC}"
+        echo -e "    ${YELLOW}↑/↓${NC}     Move up/down"
+        echo -e "    ${YELLOW}SPACE${NC}   Toggle selection"
+        echo -e "    ${YELLOW}a${NC}       Select all"
+        echo -e "    ${YELLOW}n${NC}       Clear all"
+        echo -e "    ${GREEN}c/ENTER${NC} Confirm and install"
+        echo -e "    ${RED}q${NC}       Quit"
         echo ""
 
         # Read single keypress
@@ -488,13 +488,13 @@ show_interactive_install_menu() {
             case $key in
                 'q'|'Q')
                     tput cnorm 2>/dev/null
-                    echo "Çıkılıyor..."
+                    echo "Exiting..."
                     exit 0
                     ;;
                 'c'|'C'|'')  # c or Enter
                     if [ $count -eq 0 ]; then
                         # Flash message
-                        echo -e "${RED}En az bir uygulama seçmelisiniz!${NC}"
+                        echo -e "${RED}Please select at least one application!${NC}"
                         sleep 1
                         continue
                     fi

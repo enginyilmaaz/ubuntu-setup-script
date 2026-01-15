@@ -117,10 +117,57 @@ detect_system() {
     log_info "OS: $OS_NAME $OS_VERSION ($OS_CODENAME)"
     log_info "Architecture: $ARCH ($DEB_ARCH)"
 
+    # Detect NVIDIA Jetson
+    IS_JETSON=false
+    if [ -f /etc/nv_tegra_release ] || [ -d /sys/devices/soc0 ] && grep -qi "nvidia" /sys/devices/soc0/family 2>/dev/null; then
+        IS_JETSON=true
+        log_info "NVIDIA Jetson device detected"
+    fi
+
     # Check if Ubuntu
     if [[ "$ID" != "ubuntu" && "$ID_LIKE" != *"ubuntu"* ]]; then
         log_warning "This script is optimized for Ubuntu. Some features may not work correctly."
     fi
+}
+
+#===============================================================================
+# Jetson Snapd Fix (browsers don't work without this on Jetson devices)
+# Reference: https://forums.developer.nvidia.com/t/neither-chromium-nor-firefox-work-with-my-jetson-orin-nano/338669
+#===============================================================================
+fix_jetson_snapd() {
+    if ! $IS_JETSON; then
+        return
+    fi
+
+    log_step "Applying Jetson Snapd Fix"
+    log_info "Jetson devices require a specific snapd version for browsers to work"
+
+    local temp_dir="/tmp/jetson-snapd-fix"
+    mkdir -p "$temp_dir"
+    cd "$temp_dir"
+
+    # Download specific snapd revision
+    log_info "Downloading snapd revision 24724..."
+    if ! snap download snapd --revision=24724; then
+        log_warning "Failed to download snapd, skipping Jetson fix"
+        cd - > /dev/null
+        rm -rf "$temp_dir"
+        return
+    fi
+
+    # Install the specific snapd version
+    log_info "Installing snapd revision 24724..."
+    sudo snap ack snapd_24724.assert
+    sudo snap install snapd_24724.snap
+
+    # Hold snapd to prevent auto-updates breaking it
+    log_info "Holding snapd version to prevent auto-updates..."
+    sudo snap refresh --hold snapd
+
+    cd - > /dev/null
+    rm -rf "$temp_dir"
+
+    log_success "Jetson snapd fix applied successfully"
 }
 
 #===============================================================================
@@ -1241,6 +1288,9 @@ main() {
 
     # Detect system
     detect_system
+
+    # Apply Jetson snapd fix if needed (must be done before browser installation)
+    fix_jetson_snapd
 
     # Install prerequisites
     install_prerequisites

@@ -3,50 +3,124 @@
 #===============================================================================
 # Ubuntu Post-Installation Setup Script
 # Author: Auto-generated
-# Description: Automates Ubuntu post-installation setup including:
-#   - NVM, Node.js 22, Yarn
-#   - CLI tools (Codex, Gemini CLI, Claude CLI)
-#   - RealVNC Connect (deb) + Wayland Disable
-#   - Chrome/Chromium (apt), Cursor (deb), Antigravity (apt), VSCode (apt)
-#   - Python 3, DBeaver CE (apt), VLC (apt), Docker (apt)
-#   - GNOME Shell Extensions + Dash to Dock configuration
-#   - Firefox removal (snap/deb/flatpak detection)
+# Description: Automates Ubuntu post-installation setup with modular options
 #
 # Usage:
-#   ./ubuntu-setup.sh          # Basic install (skips DBeaver, VLC, Cloudflared, CLI logins)
-#   ./ubuntu-setup.sh --full   # Full install (includes DBeaver, VLC, Cloudflared)
-#   ./ubuntu-setup.sh --login  # Basic install + CLI logins
-#   ./ubuntu-setup.sh --full --login  # Full install + CLI logins
+#   ./ubuntu-setup.sh --all                    # Install everything
+#   ./ubuntu-setup.sh --nodejs --vscode        # Install specific apps
+#   ./ubuntu-setup.sh --help                   # Show all options
+#   ./ubuntu-setup.sh --show-backup-gnome      # Show GNOME backup
+#   ./ubuntu-setup.sh --restore-gnome-desktop  # Restore GNOME settings
 #===============================================================================
 
 set -e
 
-# Command line flags
-FULL_INSTALL=false
+# Backup directory
+BACKUP_DIR="$HOME/.gnome_conf_backup"
+
+# Command line flags - all default to false
+INSTALL_ALL=false
+INSTALL_VNC=false
+INSTALL_NODEJS=false
+INSTALL_CHROME=false
+INSTALL_CURSOR=false
+INSTALL_ANTIGRAVITY=false
+INSTALL_VSCODE=false
+INSTALL_PYTHON=false
+INSTALL_GNOME=false
+INSTALL_DBEAVER=false
+INSTALL_VLC=false
+INSTALL_CLOUDFLARED=false
+INSTALL_DOCKER=false
 DO_CLI_LOGIN=false
+DO_REMOVE_FIREFOX=false
+
+# Special commands
+SHOW_BACKUP_GNOME=false
+RESTORE_GNOME=false
+SHOW_HELP=false
 
 # Parse command line arguments
 for arg in "$@"; do
     case $arg in
-        --full)
-            FULL_INSTALL=true
+        --all)
+            INSTALL_ALL=true
+            ;;
+        --vnc)
+            INSTALL_VNC=true
+            ;;
+        --nodejs)
+            INSTALL_NODEJS=true
+            ;;
+        --chrome)
+            INSTALL_CHROME=true
+            ;;
+        --cursor)
+            INSTALL_CURSOR=true
+            ;;
+        --antigravity)
+            INSTALL_ANTIGRAVITY=true
+            ;;
+        --vscode)
+            INSTALL_VSCODE=true
+            ;;
+        --python)
+            INSTALL_PYTHON=true
+            ;;
+        --gnome)
+            INSTALL_GNOME=true
+            ;;
+        --dbeaver)
+            INSTALL_DBEAVER=true
+            ;;
+        --vlc)
+            INSTALL_VLC=true
+            ;;
+        --cloudflared)
+            INSTALL_CLOUDFLARED=true
+            ;;
+        --docker)
+            INSTALL_DOCKER=true
             ;;
         --login)
             DO_CLI_LOGIN=true
             ;;
+        --remove-firefox)
+            DO_REMOVE_FIREFOX=true
+            ;;
+        --show-backup-gnome)
+            SHOW_BACKUP_GNOME=true
+            ;;
+        --restore-gnome-desktop)
+            RESTORE_GNOME=true
+            ;;
         --help|-h)
-            echo "Usage: $0 [OPTIONS]"
-            echo ""
-            echo "Options:"
-            echo "  --full    Full install (includes DBeaver CE, VLC, Cloudflared)"
-            echo "  --login   Run CLI login prompts (Claude, Gemini, Codex)"
-            echo "  --help    Show this help message"
-            echo ""
-            echo "Default (no options): Basic install without DBeaver, VLC, and CLI logins"
-            exit 0
+            SHOW_HELP=true
+            ;;
+        *)
+            echo "Unknown option: $arg"
+            echo "Use --help for available options"
+            exit 1
             ;;
     esac
 done
+
+# If --all is set, enable all installations
+if $INSTALL_ALL; then
+    INSTALL_VNC=true
+    INSTALL_NODEJS=true
+    INSTALL_CHROME=true
+    INSTALL_CURSOR=true
+    INSTALL_ANTIGRAVITY=true
+    INSTALL_VSCODE=true
+    INSTALL_PYTHON=true
+    INSTALL_GNOME=true
+    INSTALL_DBEAVER=true
+    INSTALL_VLC=true
+    INSTALL_CLOUDFLARED=true
+    INSTALL_DOCKER=true
+    DO_REMOVE_FIREFOX=true
+fi
 
 # Colors for output
 RED='\033[0;31m'
@@ -77,6 +151,136 @@ log_step() {
     echo -e "\n${CYAN}========================================${NC}"
     echo -e "${CYAN}[STEP]${NC} $1"
     echo -e "${CYAN}========================================${NC}\n"
+}
+
+#===============================================================================
+# Help Function
+#===============================================================================
+show_help() {
+    echo -e "${CYAN}╔═══════════════════════════════════════════════════════════════════════════╗${NC}"
+    echo -e "${CYAN}║              Ubuntu Post-Installation Setup Script                        ║${NC}"
+    echo -e "${CYAN}╚═══════════════════════════════════════════════════════════════════════════╝${NC}"
+    echo ""
+    echo -e "${GREEN}USAGE:${NC}"
+    echo "  $0 [OPTIONS]"
+    echo ""
+    echo -e "${GREEN}INSTALLATION OPTIONS:${NC}"
+    echo ""
+    echo -e "  ${YELLOW}--all${NC}"
+    echo "      Install everything (all options below)"
+    echo ""
+    echo -e "  ${YELLOW}--vnc${NC}"
+    echo "      RealVNC Connect - Remote desktop server"
+    echo "      - AMD64: Downloads .deb from realvnc.com"
+    echo "      - ARM64: Downloads tar.gz installer"
+    echo "      - Disables Wayland for VNC compatibility"
+    echo ""
+    echo -e "  ${YELLOW}--nodejs${NC}"
+    echo "      Node.js development environment"
+    echo "      - NVM (Node Version Manager)"
+    echo "      - Node.js 22 LTS"
+    echo "      - Yarn package manager"
+    echo "      - CLI tools: codex, @anthropics/claude-code, @anthropics/gemini-cli"
+    echo ""
+    echo -e "  ${YELLOW}--chrome${NC}"
+    echo "      Web browser"
+    echo "      - AMD64: Google Chrome"
+    echo "      - ARM64: Chromium (Chrome not available)"
+    echo ""
+    echo -e "  ${YELLOW}--cursor${NC}"
+    echo "      Cursor IDE - AI-powered code editor"
+    echo "      - Downloads latest .deb from cursor.sh"
+    echo ""
+    echo -e "  ${YELLOW}--antigravity${NC}"
+    echo "      Antigravity - Development tool"
+    echo "      - Installed via apt"
+    echo ""
+    echo -e "  ${YELLOW}--vscode${NC}"
+    echo "      Visual Studio Code"
+    echo "      - VS Code from Microsoft apt repository"
+    echo "      - Extensions: ESLint, Prettier, GitLens, Material Icon, Python"
+    echo "      - User settings configuration"
+    echo ""
+    echo -e "  ${YELLOW}--python${NC}"
+    echo "      Python 3 development environment"
+    echo "      - python3, python3-pip, python3-venv"
+    echo ""
+    echo -e "  ${YELLOW}--gnome${NC}"
+    echo "      GNOME Shell customization"
+    echo "      - GNOME Shell Extensions"
+    echo "      - Extension Manager, GNOME Tweaks"
+    echo "      - Dash to Dock configuration"
+    echo "      - ${CYAN}Creates backup before changes (~/.gnome_conf_backup/)${NC}"
+    echo ""
+    echo -e "  ${YELLOW}--dbeaver${NC}"
+    echo "      DBeaver CE - Universal database tool"
+    echo "      - AMD64: From dbeaver apt repository"
+    echo "      - ARM64: Downloads arm64 .deb"
+    echo ""
+    echo -e "  ${YELLOW}--vlc${NC}"
+    echo "      VLC Media Player"
+    echo "      - Installed via apt"
+    echo ""
+    echo -e "  ${YELLOW}--cloudflared${NC}"
+    echo "      Cloudflare Tunnel client"
+    echo "      - From Cloudflare apt repository"
+    echo ""
+    echo -e "  ${YELLOW}--docker${NC}"
+    echo "      Docker Engine"
+    echo "      - Docker CE from official apt repository"
+    echo "      - docker-compose-plugin included"
+    echo "      - Adds user to docker group"
+    echo ""
+    echo -e "${GREEN}ACTION OPTIONS:${NC}"
+    echo ""
+    echo -e "  ${YELLOW}--login${NC}"
+    echo "      Run CLI login prompts"
+    echo "      - Requires --nodejs to be installed first"
+    echo "      - Prompts for Claude, Gemini, Codex authentication"
+    echo ""
+    echo -e "  ${YELLOW}--remove-firefox${NC}"
+    echo "      Remove Firefox browser"
+    echo "      - Detects snap, deb, flatpak installations"
+    echo "      - Only removes if alternative browser available"
+    echo ""
+    echo -e "${GREEN}GNOME BACKUP/RESTORE:${NC}"
+    echo ""
+    echo -e "  ${YELLOW}--show-backup-gnome${NC}"
+    echo "      Display saved GNOME desktop backup"
+    echo "      - Shows backup from ~/.gnome_conf_backup/gnome-backup/"
+    echo ""
+    echo -e "  ${YELLOW}--restore-gnome-desktop${NC}"
+    echo "      Restore GNOME desktop to previous state"
+    echo "      - Restores from ~/.gnome_conf_backup/gnome-backup/"
+    echo ""
+    echo -e "${GREEN}OTHER:${NC}"
+    echo ""
+    echo -e "  ${YELLOW}--help, -h${NC}"
+    echo "      Show this help message"
+    echo ""
+    echo -e "${GREEN}EXAMPLES:${NC}"
+    echo ""
+    echo "  # Install everything"
+    echo "  $0 --all"
+    echo ""
+    echo "  # Install only Node.js and VS Code"
+    echo "  $0 --nodejs --vscode"
+    echo ""
+    echo "  # Install development tools"
+    echo "  $0 --nodejs --vscode --docker --python"
+    echo ""
+    echo "  # Install with CLI logins"
+    echo "  $0 --nodejs --login"
+    echo ""
+    echo "  # Restore GNOME to previous state"
+    echo "  $0 --restore-gnome-desktop"
+    echo ""
+    echo -e "${GREEN}NOTES:${NC}"
+    echo "  - Jetson devices: Automatically applies snapd fix for browser compatibility"
+    echo "  - ARM64: Some packages use alternative sources (Chromium instead of Chrome)"
+    echo "  - GNOME backup is created automatically before any GNOME changes"
+    echo "  - Backups stored in: ~/.gnome_conf_backup/"
+    echo ""
 }
 
 #===============================================================================
@@ -732,6 +936,147 @@ install_gnome_extensions() {
 }
 
 #===============================================================================
+# GNOME Backup Functions
+#===============================================================================
+backup_gnome_settings() {
+    log_info "Creating GNOME settings backup..."
+
+    local backup_dir="$BACKUP_DIR/gnome-backup"
+    local timestamp=$(date +%Y%m%d_%H%M%S)
+
+    # Create backup directory
+    mkdir -p "$backup_dir"
+
+    # Backup dash-to-dock settings
+    if dconf list /org/gnome/shell/extensions/dash-to-dock/ &>/dev/null; then
+        dconf dump /org/gnome/shell/extensions/dash-to-dock/ > "$backup_dir/dash-to-dock.dconf"
+        log_info "  Backed up: Dash to Dock settings"
+    fi
+
+    # Backup general shell settings
+    if dconf list /org/gnome/shell/ &>/dev/null; then
+        dconf dump /org/gnome/shell/ > "$backup_dir/gnome-shell.dconf"
+        log_info "  Backed up: GNOME Shell settings"
+    fi
+
+    # Backup desktop settings
+    if dconf list /org/gnome/desktop/ &>/dev/null; then
+        dconf dump /org/gnome/desktop/ > "$backup_dir/gnome-desktop.dconf"
+        log_info "  Backed up: GNOME Desktop settings"
+    fi
+
+    # Save timestamp
+    echo "$timestamp" > "$backup_dir/backup-timestamp"
+
+    log_success "GNOME backup saved to: $backup_dir"
+}
+
+show_gnome_backup() {
+    local backup_dir="$BACKUP_DIR/gnome-backup"
+
+    echo -e "${CYAN}╔═══════════════════════════════════════════════════════════════╗${NC}"
+    echo -e "${CYAN}║                    GNOME Settings Backup                       ║${NC}"
+    echo -e "${CYAN}╚═══════════════════════════════════════════════════════════════╝${NC}"
+    echo ""
+
+    if [ ! -d "$backup_dir" ]; then
+        echo -e "${YELLOW}No backup found at: $backup_dir${NC}"
+        echo ""
+        echo "Run the script with --gnome to create a backup before making changes."
+        return 1
+    fi
+
+    # Show timestamp
+    if [ -f "$backup_dir/backup-timestamp" ]; then
+        local timestamp=$(cat "$backup_dir/backup-timestamp")
+        echo -e "${GREEN}Backup Date:${NC} $timestamp"
+        echo ""
+    fi
+
+    # Show backup files
+    echo -e "${GREEN}Backup Location:${NC} $backup_dir"
+    echo ""
+    echo -e "${GREEN}Backup Files:${NC}"
+    ls -la "$backup_dir" 2>/dev/null | tail -n +2
+    echo ""
+
+    # Show Dash to Dock backup content
+    if [ -f "$backup_dir/dash-to-dock.dconf" ]; then
+        echo -e "${YELLOW}─────────────────────────────────────────────────────────────────${NC}"
+        echo -e "${GREEN}Dash to Dock Settings:${NC}"
+        echo -e "${YELLOW}─────────────────────────────────────────────────────────────────${NC}"
+        cat "$backup_dir/dash-to-dock.dconf"
+        echo ""
+    fi
+
+    echo -e "${CYAN}To restore: $0 --restore-gnome-desktop${NC}"
+    echo ""
+}
+
+restore_gnome_settings() {
+    local backup_dir="$BACKUP_DIR/gnome-backup"
+
+    echo -e "${CYAN}╔═══════════════════════════════════════════════════════════════╗${NC}"
+    echo -e "${CYAN}║                  Restoring GNOME Settings                      ║${NC}"
+    echo -e "${CYAN}╚═══════════════════════════════════════════════════════════════╝${NC}"
+    echo ""
+
+    if [ ! -d "$backup_dir" ]; then
+        echo -e "${RED}No backup found at: $backup_dir${NC}"
+        echo ""
+        echo "Cannot restore without a backup."
+        return 1
+    fi
+
+    # Check if dconf is available
+    if ! command_exists dconf; then
+        echo -e "${RED}dconf command not found. Cannot restore settings.${NC}"
+        return 1
+    fi
+
+    # Show timestamp
+    if [ -f "$backup_dir/backup-timestamp" ]; then
+        local timestamp=$(cat "$backup_dir/backup-timestamp")
+        echo -e "${GREEN}Restoring from backup:${NC} $timestamp"
+        echo ""
+    fi
+
+    # Confirm restore
+    read -p "Are you sure you want to restore GNOME settings? (y/n): " -n 1 -r
+    echo ""
+
+    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+        echo "Restore cancelled."
+        return 0
+    fi
+
+    # Restore dash-to-dock settings
+    if [ -f "$backup_dir/dash-to-dock.dconf" ]; then
+        echo -e "${BLUE}[INFO]${NC} Restoring Dash to Dock settings..."
+        dconf load /org/gnome/shell/extensions/dash-to-dock/ < "$backup_dir/dash-to-dock.dconf"
+        echo -e "${GREEN}[SUCCESS]${NC} Dash to Dock restored"
+    fi
+
+    # Restore general shell settings
+    if [ -f "$backup_dir/gnome-shell.dconf" ]; then
+        echo -e "${BLUE}[INFO]${NC} Restoring GNOME Shell settings..."
+        dconf load /org/gnome/shell/ < "$backup_dir/gnome-shell.dconf"
+        echo -e "${GREEN}[SUCCESS]${NC} GNOME Shell restored"
+    fi
+
+    # Restore desktop settings
+    if [ -f "$backup_dir/gnome-desktop.dconf" ]; then
+        echo -e "${BLUE}[INFO]${NC} Restoring GNOME Desktop settings..."
+        dconf load /org/gnome/desktop/ < "$backup_dir/gnome-desktop.dconf"
+        echo -e "${GREEN}[SUCCESS]${NC} GNOME Desktop restored"
+    fi
+
+    echo ""
+    echo -e "${GREEN}GNOME settings restored successfully!${NC}"
+    echo -e "${YELLOW}Note: You may need to restart GNOME Shell (Alt+F2, then 'r') for changes to take effect.${NC}"
+}
+
+#===============================================================================
 # 8.1 Dash to Dock Configuration (using dconf)
 #===============================================================================
 configure_dash_to_dock() {
@@ -742,6 +1087,9 @@ configure_dash_to_dock() {
         log_warning "dconf not available, skipping Dash to Dock configuration..."
         return
     fi
+
+    # Backup current settings before making changes
+    backup_gnome_settings
 
     log_info "Applying Dash to Dock settings via dconf..."
 
@@ -1274,6 +1622,45 @@ print_summary() {
 # Main
 #===============================================================================
 main() {
+    # Handle special commands first (no root check needed)
+    if $SHOW_HELP; then
+        show_help
+        exit 0
+    fi
+
+    if $SHOW_BACKUP_GNOME; then
+        show_gnome_backup
+        exit $?
+    fi
+
+    if $RESTORE_GNOME; then
+        restore_gnome_settings
+        exit $?
+    fi
+
+    # Check if any installation option is selected
+    local has_install=false
+    if $INSTALL_VNC || $INSTALL_NODEJS || $INSTALL_CHROME || $INSTALL_CURSOR || \
+       $INSTALL_ANTIGRAVITY || $INSTALL_VSCODE || $INSTALL_PYTHON || $INSTALL_GNOME || \
+       $INSTALL_DBEAVER || $INSTALL_VLC || $INSTALL_CLOUDFLARED || $INSTALL_DOCKER || \
+       $DO_CLI_LOGIN || $DO_REMOVE_FIREFOX; then
+        has_install=true
+    fi
+
+    # If no options provided, show help
+    if ! $has_install; then
+        echo -e "${YELLOW}No installation options specified.${NC}"
+        echo ""
+        echo "Use --all to install everything, or specify individual components."
+        echo "Use --help to see all available options."
+        echo ""
+        echo "Examples:"
+        echo "  $0 --all                    # Install everything"
+        echo "  $0 --nodejs --vscode        # Install Node.js and VS Code"
+        echo "  $0 --help                   # Show all options"
+        exit 0
+    fi
+
     echo -e "${CYAN}"
     echo "╔═══════════════════════════════════════════════════════════════╗"
     echo "║           Ubuntu Post-Installation Setup Script               ║"
@@ -1295,48 +1682,49 @@ main() {
     # Install prerequisites
     install_prerequisites
 
-    # Show install mode
-    if $FULL_INSTALL; then
-        log_info "Running FULL install (includes DBeaver, VLC, Cloudflared)"
-    else
-        log_info "Running BASIC install (use --full for DBeaver, VLC, Cloudflared)"
-    fi
-    if $DO_CLI_LOGIN; then
-        log_info "CLI logins enabled (--login)"
-    fi
+    # Show what will be installed
+    log_info "Selected installations:"
+    $INSTALL_VNC && echo "  - RealVNC Connect"
+    $INSTALL_NODEJS && echo "  - Node.js (NVM, Node 22, Yarn, CLI tools)"
+    $INSTALL_CHROME && echo "  - Chrome/Chromium"
+    $INSTALL_CURSOR && echo "  - Cursor IDE"
+    $INSTALL_ANTIGRAVITY && echo "  - Antigravity"
+    $INSTALL_VSCODE && echo "  - VS Code + Extensions"
+    $INSTALL_PYTHON && echo "  - Python 3"
+    $INSTALL_GNOME && echo "  - GNOME Extensions + Dash to Dock"
+    $INSTALL_DBEAVER && echo "  - DBeaver CE"
+    $INSTALL_VLC && echo "  - VLC Media Player"
+    $INSTALL_CLOUDFLARED && echo "  - Cloudflared"
+    $INSTALL_DOCKER && echo "  - Docker"
+    $DO_CLI_LOGIN && echo "  - CLI Logins"
+    $DO_REMOVE_FIREFOX && echo "  - Remove Firefox"
     echo ""
 
-    # Run installations
-    install_realvnc         # 1. RealVNC Connect (deb) + Wayland Disable
-    install_nvm_nodejs      # 2. NVM, Node.js, Yarn, CLI tools
-    install_chrome          # 3. Chrome/Chromium (apt)
-    install_cursor          # 4. Cursor IDE (deb)
-    install_antigravity     # 5. Antigravity (apt)
-    install_vscode          # 6. VS Code + Extensions (apt repo)
-    install_python          # 7. Python 3
-    install_gnome_extensions # 8. GNOME Shell Extensions + Dash to Dock
+    # Run installations based on flags
+    $INSTALL_VNC && install_realvnc
+    $INSTALL_NODEJS && install_nvm_nodejs
+    $INSTALL_CHROME && install_chrome
+    $INSTALL_CURSOR && install_cursor
+    $INSTALL_ANTIGRAVITY && install_antigravity
+    $INSTALL_VSCODE && install_vscode
+    $INSTALL_PYTHON && install_python
+    $INSTALL_GNOME && install_gnome_extensions
+    $INSTALL_DBEAVER && install_dbeaver
+    $INSTALL_VLC && install_vlc
+    $INSTALL_CLOUDFLARED && install_cloudflared
+    $INSTALL_DOCKER && install_docker
 
-    # Optional: DBeaver, VLC, Cloudflared (only with --full)
-    if $FULL_INSTALL; then
-        install_dbeaver     # 9. DBeaver CE (apt)
-        install_vlc         # 10. VLC Media Player (apt)
-        install_cloudflared # 11. Cloudflared (apt)
-    else
-        log_info "Skipping DBeaver CE (use --full to install)"
-        log_info "Skipping VLC (use --full to install)"
-        log_info "Skipping Cloudflared (use --full to install)"
-    fi
-
-    install_docker          # 12. Docker (apt)
-
-    # Optional: CLI logins (only with --login)
+    # CLI logins (requires nodejs to be installed)
     if $DO_CLI_LOGIN; then
-        run_cli_logins      # 13. CLI Logins
-    else
-        log_info "Skipping CLI logins (use --login to enable)"
+        if $INSTALL_NODEJS || command_exists node; then
+            run_cli_logins
+        else
+            log_warning "CLI logins skipped: Node.js not installed. Use --nodejs first."
+        fi
     fi
 
-    remove_firefox          # 14. Firefox Removal
+    # Firefox removal
+    $DO_REMOVE_FIREFOX && remove_firefox
 
     # Print summary
     print_summary

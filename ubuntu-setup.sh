@@ -365,91 +365,73 @@ show_system_header() {
 
 # Interactive app selection menu with arrow key navigation
 show_interactive_install_menu() {
+    # Disable exit on error for this function
+    set +e
+
     detect_system_silent
 
-    # App selection array
-    declare -a APP_NAMES
-    declare -a APP_DESCS
-    declare -a APP_VARS
-
-    APP_NAMES[1]="VNC";         APP_DESCS[1]="RealVNC Connect (Remote Desktop)";    APP_VARS[1]="INSTALL_VNC"
-    APP_NAMES[2]="NodeJS";      APP_DESCS[2]="NVM + Node.js 22 + Yarn + CLI Tools"; APP_VARS[2]="INSTALL_NODEJS"
-    APP_NAMES[3]="Chrome";      APP_DESCS[3]="Google Chrome / Chromium";            APP_VARS[3]="INSTALL_CHROME"
-    APP_NAMES[4]="Cursor";      APP_DESCS[4]="Cursor IDE (AI Code Editor)";         APP_VARS[4]="INSTALL_CURSOR"
-    APP_NAMES[5]="Antigravity"; APP_DESCS[5]="Antigravity Tool";                    APP_VARS[5]="INSTALL_ANTIGRAVITY"
-    APP_NAMES[6]="VSCode";      APP_DESCS[6]="Visual Studio Code + Extensions";     APP_VARS[6]="INSTALL_VSCODE"
-    APP_NAMES[7]="Python";      APP_DESCS[7]="Python 3 + pip + venv";               APP_VARS[7]="INSTALL_PYTHON"
-    APP_NAMES[8]="GNOME";       APP_DESCS[8]="GNOME Extensions + Dash to Dock";     APP_VARS[8]="INSTALL_GNOME"
-    APP_NAMES[9]="DBeaver";     APP_DESCS[9]="DBeaver CE (Database Tool)";          APP_VARS[9]="INSTALL_DBEAVER"
-    APP_NAMES[10]="VLC";        APP_DESCS[10]="VLC Media Player";                   APP_VARS[10]="INSTALL_VLC"
-    APP_NAMES[11]="Cloudflared"; APP_DESCS[11]="Cloudflare Tunnel Client";          APP_VARS[11]="INSTALL_CLOUDFLARED"
-    APP_NAMES[12]="Docker";     APP_DESCS[12]="Docker Engine + Compose";            APP_VARS[12]="INSTALL_DOCKER"
-    APP_NAMES[13]="JetsonFix";  APP_DESCS[13]="Jetson Snapd Fix (Browser Fix)";     APP_VARS[13]="APPLY_JETSON_FIX"
+    # App data
+    local -a APP_NAMES=("" "VNC" "NodeJS" "Chrome" "Cursor" "Antigravity" "VSCode" "Python" "GNOME" "DBeaver" "VLC" "Cloudflared" "Docker" "JetsonFix")
+    local -a APP_DESCS=("" "RealVNC Connect (Remote Desktop)" "NVM + Node.js 22 + Yarn + CLI Tools" "Google Chrome / Chromium" "Cursor IDE (AI Code Editor)" "Antigravity Tool" "Visual Studio Code + Extensions" "Python 3 + pip + venv" "GNOME Extensions + Dash to Dock" "DBeaver CE (Database Tool)" "VLC Media Player" "Cloudflare Tunnel Client" "Docker Engine + Compose" "Jetson Snapd Fix (Browser Fix)")
+    local -a APP_VARS=("" "INSTALL_VNC" "INSTALL_NODEJS" "INSTALL_CHROME" "INSTALL_CURSOR" "INSTALL_ANTIGRAVITY" "INSTALL_VSCODE" "INSTALL_PYTHON" "INSTALL_GNOME" "INSTALL_DBEAVER" "INSTALL_VLC" "INSTALL_CLOUDFLARED" "INSTALL_DOCKER" "APPLY_JETSON_FIX")
 
     local TOTAL_ITEMS=13
-
-    # Selected apps array
-    declare -a SELECTED
-    for i in $(seq 1 $TOTAL_ITEMS); do
-        SELECTED[$i]=0
-    done
-
-    # Current cursor position
+    local -a SELECTED=(0 0 0 0 0 0 0 0 0 0 0 0 0 0)
     local cursor=1
+    local key=""
+    local count=0
 
     # Hide cursor
-    tput civis 2>/dev/null
-
-    # Restore cursor on exit
-    trap 'tput cnorm 2>/dev/null' EXIT
+    tput civis 2>/dev/null || true
 
     while true; do
         clear
         show_system_header
 
         echo -e "${GREEN}═══════════════════════════════════════════════════════════════${NC}"
-        echo -e "${GREEN}     Use ↑↓ arrows to navigate, SPACE/ENTER to select${NC}"
+        echo -e "${GREEN}     Use ↑↓ arrows to navigate, SPACE to select${NC}"
         echo -e "${GREEN}═══════════════════════════════════════════════════════════════${NC}"
         echo ""
 
         # Draw menu items
-        for i in $(seq 1 $TOTAL_ITEMS); do
+        local i
+        for i in 1 2 3 4 5 6 7 8 9 10 11 12 13; do
             local name="${APP_NAMES[$i]}"
             local desc="${APP_DESCS[$i]}"
             local num_display=$(printf "%2d" $i)
-
-            # Check if selected
             local checkbox="[ ]"
-            local name_color="${NC}"
-            if [ "${SELECTED[$i]}" -eq 1 ]; then
+            local line_start="   "
+
+            if [ "${SELECTED[$i]}" = "1" ]; then
                 checkbox="${GREEN}[✓]${NC}"
-                name_color="${GREEN}"
             fi
 
-            # Check if cursor is on this item
-            if [ $cursor -eq $i ]; then
-                # Highlighted row (cursor here)
-                echo -e "  ${CYAN}▶${NC} ${BLUE}[$num_display]${NC} $checkbox ${name_color}${name}${NC} - $desc"
+            if [ "$cursor" = "$i" ]; then
+                line_start=" ${CYAN}▶${NC}"
+            fi
+
+            if [ "${SELECTED[$i]}" = "1" ]; then
+                echo -e "${line_start} ${BLUE}[$num_display]${NC} $checkbox ${GREEN}$name${NC} - $desc"
             else
-                echo -e "    ${BLUE}[$num_display]${NC} $checkbox ${name_color}${name}${NC} - $desc"
+                echo -e "${line_start} ${BLUE}[$num_display]${NC} $checkbox $name - $desc"
             fi
         done
 
         echo ""
         echo -e "${YELLOW}───────────────────────────────────────────────────────────────${NC}"
 
-        # Show selected count and names
-        local count=0
+        # Count selected
+        count=0
         local selected_names=""
-        for i in $(seq 1 $TOTAL_ITEMS); do
-            if [ "${SELECTED[$i]}" -eq 1 ]; then
-                ((count++))
-                selected_names+="${APP_NAMES[$i]}, "
+        for i in 1 2 3 4 5 6 7 8 9 10 11 12 13; do
+            if [ "${SELECTED[$i]}" = "1" ]; then
+                count=$((count + 1))
+                selected_names="${selected_names}${APP_NAMES[$i]}, "
             fi
         done
 
         if [ $count -gt 0 ]; then
-            selected_names=${selected_names%, }
+            selected_names="${selected_names%, }"
             echo -e "  ${GREEN}Selected ($count):${NC} $selected_names"
         else
             echo -e "  ${YELLOW}Selected: None${NC}"
@@ -457,87 +439,80 @@ show_interactive_install_menu() {
 
         echo -e "${YELLOW}───────────────────────────────────────────────────────────────${NC}"
         echo ""
-        echo -e "  ${CYAN}CONTROLS:${NC}"
-        echo -e "    ${YELLOW}↑/↓${NC}     Move up/down"
-        echo -e "    ${YELLOW}SPACE${NC}   Toggle selection"
-        echo -e "    ${YELLOW}a${NC}       Select all"
-        echo -e "    ${YELLOW}n${NC}       Clear all"
-        echo -e "    ${GREEN}c/ENTER${NC} Confirm and install"
-        echo -e "    ${RED}q${NC}       Quit"
+        echo -e "  ${CYAN}CONTROLS:${NC}  ${YELLOW}↑↓${NC}=Move  ${YELLOW}SPACE${NC}=Toggle  ${YELLOW}a${NC}=All  ${YELLOW}n${NC}=None  ${GREEN}c${NC}=Confirm  ${RED}q${NC}=Quit"
         echo ""
 
-        # Read single keypress
-        read -rsn1 key
+        # Read key
+        IFS= read -rsn1 key 2>/dev/null || key=""
 
-        # Handle escape sequences for arrow keys
-        if [[ $key == $'\x1b' ]]; then
-            read -rsn2 -t 0.1 key
-            case $key in
-                '[A') # Up arrow
-                    if [ $cursor -gt 1 ]; then
-                        ((cursor--))
-                    fi
-                    ;;
-                '[B') # Down arrow
-                    if [ $cursor -lt $TOTAL_ITEMS ]; then
-                        ((cursor++))
-                    fi
-                    ;;
-            esac
-        else
-            case $key in
-                'q'|'Q')
-                    tput cnorm 2>/dev/null
-                    echo "Exiting..."
-                    exit 0
-                    ;;
-                'c'|'C'|'')  # c or Enter
-                    if [ $count -eq 0 ]; then
-                        # Flash message
-                        echo -e "${RED}Please select at least one application!${NC}"
-                        sleep 1
-                        continue
-                    fi
-                    # Set the install flags based on selection
-                    for i in $(seq 1 $TOTAL_ITEMS); do
-                        if [ "${SELECTED[$i]}" -eq 1 ]; then
-                            eval "${APP_VARS[$i]}=true"
-                        fi
-                    done
-                    tput cnorm 2>/dev/null
-                    return 0
-                    ;;
-                'a'|'A')
-                    for i in $(seq 1 $TOTAL_ITEMS); do
-                        SELECTED[$i]=1
-                    done
-                    ;;
-                'n'|'N')
-                    for i in $(seq 1 $TOTAL_ITEMS); do
-                        SELECTED[$i]=0
-                    done
-                    ;;
-                ' ')  # Space - toggle current item
-                    if [ "${SELECTED[$cursor]}" -eq 1 ]; then
-                        SELECTED[$cursor]=0
-                    else
-                        SELECTED[$cursor]=1
-                    fi
-                    ;;
-                # Number keys for quick selection
-                [1-9])
-                    local num=$key
-                    if [ $num -le $TOTAL_ITEMS ]; then
-                        if [ "${SELECTED[$num]}" -eq 1 ]; then
-                            SELECTED[$num]=0
-                        else
-                            SELECTED[$num]=1
-                        fi
-                        cursor=$num
-                    fi
-                    ;;
-            esac
+        # Check for escape sequence (arrow keys)
+        if [ "$key" = $'\x1b' ]; then
+            read -rsn2 -t 0.1 rest 2>/dev/null || rest=""
+            key="${key}${rest}"
         fi
+
+        # Handle keys
+        case "$key" in
+            $'\x1b[A'|'k') # Up arrow or k
+                if [ $cursor -gt 1 ]; then
+                    cursor=$((cursor - 1))
+                fi
+                ;;
+            $'\x1b[B'|'j') # Down arrow or j
+                if [ $cursor -lt $TOTAL_ITEMS ]; then
+                    cursor=$((cursor + 1))
+                fi
+                ;;
+            ' ') # Space - toggle
+                if [ "${SELECTED[$cursor]}" = "1" ]; then
+                    SELECTED[$cursor]=0
+                else
+                    SELECTED[$cursor]=1
+                fi
+                ;;
+            'a'|'A') # Select all
+                for i in 1 2 3 4 5 6 7 8 9 10 11 12 13; do
+                    SELECTED[$i]=1
+                done
+                ;;
+            'n'|'N') # Clear all
+                for i in 1 2 3 4 5 6 7 8 9 10 11 12 13; do
+                    SELECTED[$i]=0
+                done
+                ;;
+            'c'|'C'|'') # Confirm or Enter
+                if [ $count -eq 0 ]; then
+                    echo -e "${RED}Please select at least one application!${NC}"
+                    sleep 1
+                    continue
+                fi
+                # Set flags
+                for i in 1 2 3 4 5 6 7 8 9 10 11 12 13; do
+                    if [ "${SELECTED[$i]}" = "1" ]; then
+                        eval "${APP_VARS[$i]}=true"
+                    fi
+                done
+                tput cnorm 2>/dev/null || true
+                set -e
+                return 0
+                ;;
+            'q'|'Q') # Quit
+                tput cnorm 2>/dev/null || true
+                echo "Exiting..."
+                exit 0
+                ;;
+            [1-9]) # Number keys
+                local num=$key
+                if [ $num -le $TOTAL_ITEMS ]; then
+                    if [ "${SELECTED[$num]}" = "1" ]; then
+                        SELECTED[$num]=0
+                    else
+                        SELECTED[$num]=1
+                    fi
+                    cursor=$num
+                fi
+                ;;
+        esac
     done
 }
 

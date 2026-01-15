@@ -393,44 +393,64 @@ show_interactive_install_menu() {
         clear
         show_system_header
 
-        echo -e "${GREEN}Select applications to install:${NC}"
-        echo -e "${YELLOW}(Enter numbers separated by space, 'a' for all, 'c' to confirm, 'q' to quit)${NC}"
+        echo -e "${GREEN}═══════════════════════════════════════════════════════════════${NC}"
+        echo -e "${GREEN}        ÇOKLU SEÇİM - Numara girerek seçim yapın${NC}"
+        echo -e "${GREEN}═══════════════════════════════════════════════════════════════${NC}"
         echo ""
 
         for i in {1..13}; do
             IFS=':' read -r name desc var <<< "${APPS[$i]}"
+            # Format number with padding
+            local num_display=$(printf "%2d" $i)
             if ${SELECTED[$i]}; then
-                echo -e "  ${GREEN}[$i] ✓ $name${NC} - $desc"
+                echo -e "  ${GREEN}[$num_display] [✓]${NC} ${GREEN}$name${NC} - $desc"
             else
-                echo -e "  ${BLUE}[$i]${NC}   $name - $desc"
+                echo -e "  ${BLUE}[$num_display]${NC} [ ] $name - $desc"
             fi
         done
 
         echo ""
-        echo -e "  ${YELLOW}[a]${NC}   Select ALL"
-        echo -e "  ${YELLOW}[n]${NC}   Select NONE (clear)"
-        echo -e "  ${GREEN}[c]${NC}   CONFIRM and install"
-        echo -e "  ${RED}[q]${NC}   QUIT"
-        echo ""
+        echo -e "${YELLOW}───────────────────────────────────────────────────────────────${NC}"
 
-        # Show selected count
+        # Show selected count and names
         local count=0
+        local selected_names=""
         for i in {1..13}; do
-            ${SELECTED[$i]} && ((count++))
+            if ${SELECTED[$i]}; then
+                ((count++))
+                IFS=':' read -r name desc var <<< "${APPS[$i]}"
+                selected_names+="$name, "
+            fi
         done
-        echo -e "${CYAN}Selected: $count applications${NC}"
+
+        if [ $count -gt 0 ]; then
+            selected_names=${selected_names%, }
+            echo -e "  ${GREEN}Seçili ($count):${NC} $selected_names"
+        else
+            echo -e "  ${YELLOW}Seçili: Hiçbiri${NC}"
+        fi
+
+        echo -e "${YELLOW}───────────────────────────────────────────────────────────────${NC}"
+        echo ""
+        echo -e "  ${CYAN}KULLANIM:${NC}"
+        echo -e "    • Tek seçim:    ${YELLOW}5${NC}       → 5 numarayı seç/kaldır"
+        echo -e "    • Çoklu seçim:  ${YELLOW}1 3 5 7${NC} → 1,3,5,7 numaraları seç/kaldır"
+        echo -e "    • Aralık:       ${YELLOW}1-6${NC}     → 1'den 6'ya kadar seç/kaldır"
+        echo ""
+        echo -e "  ${CYAN}KOMUTLAR:${NC}"
+        echo -e "    ${YELLOW}a${NC} = Hepsini seç   ${YELLOW}n${NC} = Temizle   ${GREEN}c${NC} = ONAYLA & Kur   ${RED}q${NC} = Çıkış"
         echo ""
 
-        read -p "Enter choice: " choice
+        read -p "➤ Seçim yapın: " choice
 
         case $choice in
             q|Q)
-                echo "Exiting..."
+                echo "Çıkılıyor..."
                 exit 0
                 ;;
             c|C)
                 if [ $count -eq 0 ]; then
-                    echo -e "${RED}No applications selected. Please select at least one.${NC}"
+                    echo -e "${RED}Hiçbir uygulama seçilmedi. En az bir tane seçin.${NC}"
                     sleep 1
                     continue
                 fi
@@ -454,9 +474,24 @@ show_interactive_install_menu() {
                 done
                 ;;
             *)
-                # Parse space-separated numbers
-                for num in $choice; do
-                    if [[ "$num" =~ ^[0-9]+$ ]] && [ "$num" -ge 1 ] && [ "$num" -le 13 ]; then
+                # Parse input - support ranges (1-5) and space-separated numbers
+                for item in $choice; do
+                    # Check if it's a range (e.g., 1-5)
+                    if [[ "$item" =~ ^([0-9]+)-([0-9]+)$ ]]; then
+                        local start=${BASH_REMATCH[1]}
+                        local end=${BASH_REMATCH[2]}
+                        for ((num=start; num<=end; num++)); do
+                            if [ "$num" -ge 1 ] && [ "$num" -le 13 ]; then
+                                if ${SELECTED[$num]}; then
+                                    SELECTED[$num]=false
+                                else
+                                    SELECTED[$num]=true
+                                fi
+                            fi
+                        done
+                    # Single number
+                    elif [[ "$item" =~ ^[0-9]+$ ]] && [ "$item" -ge 1 ] && [ "$item" -le 13 ]; then
+                        local num=$item
                         if ${SELECTED[$num]}; then
                             SELECTED[$num]=false
                         else

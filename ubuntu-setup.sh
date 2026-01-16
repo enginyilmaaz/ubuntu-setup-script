@@ -21,6 +21,7 @@ BACKUP_DIR="$HOME/.gnome_conf_backup"
 # Command line flags - all default to false
 INSTALL_ALL=false
 INSTALL_VNC=false
+INSTALL_RUSTDESK=false
 INSTALL_NODEJS=false
 INSTALL_CHROME=false
 INSTALL_CURSOR=false
@@ -50,6 +51,9 @@ for arg in "$@"; do
             ;;
         --vnc)
             INSTALL_VNC=true
+            ;;
+        --rustdesk)
+            INSTALL_RUSTDESK=true
             ;;
         --nodejs)
             INSTALL_NODEJS=true
@@ -116,6 +120,7 @@ done
 # If --all is set, enable all installations
 if $INSTALL_ALL; then
     INSTALL_VNC=true
+    INSTALL_RUSTDESK=true
     INSTALL_NODEJS=true
     INSTALL_CHROME=true
     INSTALL_CURSOR=true
@@ -238,6 +243,12 @@ show_help() {
     echo "      - Docker CE from official apt repository"
     echo "      - docker-compose-plugin included"
     echo "      - Adds user to docker group"
+    echo ""
+    echo -e "  ${YELLOW}--rustdesk${NC}"
+    echo "      RustDesk - Open source remote desktop"
+    echo "      - Downloads .deb from GitHub releases"
+    echo "      - Supports AMD64 and ARM64"
+    echo "      - Set password: rustdesk --password YOUR_PASSWORD"
     echo ""
     echo -e "${GREEN}ACTION OPTIONS:${NC}"
     echo ""
@@ -371,12 +382,12 @@ show_interactive_install_menu() {
     detect_system_silent
 
     # App data
-    local -a APP_NAMES=("" "VNC" "NodeJS" "Chrome" "Cursor" "Antigravity" "VSCode" "Python" "GNOME" "DBeaver" "VLC" "Cloudflared" "Docker" "JetsonFix")
-    local -a APP_DESCS=("" "RealVNC Connect (Remote Desktop)" "NVM + Node.js 22 + Yarn + CLI Tools" "Google Chrome / Chromium" "Cursor IDE (AI Code Editor)" "Antigravity Tool" "Visual Studio Code + Extensions" "Python 3 + pip + venv" "GNOME Extensions + Dash to Dock" "DBeaver CE (Database Tool)" "VLC Media Player" "Cloudflare Tunnel Client" "Docker Engine + Compose" "Jetson Snapd Fix (Browser Fix)")
-    local -a APP_VARS=("" "INSTALL_VNC" "INSTALL_NODEJS" "INSTALL_CHROME" "INSTALL_CURSOR" "INSTALL_ANTIGRAVITY" "INSTALL_VSCODE" "INSTALL_PYTHON" "INSTALL_GNOME" "INSTALL_DBEAVER" "INSTALL_VLC" "INSTALL_CLOUDFLARED" "INSTALL_DOCKER" "APPLY_JETSON_FIX")
+    local -a APP_NAMES=("" "VNC" "RustDesk" "NodeJS" "Chrome" "Cursor" "Antigravity" "VSCode" "Python" "GNOME" "DBeaver" "VLC" "Cloudflared" "Docker" "JetsonFix")
+    local -a APP_DESCS=("" "RealVNC Connect (Remote Desktop)" "RustDesk (Open Source Remote Desktop)" "NVM + Node.js 22 + Yarn + CLI Tools" "Google Chrome / Chromium" "Cursor IDE (AI Code Editor)" "Antigravity Tool" "Visual Studio Code + Extensions" "Python 3 + pip + venv" "GNOME Extensions + Dash to Dock" "DBeaver CE (Database Tool)" "VLC Media Player" "Cloudflare Tunnel Client" "Docker Engine + Compose" "Jetson Snapd Fix (Browser Fix)")
+    local -a APP_VARS=("" "INSTALL_VNC" "INSTALL_RUSTDESK" "INSTALL_NODEJS" "INSTALL_CHROME" "INSTALL_CURSOR" "INSTALL_ANTIGRAVITY" "INSTALL_VSCODE" "INSTALL_PYTHON" "INSTALL_GNOME" "INSTALL_DBEAVER" "INSTALL_VLC" "INSTALL_CLOUDFLARED" "INSTALL_DOCKER" "APPLY_JETSON_FIX")
 
-    local TOTAL_ITEMS=13
-    local -a SELECTED=(0 0 0 0 0 0 0 0 0 0 0 0 0 0)
+    local TOTAL_ITEMS=14
+    local -a SELECTED=(0 0 0 0 0 0 0 0 0 0 0 0 0 0 0)
     local cursor=1
     local key=""
     local count=0
@@ -395,7 +406,7 @@ show_interactive_install_menu() {
 
         # Draw menu items
         local i
-        for i in 1 2 3 4 5 6 7 8 9 10 11 12 13; do
+        for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14; do
             local name="${APP_NAMES[$i]}"
             local desc="${APP_DESCS[$i]}"
             local num_display=$(printf "%2d" $i)
@@ -423,7 +434,7 @@ show_interactive_install_menu() {
         # Count selected
         count=0
         local selected_names=""
-        for i in 1 2 3 4 5 6 7 8 9 10 11 12 13; do
+        for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14; do
             if [ "${SELECTED[$i]}" = "1" ]; then
                 count=$((count + 1))
                 selected_names="${selected_names}${APP_NAMES[$i]}, "
@@ -471,12 +482,12 @@ show_interactive_install_menu() {
                 fi
                 ;;
             'a'|'A') # Select all
-                for i in 1 2 3 4 5 6 7 8 9 10 11 12 13; do
+                for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14; do
                     SELECTED[$i]=1
                 done
                 ;;
             'n'|'N') # Clear all
-                for i in 1 2 3 4 5 6 7 8 9 10 11 12 13; do
+                for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14; do
                     SELECTED[$i]=0
                 done
                 ;;
@@ -487,7 +498,7 @@ show_interactive_install_menu() {
                     continue
                 fi
                 # Set flags
-                for i in 1 2 3 4 5 6 7 8 9 10 11 12 13; do
+                for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14; do
                     if [ "${SELECTED[$i]}" = "1" ]; then
                         eval "${APP_VARS[$i]}=true"
                     fi
@@ -1020,6 +1031,7 @@ run_installations() {
     $INSTALL_VLC && install_vlc
     $INSTALL_CLOUDFLARED && install_cloudflared
     $INSTALL_DOCKER && install_docker
+    $INSTALL_RUSTDESK && install_rustdesk
 
     # CLI logins (requires nodejs to be installed)
     if $DO_CLI_LOGIN; then
@@ -1243,6 +1255,45 @@ retry_curl_download() {
 
     log_warning "All download attempts failed"
     return 1
+}
+
+#===============================================================================
+# 1.5 RustDesk Installation (Open Source Remote Desktop)
+#===============================================================================
+install_rustdesk() {
+    log_step "1.5 Installing RustDesk"
+
+    if command_exists rustdesk; then
+        log_warning "RustDesk already installed, skipping..."
+        return
+    fi
+
+    log_info "Installing RustDesk..."
+
+    local temp_file="/tmp/rustdesk.deb"
+    local download_url=""
+
+    # Determine download URL based on architecture
+    if [ "$DEB_ARCH" == "amd64" ]; then
+        download_url="https://github.com/rustdesk/rustdesk/releases/download/1.3.6/rustdesk-1.3.6-x86_64.deb"
+    else
+        download_url="https://github.com/rustdesk/rustdesk/releases/download/1.3.6/rustdesk-1.3.6-aarch64.deb"
+    fi
+
+    if ! retry_curl_download "$download_url" "$temp_file" "Downloading RustDesk"; then
+        log_warning "RustDesk download failed after 3 attempts"
+        return
+    fi
+
+    log_info "Installing RustDesk deb package..."
+    sudo DEBIAN_FRONTEND=noninteractive apt-get install -y "$temp_file"
+    rm -f "$temp_file"
+
+    # Set default password if desired (optional)
+    # You can set a permanent password with: rustdesk --password YOUR_PASSWORD
+    log_success "RustDesk installed successfully"
+    log_info "To set a permanent password, run: rustdesk --password YOUR_PASSWORD"
+    log_info "Or configure via RustDesk GUI settings"
 }
 
 #===============================================================================
@@ -2414,7 +2465,7 @@ main() {
     if $INSTALL_VNC || $INSTALL_NODEJS || $INSTALL_CHROME || $INSTALL_CURSOR || \
        $INSTALL_ANTIGRAVITY || $INSTALL_VSCODE || $INSTALL_PYTHON || $INSTALL_GNOME || \
        $INSTALL_DBEAVER || $INSTALL_VLC || $INSTALL_CLOUDFLARED || $INSTALL_DOCKER || \
-       $DO_CLI_LOGIN || $DO_REMOVE_FIREFOX || $APPLY_JETSON_FIX; then
+       $INSTALL_RUSTDESK || $DO_CLI_LOGIN || $DO_REMOVE_FIREFOX || $APPLY_JETSON_FIX; then
         has_install=true
     fi
 

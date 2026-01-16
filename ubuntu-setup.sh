@@ -1289,11 +1289,61 @@ install_rustdesk() {
     sudo DEBIAN_FRONTEND=noninteractive apt-get install -y "$temp_file"
     rm -f "$temp_file"
 
-    # Set default password if desired (optional)
-    # You can set a permanent password with: rustdesk --password YOUR_PASSWORD
     log_success "RustDesk installed successfully"
-    log_info "To set a permanent password, run: rustdesk --password YOUR_PASSWORD"
-    log_info "Or configure via RustDesk GUI settings"
+
+    # Interactive password setup
+    echo ""
+    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo -e "${GREEN}RustDesk Password Setup${NC}"
+    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo ""
+    read -p "Do you want to set a permanent password for RustDesk? (y/n): " set_password
+
+    if [[ "$set_password" =~ ^[Yy]$ ]]; then
+        while true; do
+            echo ""
+            # Read password with hidden input
+            read -sp "Enter password: " rustdesk_password
+            echo ""
+
+            if [ -z "$rustdesk_password" ]; then
+                log_warning "Password cannot be empty. Please try again."
+                continue
+            fi
+
+            # Show password and confirm
+            echo ""
+            echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+            echo -e "Your password: ${GREEN}$rustdesk_password${NC}"
+            echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+            echo ""
+            echo -e "  ${BLUE}[1]${NC}  Continue with this password"
+            echo -e "  ${BLUE}[2]${NC}  Re-enter password"
+            echo -e "  ${BLUE}[3]${NC}  Skip password setup"
+            echo ""
+            read -p "Enter choice (1/2/3): " password_choice
+
+            case $password_choice in
+                1)
+                    log_info "Setting RustDesk password..."
+                    rustdesk --password "$rustdesk_password" 2>/dev/null || true
+                    log_success "RustDesk password set successfully"
+                    break
+                    ;;
+                2)
+                    log_info "Re-entering password..."
+                    continue
+                    ;;
+                3|*)
+                    log_info "Skipping password setup"
+                    break
+                    ;;
+            esac
+        done
+    else
+        log_info "Skipping password setup"
+        log_info "You can set a password later with: rustdesk --password YOUR_PASSWORD"
+    fi
 }
 
 #===============================================================================

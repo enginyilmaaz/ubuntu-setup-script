@@ -2408,10 +2408,10 @@ install_prerequisites() {
     log_step "Installing Prerequisites"
 
     # Clean up broken saiarcot895/chromium-dev PPA if it exists (no longer supports Noble+)
-    if ls /etc/apt/sources.list.d/saiarcot895-ubuntu-chromium-dev-* &>/dev/null; then
+    if ls /etc/apt/sources.list.d/*saiarcot895*chromium* &>/dev/null; then
         log_info "Removing broken Chromium PPA (saiarcot895/chromium-dev)..."
-        sudo rm -f /etc/apt/sources.list.d/saiarcot895-ubuntu-chromium-dev-*.list
-        sudo rm -f /etc/apt/sources.list.d/saiarcot895-ubuntu-chromium-dev-*.sources
+        sudo add-apt-repository --remove -y ppa:saiarcot895/chromium-dev 2>/dev/null || \
+            sudo rm -f /etc/apt/sources.list.d/*saiarcot895*chromium*
         log_success "Broken PPA removed"
     fi
 

@@ -2012,6 +2012,7 @@ install_realvnc() {
             sudo rm -f /etc/apt/sources.list.d/*realvnc* /etc/apt/sources.list.d/*vnc*
             sudo rm -f /usr/share/keyrings/*realvnc* /etc/apt/trusted.gpg.d/*realvnc*
             sudo rm -rf /usr/share/vnc /usr/bin/vncserver-x11 /usr/bin/vncserver
+            sudo apt-get autoremove -y 2>/dev/null
             log_success "Old RealVNC removed, reinstalling..."
         else
             log_info "Keeping existing installation, skipping..."

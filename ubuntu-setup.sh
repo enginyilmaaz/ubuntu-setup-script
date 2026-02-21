@@ -1464,23 +1464,11 @@ install_chrome() {
             log_warning "Chrome installation failed after 3 attempts"
         fi
     else
-        # ARM64: Install Chromium via PPA (apt chromium-browser is just a snap redirect)
-        log_info "Installing Chromium via PPA (ARM64 - Chrome not available)..."
+        # ARM64: Install Chromium via snap (Chrome is not available for ARM64)
+        log_info "Installing Chromium via snap (ARM64 - Chrome not available)..."
 
-        # Add Chromium PPA
-        log_info "Adding Chromium PPA repository..."
-        if ! sudo add-apt-repository -y ppa:saiarcot895/chromium-dev; then
-            log_warning "Failed to add Chromium PPA"
-            log_info "Firefox will be kept as the default browser"
-            return
-        fi
-
-        # Update package list
-        sudo apt-get update
-
-        # Install Chromium from PPA
-        if retry_apt_install chromium-browser; then
-            log_success "Chromium installed successfully (via PPA)"
+        if retry_snap_install chromium; then
+            log_success "Chromium installed successfully (via snap)"
             BROWSER_INSTALLED=true
         else
             log_warning "Chromium installation failed after 3 attempts"

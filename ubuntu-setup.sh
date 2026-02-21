@@ -2407,6 +2407,14 @@ remove_firefox() {
 install_prerequisites() {
     log_step "Installing Prerequisites"
 
+    # Clean up broken saiarcot895/chromium-dev PPA if it exists (no longer supports Noble+)
+    if ls /etc/apt/sources.list.d/saiarcot895-ubuntu-chromium-dev-* &>/dev/null; then
+        log_info "Removing broken Chromium PPA (saiarcot895/chromium-dev)..."
+        sudo rm -f /etc/apt/sources.list.d/saiarcot895-ubuntu-chromium-dev-*.list
+        sudo rm -f /etc/apt/sources.list.d/saiarcot895-ubuntu-chromium-dev-*.sources
+        log_success "Broken PPA removed"
+    fi
+
     log_info "Updating package lists..."
     sudo apt-get update
 

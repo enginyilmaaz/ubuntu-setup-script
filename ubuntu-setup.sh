@@ -2008,9 +2008,10 @@ install_realvnc() {
         read -p "Reinstall from scratch? (y/n): " reinstall_choice
         if [[ "$reinstall_choice" =~ ^[Yy]$ ]]; then
             log_info "Removing existing RealVNC installation..."
-            sudo apt-get remove -y realvnc-connect realvnc-vnc-server 2>/dev/null
+            sudo apt-get purge -y realvnc-connect realvnc-vnc-server 2>/dev/null
             sudo rm -f /etc/apt/sources.list.d/*realvnc* /etc/apt/sources.list.d/*vnc*
             sudo rm -f /usr/share/keyrings/*realvnc* /etc/apt/trusted.gpg.d/*realvnc*
+            sudo rm -rf /usr/share/vnc /usr/bin/vncserver-x11 /usr/bin/vncserver
             log_success "Old RealVNC removed, reinstalling..."
         else
             log_info "Keeping existing installation, skipping..."

@@ -13,7 +13,9 @@
 #   ./ubuntu-setup.sh --restore-gnome-desktop  # Restore GNOME settings
 #===============================================================================
 
-set -e
+# NOTE: We intentionally do NOT use set -e here.
+# Instead, errors are handled interactively via handle_error() so the user
+# can decide whether to continue or abort.
 
 # Backup directory
 BACKUP_DIR="$HOME/.gnome_conf_backup"
@@ -164,6 +166,38 @@ log_step() {
     echo -e "\n${CYAN}========================================${NC}"
     echo -e "${CYAN}[STEP]${NC} $1"
     echo -e "${CYAN}========================================${NC}\n"
+}
+
+# Interactive error handler - asks user whether to continue or abort
+# Usage: some_command || handle_error "Description of what failed"
+# Returns: 0 if user wants to continue, exits if user wants to abort
+handle_error() {
+    local error_msg="$1"
+    echo ""
+    echo -e "${RED}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo -e "${RED}[ERROR]${NC} $error_msg"
+    echo -e "${RED}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo ""
+    read -p "Do you want to continue? (y/n): " -n 1 -r
+    echo ""
+    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+        log_error "Script aborted by user."
+        exit 1
+    fi
+    log_info "Continuing despite error..."
+    return 0
+}
+
+# Safe apt-get update - tolerates repo errors and asks user on failure
+safe_apt_update() {
+    if ! sudo apt-get update 2>&1 | tee /tmp/apt-update-output.tmp; then
+        local errors
+        errors=$(grep -i "err\|failed\|error" /tmp/apt-update-output.tmp 2>/dev/null || true)
+        if [ -n "$errors" ]; then
+            handle_error "apt-get update encountered errors:\n$errors"
+        fi
+    fi
+    rm -f /tmp/apt-update-output.tmp
 }
 
 #===============================================================================
@@ -376,9 +410,6 @@ show_system_header() {
 
 # Interactive app selection menu with arrow key navigation
 show_interactive_install_menu() {
-    # Disable exit on error for this function
-    set +e
-
     detect_system_silent
 
     # App data
@@ -504,7 +535,6 @@ show_interactive_install_menu() {
                     fi
                 done
                 tput cnorm 2>/dev/null || true
-                set -e
                 return 0
                 ;;
             'q'|'Q') # Quit
@@ -1021,32 +1051,32 @@ run_installations() {
     # Install prerequisites
     install_prerequisites
 
-    # Run installations based on flags
-    $INSTALL_VNC && install_realvnc
-    $INSTALL_NODEJS && install_nvm_nodejs
-    $INSTALL_CHROME && install_chrome
-    $INSTALL_CURSOR && install_cursor
-    $INSTALL_ANTIGRAVITY && install_antigravity
-    $INSTALL_VSCODE && install_vscode
-    $INSTALL_PYTHON && install_python
-    $INSTALL_GNOME && install_gnome_extensions
-    $INSTALL_DBEAVER && install_dbeaver
-    $INSTALL_VLC && install_vlc
-    $INSTALL_CLOUDFLARED && install_cloudflared
-    $INSTALL_DOCKER && install_docker
-    $INSTALL_RUSTDESK && install_rustdesk
+    # Run installations based on flags (each wrapped with error handling)
+    if $INSTALL_VNC; then install_realvnc || handle_error "RealVNC installation failed"; fi
+    if $INSTALL_NODEJS; then install_nvm_nodejs || handle_error "Node.js installation failed"; fi
+    if $INSTALL_CHROME; then install_chrome || handle_error "Chrome/Chromium installation failed"; fi
+    if $INSTALL_CURSOR; then install_cursor || handle_error "Cursor installation failed"; fi
+    if $INSTALL_ANTIGRAVITY; then install_antigravity || handle_error "Antigravity installation failed"; fi
+    if $INSTALL_VSCODE; then install_vscode || handle_error "VS Code installation failed"; fi
+    if $INSTALL_PYTHON; then install_python || handle_error "Python installation failed"; fi
+    if $INSTALL_GNOME; then install_gnome_extensions || handle_error "GNOME extensions installation failed"; fi
+    if $INSTALL_DBEAVER; then install_dbeaver || handle_error "DBeaver installation failed"; fi
+    if $INSTALL_VLC; then install_vlc || handle_error "VLC installation failed"; fi
+    if $INSTALL_CLOUDFLARED; then install_cloudflared || handle_error "Cloudflared installation failed"; fi
+    if $INSTALL_DOCKER; then install_docker || handle_error "Docker installation failed"; fi
+    if $INSTALL_RUSTDESK; then install_rustdesk || handle_error "RustDesk installation failed"; fi
 
     # CLI logins (requires nodejs to be installed)
     if $DO_CLI_LOGIN; then
         if $INSTALL_NODEJS || command_exists node; then
-            run_cli_logins
+            run_cli_logins || handle_error "CLI logins failed"
         else
             log_warning "CLI logins skipped: Node.js not installed. Use --nodejs first."
         fi
     fi
 
     # Firefox removal
-    $DO_REMOVE_FIREFOX && remove_firefox
+    if $DO_REMOVE_FIREFOX; then remove_firefox || handle_error "Firefox removal failed"; fi
 
     # Print summary
     print_summary
@@ -1065,8 +1095,10 @@ detect_system() {
         OS_VERSION=$VERSION_ID
         OS_CODENAME=$VERSION_CODENAME
     else
-        log_error "Cannot detect OS. This script is designed for Ubuntu."
-        exit 1
+        handle_error "Cannot detect OS. This script is designed for Ubuntu."
+        OS_NAME="Unknown"
+        OS_VERSION="Unknown"
+        OS_CODENAME="Unknown"
     fi
 
     # Detect Architecture
@@ -1082,8 +1114,8 @@ detect_system() {
             DEB_ARCH="armhf"
             ;;
         *)
-            log_error "Unsupported architecture: $ARCH"
-            exit 1
+            handle_error "Unsupported architecture: $ARCH. Some packages may not install correctly."
+            DEB_ARCH="unknown"
             ;;
     esac
 
@@ -1438,6 +1470,14 @@ BROWSER_INSTALLED=false
 install_chrome() {
     log_step "3. Installing Browser (Chrome/Chromium)"
 
+    # Clean up broken saiarcot895/chromium-dev PPA if it exists (no longer supports Noble+)
+    if ls /etc/apt/sources.list.d/*saiarcot895*chromium* &>/dev/null; then
+        log_info "Removing broken Chromium PPA (saiarcot895/chromium-dev)..."
+        sudo add-apt-repository --remove -y ppa:saiarcot895/chromium-dev 2>/dev/null || \
+            sudo rm -f /etc/apt/sources.list.d/*saiarcot895*chromium*
+        log_success "Broken PPA removed"
+    fi
+
     # Check if any browser already installed
     if command_exists google-chrome || command_exists google-chrome-stable || command_exists chromium-browser || command_exists chromium; then
         log_warning "Browser already installed, skipping..."
@@ -1451,20 +1491,19 @@ install_chrome() {
 
         # Add Google's signing key (with retry)
         if ! retry_command "Adding Chrome GPG key" bash -c 'curl -fsSL https://dl.google.com/linux/linux_signing_key.pub | sudo gpg --dearmor -o /usr/share/keyrings/google-chrome.gpg'; then
-            log_warning "Chrome installation skipped - could not add GPG key"
-            return
+            handle_error "Chrome GPG key could not be added. Chrome installation may fail."
         fi
 
         # Add repository
         echo "deb [arch=${DEB_ARCH} signed-by=/usr/share/keyrings/google-chrome.gpg] http://dl.google.com/linux/chrome/deb/ stable main" | sudo tee /etc/apt/sources.list.d/google-chrome.list > /dev/null
 
         # Update and install with retry
-        sudo apt-get update
+        safe_apt_update
         if retry_apt_install google-chrome-stable; then
             log_success "Google Chrome installed successfully (via apt repository)"
             BROWSER_INSTALLED=true
         else
-            log_warning "Chrome installation failed after 3 attempts"
+            handle_error "Chrome installation failed after 3 attempts"
         fi
     else
         # ARM64: Install Chromium via snap (Chrome is not available for ARM64)
@@ -1532,19 +1571,18 @@ install_antigravity() {
 
     # Add Antigravity GPG key
     if ! retry_command "Adding Antigravity GPG key" bash -c 'curl -fsSL https://us-central1-apt.pkg.dev/doc/repo-signing-key.gpg | sudo gpg --dearmor --yes -o /etc/apt/keyrings/antigravity-repo-key.gpg'; then
-        log_warning "Antigravity installation skipped - could not add GPG key"
-        return
+        handle_error "Antigravity GPG key could not be added. Installation may fail."
     fi
 
     # Add repository
     echo "deb [signed-by=/etc/apt/keyrings/antigravity-repo-key.gpg] https://us-central1-apt.pkg.dev/projects/antigravity-auto-updater-dev/ antigravity-debian main" | sudo tee /etc/apt/sources.list.d/antigravity.list > /dev/null
 
     # Update and install
-    sudo apt-get update
+    safe_apt_update
     if retry_apt_install antigravity; then
         log_success "Antigravity installed successfully (via apt repository)"
     else
-        log_warning "Antigravity installation skipped after 3 failed attempts"
+        handle_error "Antigravity installation failed after 3 attempts"
     fi
 }
 
@@ -1561,19 +1599,18 @@ install_vscode() {
 
         # Add Microsoft's signing key (with retry)
         if ! retry_command "Adding VS Code GPG key" bash -c 'curl -fsSL https://packages.microsoft.com/keys/microsoft.asc | sudo gpg --dearmor -o /usr/share/keyrings/microsoft.gpg'; then
-            log_warning "VS Code installation skipped - could not add GPG key"
-            return
+            handle_error "VS Code GPG key could not be added. Installation may fail."
         fi
 
         # Add repository
         echo "deb [arch=${DEB_ARCH} signed-by=/usr/share/keyrings/microsoft.gpg] https://packages.microsoft.com/repos/code stable main" | sudo tee /etc/apt/sources.list.d/vscode.list > /dev/null
 
         # Update and install with retry
-        sudo apt-get update
+        safe_apt_update
         if retry_apt_install code; then
             log_success "VS Code installed successfully (via apt repository)"
         else
-            log_warning "VS Code installation skipped after 3 failed attempts"
+            handle_error "VS Code installation failed after 3 attempts"
             return
         fi
     fi
@@ -1724,8 +1761,8 @@ install_python() {
         log_warning "Python 3 already installed ($(python3 --version)), skipping..."
     else
         log_info "Installing Python 3..."
-        sudo apt-get update
-        sudo apt-get install -y python3 python3-pip python3-venv
+        safe_apt_update
+        sudo apt-get install -y python3 python3-pip python3-venv || handle_error "Python 3 installation failed"
         log_success "Python 3 installed successfully"
     fi
 
@@ -2122,17 +2159,16 @@ install_dbeaver() {
 
         # Add DBeaver repository with retry
         if ! retry_command "Adding DBeaver GPG key" sudo wget -O /usr/share/keyrings/dbeaver.gpg.key https://dbeaver.io/debs/dbeaver.gpg.key; then
-            log_warning "DBeaver installation skipped - could not add GPG key"
-            return
+            handle_error "DBeaver GPG key could not be added. Installation may fail."
         fi
 
         echo "deb [signed-by=/usr/share/keyrings/dbeaver.gpg.key] https://dbeaver.io/debs/dbeaver-ce /" | sudo tee /etc/apt/sources.list.d/dbeaver.list > /dev/null
 
-        sudo apt-get update
+        safe_apt_update
         if retry_apt_install dbeaver-ce; then
             log_success "DBeaver CE installed successfully (via apt repository)"
         else
-            log_warning "DBeaver CE installation skipped after 3 failed attempts"
+            handle_error "DBeaver CE installation failed after 3 attempts"
         fi
     else
         # ARM64: Use deb package directly
@@ -2188,19 +2224,18 @@ install_cloudflared() {
     # Add Cloudflare GPG key
     sudo mkdir -p --mode=0755 /usr/share/keyrings
     if ! retry_command "Adding Cloudflare GPG key" bash -c 'curl -fsSL https://pkg.cloudflare.com/cloudflare-public-v2.gpg | sudo tee /usr/share/keyrings/cloudflare-public-v2.gpg >/dev/null'; then
-        log_warning "Cloudflared installation skipped - could not add GPG key"
-        return
+        handle_error "Cloudflare GPG key could not be added. Installation may fail."
     fi
 
     # Add Cloudflare repository
     echo 'deb [signed-by=/usr/share/keyrings/cloudflare-public-v2.gpg] https://pkg.cloudflare.com/cloudflared any main' | sudo tee /etc/apt/sources.list.d/cloudflared.list > /dev/null
 
     # Update and install cloudflared
-    sudo apt-get update
+    safe_apt_update
     if retry_apt_install cloudflared; then
         log_success "Cloudflared installed successfully"
     else
-        log_warning "Cloudflared installation skipped after 3 failed attempts"
+        handle_error "Cloudflared installation failed after 3 attempts"
     fi
 }
 
@@ -2219,15 +2254,14 @@ install_docker() {
 
     # Add Docker's official GPG key
     if ! retry_command "Adding Docker GPG key" bash -c 'curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /usr/share/keyrings/docker.gpg'; then
-        log_warning "Docker installation skipped - could not add GPG key"
-        return
+        handle_error "Docker GPG key could not be added. Installation may fail."
     fi
 
     # Add Docker repository
     echo "deb [arch=${DEB_ARCH} signed-by=/usr/share/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu ${OS_CODENAME} stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
 
     # Update and install Docker
-    sudo apt-get update
+    safe_apt_update
     if retry_apt_install docker-ce; then
         # Install additional Docker components
         sudo apt-get install -y docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
@@ -2421,16 +2455,8 @@ remove_firefox() {
 install_prerequisites() {
     log_step "Installing Prerequisites"
 
-    # Clean up broken saiarcot895/chromium-dev PPA if it exists (no longer supports Noble+)
-    if ls /etc/apt/sources.list.d/*saiarcot895*chromium* &>/dev/null; then
-        log_info "Removing broken Chromium PPA (saiarcot895/chromium-dev)..."
-        sudo add-apt-repository --remove -y ppa:saiarcot895/chromium-dev 2>/dev/null || \
-            sudo rm -f /etc/apt/sources.list.d/*saiarcot895*chromium*
-        log_success "Broken PPA removed"
-    fi
-
     log_info "Updating package lists..."
-    sudo apt-get update
+    safe_apt_update
 
     log_info "Installing required packages..."
     sudo apt-get install -y \
@@ -2441,7 +2467,7 @@ install_prerequisites() {
         apt-transport-https \
         software-properties-common \
         build-essential \
-        git
+        git || handle_error "Some prerequisite packages could not be installed"
 
     log_success "Prerequisites installed"
 }

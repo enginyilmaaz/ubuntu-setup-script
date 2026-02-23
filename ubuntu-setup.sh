@@ -178,7 +178,7 @@ handle_error() {
     echo -e "${RED}[ERROR]${NC} $error_msg"
     echo -e "${RED}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
     echo ""
-    read -p "Do you want to continue? (y/n): " -n 1 -r
+    read -p "Do you want to continue? (y/n): " -n 1 -r < /dev/tty
     echo ""
     if [[ ! $REPLY =~ ^[Yy]$ ]]; then
         log_error "Script aborted by user."
@@ -485,11 +485,11 @@ show_interactive_install_menu() {
         echo ""
 
         # Read key
-        IFS= read -rsn1 key 2>/dev/null || key=""
+        IFS= read -rsn1 key < /dev/tty 2>/dev/null || key=""
 
         # Check for escape sequence (arrow keys)
         if [ "$key" = $'\x1b' ]; then
-            read -rsn2 -t 0.1 rest 2>/dev/null || rest=""
+            read -rsn2 -t 0.1 rest < /dev/tty 2>/dev/null || rest=""
             key="${key}${rest}"
         fi
 
@@ -575,7 +575,7 @@ show_full_menu() {
         echo -e "  ${RED}[q]${NC}  Quit"
         echo ""
 
-        read -p "Enter choice: " choice
+        read -p "Enter choice: " choice < /dev/tty
 
         case $choice in
             1) menu_install_apps ;;
@@ -689,7 +689,7 @@ menu_remove_apps() {
         echo -e "  ${RED}[b]${NC}  Back to main menu"
         echo ""
 
-        read -p "Enter number to remove (or 'b' to go back): " choice
+        read -p "Enter number to remove (or 'b' to go back): " choice < /dev/tty
 
         if [[ "$choice" == "b" || "$choice" == "B" ]]; then
             return
@@ -698,11 +698,11 @@ menu_remove_apps() {
         if [[ "$choice" =~ ^[0-9]+$ ]] && [ -n "${REMOVABLE[$choice]}" ]; then
             local app="${REMOVABLE[$choice]}"
             echo ""
-            read -p "Are you sure you want to remove $app? (y/n): " confirm
+            read -p "Are you sure you want to remove $app? (y/n): " confirm < /dev/tty
             if [[ "$confirm" =~ ^[Yy]$ ]]; then
                 remove_application "$app"
                 echo ""
-                read -p "Press Enter to continue..."
+                read -p "Press Enter to continue..." < /dev/tty
             fi
         fi
     done
@@ -772,7 +772,7 @@ menu_backups() {
         echo -e "  ${RED}[b]${NC}  Back to main menu"
         echo ""
 
-        read -p "Enter choice: " choice
+        read -p "Enter choice: " choice < /dev/tty
 
         case $choice in
             1) show_all_backups ;;
@@ -796,7 +796,7 @@ show_all_backups() {
     if [ ! -d "$BACKUP_DIR" ]; then
         echo -e "${YELLOW}No backups found.${NC}"
         echo ""
-        read -p "Press Enter to continue..."
+        read -p "Press Enter to continue..." < /dev/tty
         return
     fi
 
@@ -825,7 +825,7 @@ show_all_backups() {
     fi
 
     echo ""
-    read -p "Press Enter to continue..."
+    read -p "Press Enter to continue..." < /dev/tty
 }
 
 # Take new backup
@@ -841,7 +841,7 @@ take_new_backup() {
     echo -e "Backup name: ${YELLOW}$backup_name${NC}"
     echo ""
 
-    read -p "Continue? (y/n): " confirm
+    read -p "Continue? (y/n): " confirm < /dev/tty
     if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
         return
     fi
@@ -882,7 +882,7 @@ take_new_backup() {
     echo ""
     echo -e "${GREEN}Backup completed: $backup_path${NC}"
     echo ""
-    read -p "Press Enter to continue..."
+    read -p "Press Enter to continue..." < /dev/tty
 }
 
 # Restore backup interactive
@@ -896,7 +896,7 @@ restore_backup_interactive() {
     if [ ! -d "$BACKUP_DIR" ]; then
         echo -e "${YELLOW}No backups found.${NC}"
         echo ""
-        read -p "Press Enter to continue..."
+        read -p "Press Enter to continue..." < /dev/tty
         return
     fi
 
@@ -920,7 +920,7 @@ restore_backup_interactive() {
     if [ $idx -eq 1 ]; then
         echo -e "${YELLOW}No backups found.${NC}"
         echo ""
-        read -p "Press Enter to continue..."
+        read -p "Press Enter to continue..." < /dev/tty
         return
     fi
 
@@ -928,7 +928,7 @@ restore_backup_interactive() {
     echo -e "  ${RED}[b]${NC}  Back"
     echo ""
 
-    read -p "Select backup to restore: " choice
+    read -p "Select backup to restore: " choice < /dev/tty
 
     if [[ "$choice" == "b" || "$choice" == "B" ]]; then
         return
@@ -956,7 +956,7 @@ restore_backup_interactive() {
             echo ""
         fi
 
-        read -p "Restore this backup? (yes/y to confirm): " confirm
+        read -p "Restore this backup? (yes/y to confirm): " confirm < /dev/tty
 
         if [[ "$confirm" =~ ^[Yy]([Ee][Ss])?$ ]]; then
             echo ""
@@ -992,7 +992,7 @@ restore_backup_interactive() {
         fi
 
         echo ""
-        read -p "Press Enter to continue..."
+        read -p "Press Enter to continue..." < /dev/tty
     fi
 }
 
@@ -1029,7 +1029,7 @@ menu_system_info() {
     command_exists firefox && echo -e "  ${GREEN}✓${NC} Firefox"
 
     echo ""
-    read -p "Press Enter to continue..."
+    read -p "Press Enter to continue..." < /dev/tty
 }
 
 # Run installations based on flags
@@ -1332,13 +1332,13 @@ install_rustdesk() {
     echo -e "${GREEN}RustDesk Password Setup${NC}"
     echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
     echo ""
-    read -p "Do you want to set a permanent password for RustDesk? (y/n): " set_password
+    read -p "Do you want to set a permanent password for RustDesk? (y/n): " set_password < /dev/tty
 
     if [[ "$set_password" =~ ^[Yy]$ ]]; then
         while true; do
             echo ""
             # Read password with hidden input
-            read -sp "Enter password: " rustdesk_password
+            read -sp "Enter password: " rustdesk_password < /dev/tty
             echo ""
 
             if [ -z "$rustdesk_password" ]; then
@@ -1356,7 +1356,7 @@ install_rustdesk() {
             echo -e "  ${BLUE}[2]${NC}  Re-enter password"
             echo -e "  ${BLUE}[3]${NC}  Skip password setup"
             echo ""
-            read -p "Enter choice (1/2/3): " password_choice
+            read -p "Enter choice (1/2/3): " password_choice < /dev/tty
 
             case $password_choice in
                 1)
@@ -1937,7 +1937,7 @@ restore_gnome_settings() {
     fi
 
     # Confirm restore
-    read -p "Are you sure you want to restore GNOME settings? (y/n): " -n 1 -r
+    read -p "Are you sure you want to restore GNOME settings? (y/n): " -n 1 -r < /dev/tty
     echo ""
 
     if [[ ! $REPLY =~ ^[Yy]$ ]]; then
@@ -2042,7 +2042,7 @@ install_realvnc() {
        [ -f /usr/bin/vncserver-x11 ] || \
        [ -d /usr/share/vnc ]; then
         log_warning "RealVNC already installed."
-        read -p "Reinstall from scratch? (y/n): " reinstall_choice
+        read -p "Reinstall from scratch? (y/n): " reinstall_choice < /dev/tty
         if [[ "$reinstall_choice" =~ ^[Yy]$ ]]; then
             log_info "Removing existing RealVNC installation..."
             sudo apt-get purge -y realvnc-connect realvnc-vnc-server 2>/dev/null
@@ -2324,7 +2324,7 @@ run_cli_logins() {
     fi
 
     echo ""
-    read -p "Do you want to login to CLI tools now? (y/n): " -n 1 -r
+    read -p "Do you want to login to CLI tools now? (y/n): " -n 1 -r < /dev/tty
     echo ""
 
     if [[ $REPLY =~ ^[Yy]$ ]]; then
@@ -2407,7 +2407,7 @@ remove_firefox() {
         return
     fi
 
-    read -p "Do you want to remove Firefox? (y/n): " -n 1 -r
+    read -p "Do you want to remove Firefox? (y/n): " -n 1 -r < /dev/tty
     echo ""
 
     if [[ $REPLY =~ ^[Yy]$ ]]; then
@@ -2435,7 +2435,7 @@ remove_firefox() {
 
         # Clean up Firefox user data (optional)
         if [ -d "$HOME/.mozilla/firefox" ]; then
-            read -p "Do you want to remove Firefox user data too? (y/n): " -n 1 -r
+            read -p "Do you want to remove Firefox user data too? (y/n): " -n 1 -r < /dev/tty
             echo ""
             if [[ $REPLY =~ ^[Yy]$ ]]; then
                 rm -rf "$HOME/.mozilla/firefox"

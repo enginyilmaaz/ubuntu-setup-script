@@ -35,6 +35,7 @@ INSTALL_DBEAVER=false
 INSTALL_VLC=false
 INSTALL_CLOUDFLARED=false
 INSTALL_DOCKER=false
+INSTALL_CLAUDE=false
 DO_CLI_LOGIN=false
 DO_REMOVE_FIREFOX=false
 
@@ -90,6 +91,9 @@ for arg in "$@"; do
         --docker)
             INSTALL_DOCKER=true
             ;;
+        --claude|--claude-code)
+            INSTALL_CLAUDE=true
+            ;;
         --login)
             DO_CLI_LOGIN=true
             ;;
@@ -134,6 +138,7 @@ if $INSTALL_ALL; then
     INSTALL_VLC=true
     INSTALL_CLOUDFLARED=true
     INSTALL_DOCKER=true
+    INSTALL_CLAUDE=true
     DO_REMOVE_FIREFOX=true
 fi
 
@@ -227,7 +232,7 @@ show_help() {
     echo "      - NVM (Node Version Manager)"
     echo "      - Node.js 22 LTS"
     echo "      - Yarn package manager"
-    echo "      - CLI tools: codex, claude-code (native installer), gemini-cli"
+    echo "      - CLI tools: codex, gemini-cli"
     echo ""
     echo -e "  ${YELLOW}--chrome${NC}"
     echo "      Web browser"
@@ -283,6 +288,11 @@ show_help() {
     echo "      - Downloads .deb from GitHub releases"
     echo "      - Supports AMD64 and ARM64"
     echo "      - Set password: rustdesk --password YOUR_PASSWORD"
+    echo ""
+    echo -e "  ${YELLOW}--claude${NC}"
+    echo "      Claude Code - AI coding assistant CLI"
+    echo "      - Native installer (no Node.js required)"
+    echo "      - Auto-updates in background"
     echo ""
     echo -e "${GREEN}ACTION OPTIONS:${NC}"
     echo ""
@@ -413,12 +423,12 @@ show_interactive_install_menu() {
     detect_system_silent
 
     # App data
-    local -a APP_NAMES=("" "VNC" "RustDesk" "NodeJS" "Chrome" "Cursor" "Antigravity" "VSCode" "Python" "GNOME" "DBeaver" "VLC" "Cloudflared" "Docker" "JetsonFix")
-    local -a APP_DESCS=("" "RealVNC Connect (Remote Desktop)" "RustDesk (Open Source Remote Desktop)" "NVM + Node.js 22 + Yarn + CLI Tools" "Google Chrome / Chromium" "Cursor IDE (AI Code Editor)" "Antigravity Tool" "Visual Studio Code + Extensions" "Python 3 + pip + venv" "GNOME Extensions + Dash to Dock" "DBeaver CE (Database Tool)" "VLC Media Player" "Cloudflare Tunnel Client" "Docker Engine + Compose" "Jetson Snapd Fix (Browser Fix)")
-    local -a APP_VARS=("" "INSTALL_VNC" "INSTALL_RUSTDESK" "INSTALL_NODEJS" "INSTALL_CHROME" "INSTALL_CURSOR" "INSTALL_ANTIGRAVITY" "INSTALL_VSCODE" "INSTALL_PYTHON" "INSTALL_GNOME" "INSTALL_DBEAVER" "INSTALL_VLC" "INSTALL_CLOUDFLARED" "INSTALL_DOCKER" "APPLY_JETSON_FIX")
+    local -a APP_NAMES=("" "VNC" "RustDesk" "NodeJS" "Chrome" "Cursor" "Antigravity" "VSCode" "Python" "GNOME" "DBeaver" "VLC" "Cloudflared" "Docker" "Claude Code" "JetsonFix")
+    local -a APP_DESCS=("" "RealVNC Connect (Remote Desktop)" "RustDesk (Open Source Remote Desktop)" "NVM + Node.js 22 + Yarn + CLI Tools" "Google Chrome / Chromium" "Cursor IDE (AI Code Editor)" "Antigravity Tool" "Visual Studio Code + Extensions" "Python 3 + pip + venv" "GNOME Extensions + Dash to Dock" "DBeaver CE (Database Tool)" "VLC Media Player" "Cloudflare Tunnel Client" "Docker Engine + Compose" "Claude Code (AI Coding CLI)" "Jetson Snapd Fix (Browser Fix)")
+    local -a APP_VARS=("" "INSTALL_VNC" "INSTALL_RUSTDESK" "INSTALL_NODEJS" "INSTALL_CHROME" "INSTALL_CURSOR" "INSTALL_ANTIGRAVITY" "INSTALL_VSCODE" "INSTALL_PYTHON" "INSTALL_GNOME" "INSTALL_DBEAVER" "INSTALL_VLC" "INSTALL_CLOUDFLARED" "INSTALL_DOCKER" "INSTALL_CLAUDE" "APPLY_JETSON_FIX")
 
-    local TOTAL_ITEMS=14
-    local -a SELECTED=(0 0 0 0 0 0 0 0 0 0 0 0 0 0 0)
+    local TOTAL_ITEMS=15
+    local -a SELECTED=(0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0)
     local cursor=1
     local key=""
     local count=0
@@ -437,7 +447,7 @@ show_interactive_install_menu() {
 
         # Draw menu items
         local i
-        for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14; do
+        for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do
             local name="${APP_NAMES[$i]}"
             local desc="${APP_DESCS[$i]}"
             local num_display=$(printf "%2d" $i)
@@ -465,7 +475,7 @@ show_interactive_install_menu() {
         # Count selected
         count=0
         local selected_names=""
-        for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14; do
+        for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do
             if [ "${SELECTED[$i]}" = "1" ]; then
                 count=$((count + 1))
                 selected_names="${selected_names}${APP_NAMES[$i]}, "
@@ -513,12 +523,12 @@ show_interactive_install_menu() {
                 fi
                 ;;
             'a'|'A') # Select all
-                for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14; do
+                for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do
                     SELECTED[$i]=1
                 done
                 ;;
             'n'|'N') # Clear all
-                for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14; do
+                for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do
                     SELECTED[$i]=0
                 done
                 ;;
@@ -529,7 +539,7 @@ show_interactive_install_menu() {
                     continue
                 fi
                 # Set flags
-                for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14; do
+                for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do
                     if [ "${SELECTED[$i]}" = "1" ]; then
                         eval "${APP_VARS[$i]}=true"
                     fi
@@ -675,6 +685,12 @@ menu_remove_apps() {
             ((idx++))
         fi
 
+        if command_exists claude; then
+            echo -e "  ${BLUE}[$idx]${NC}  Claude Code"
+            REMOVABLE[$idx]="claude"
+            ((idx++))
+        fi
+
         if command_exists firefox; then
             echo -e "  ${BLUE}[$idx]${NC}  Firefox"
             REMOVABLE[$idx]="firefox"
@@ -747,6 +763,13 @@ remove_application() {
             ;;
         docker)
             sudo apt-get remove -y docker-ce docker-ce-cli containerd.io 2>/dev/null
+            ;;
+        claude)
+            # Remove native installation
+            rm -f "$HOME/.claude/bin/claude" 2>/dev/null
+            rm -rf "$HOME/.claude" 2>/dev/null
+            # Remove npm installation if exists
+            npm uninstall -g @anthropic-ai/claude-code 2>/dev/null
             ;;
         firefox)
             sudo snap remove firefox 2>/dev/null
@@ -1026,6 +1049,7 @@ menu_system_info() {
     command_exists vlc && echo -e "  ${GREEN}✓${NC} VLC"
     command_exists cloudflared && echo -e "  ${GREEN}✓${NC} Cloudflared"
     command_exists docker && echo -e "  ${GREEN}✓${NC} Docker"
+    command_exists claude && echo -e "  ${GREEN}✓${NC} Claude Code"
     command_exists firefox && echo -e "  ${GREEN}✓${NC} Firefox"
 
     echo ""
@@ -1064,6 +1088,7 @@ run_installations() {
     if $INSTALL_VLC; then install_vlc || handle_error "VLC installation failed"; fi
     if $INSTALL_CLOUDFLARED; then install_cloudflared || handle_error "Cloudflared installation failed"; fi
     if $INSTALL_DOCKER; then install_docker || handle_error "Docker installation failed"; fi
+    if $INSTALL_CLAUDE; then install_claude_code || handle_error "Claude Code installation failed"; fi
     if $INSTALL_RUSTDESK; then install_rustdesk || handle_error "RustDesk installation failed"; fi
 
     # CLI logins (requires nodejs to be installed)
@@ -1448,20 +1473,36 @@ install_nvm_nodejs() {
         fi
     fi
 
-    # 2.5 Install Claude Code (native installer - no npm required)
-    log_info "2.5 Installing Claude Code..."
+}
+
+#===============================================================================
+# Claude Code Installation (native installer)
+#===============================================================================
+
+install_claude_code() {
+    log_step "Installing Claude Code"
+
     if command_exists claude; then
-        log_warning "Claude Code already installed, skipping..."
+        log_warning "Claude Code already installed ($(claude --version 2>/dev/null || echo 'unknown')), skipping..."
+        return 0
+    fi
+
+    log_info "Installing Claude Code via native installer..."
+
+    if curl -fsSL https://claude.ai/install.sh | bash; then
+        log_success "Claude Code installed successfully"
     else
-        if curl -fsSL https://claude.ai/install.sh | bash; then
-            log_success "Claude Code installed successfully"
-        else
-            log_warning "Claude Code installation failed, falling back to npm..."
+        log_warning "Native installer failed, trying npm fallback..."
+        if command_exists npm; then
             if retry_npm_install @anthropic-ai/claude-code; then
                 log_success "Claude Code installed via npm"
             else
                 log_warning "Claude Code installation skipped after all attempts"
+                return 1
             fi
+        else
+            log_warning "Claude Code installation failed (npm not available for fallback)"
+            return 1
         fi
     fi
 }
@@ -2503,7 +2544,7 @@ print_summary() {
     command_exists yarn && echo -e "  ${GREEN}✓${NC} Yarn $(yarn -v)"
     command_exists codex && echo -e "  ${GREEN}✓${NC} Codex CLI"
     command_exists gemini && echo -e "  ${GREEN}✓${NC} Gemini CLI"
-    command_exists claude && echo -e "  ${GREEN}✓${NC} Claude CLI"
+    command_exists claude && echo -e "  ${GREEN}✓${NC} Claude Code $(claude --version 2>/dev/null || echo '')"
     (command_exists google-chrome || command_exists google-chrome-stable) && echo -e "  ${GREEN}✓${NC} Google Chrome"
     (command_exists chromium-browser || command_exists chromium) && echo -e "  ${GREEN}✓${NC} Chromium"
     command_exists cursor && echo -e "  ${GREEN}✓${NC} Cursor IDE"
@@ -2556,7 +2597,7 @@ main() {
     if $INSTALL_VNC || $INSTALL_NODEJS || $INSTALL_CHROME || $INSTALL_CURSOR || \
        $INSTALL_ANTIGRAVITY || $INSTALL_VSCODE || $INSTALL_PYTHON || $INSTALL_GNOME || \
        $INSTALL_DBEAVER || $INSTALL_VLC || $INSTALL_CLOUDFLARED || $INSTALL_DOCKER || \
-       $INSTALL_RUSTDESK || $DO_CLI_LOGIN || $DO_REMOVE_FIREFOX || $APPLY_JETSON_FIX; then
+       $INSTALL_CLAUDE || $INSTALL_RUSTDESK || $DO_CLI_LOGIN || $DO_REMOVE_FIREFOX || $APPLY_JETSON_FIX; then
         has_install=true
     fi
 

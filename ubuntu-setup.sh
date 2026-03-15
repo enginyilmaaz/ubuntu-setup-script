@@ -227,7 +227,7 @@ show_help() {
     echo "      - NVM (Node Version Manager)"
     echo "      - Node.js 22 LTS"
     echo "      - Yarn package manager"
-    echo "      - CLI tools: codex, @anthropics/claude-code, @anthropics/gemini-cli"
+    echo "      - CLI tools: codex, claude-code (native installer), gemini-cli"
     echo ""
     echo -e "  ${YELLOW}--chrome${NC}"
     echo "      Web browser"
@@ -1448,15 +1448,20 @@ install_nvm_nodejs() {
         fi
     fi
 
-    # 2.5 Install Claude CLI
-    log_info "2.5 Installing Claude CLI..."
+    # 2.5 Install Claude Code (native installer - no npm required)
+    log_info "2.5 Installing Claude Code..."
     if command_exists claude; then
-        log_warning "Claude CLI already installed, skipping..."
+        log_warning "Claude Code already installed, skipping..."
     else
-        if retry_npm_install @anthropic-ai/claude-code; then
-            log_success "Claude CLI installed successfully"
+        if curl -fsSL https://claude.ai/install.sh | bash; then
+            log_success "Claude Code installed successfully"
         else
-            log_warning "Claude CLI installation skipped after 3 failed attempts"
+            log_warning "Claude Code installation failed, falling back to npm..."
+            if retry_npm_install @anthropic-ai/claude-code; then
+                log_success "Claude Code installed via npm"
+            else
+                log_warning "Claude Code installation skipped after all attempts"
+            fi
         fi
     fi
 }

@@ -422,14 +422,46 @@ show_system_header() {
 show_interactive_install_menu() {
     detect_system_silent
 
-    # App data
-    local -a APP_NAMES=("" "VNC" "RustDesk" "NodeJS" "Chrome" "Cursor" "Antigravity" "VSCode" "Python" "GNOME" "DBeaver" "VLC" "Cloudflared" "Docker" "Claude Code" "JetsonFix")
-    local -a APP_DESCS=("" "RealVNC Connect (Remote Desktop)" "RustDesk (Open Source Remote Desktop)" "NVM + Node.js 22 + Yarn + CLI Tools" "Google Chrome / Chromium" "Cursor IDE (AI Code Editor)" "Antigravity Tool" "Visual Studio Code + Extensions" "Python 3 + pip + venv" "GNOME Extensions + Dash to Dock" "DBeaver CE (Database Tool)" "VLC Media Player" "Cloudflare Tunnel Client" "Docker Engine + Compose" "Claude Code (AI Coding CLI)" "Jetson Snapd Fix (Browser Fix)")
-    local -a APP_VARS=("" "INSTALL_VNC" "INSTALL_RUSTDESK" "INSTALL_NODEJS" "INSTALL_CHROME" "INSTALL_CURSOR" "INSTALL_ANTIGRAVITY" "INSTALL_VSCODE" "INSTALL_PYTHON" "INSTALL_GNOME" "INSTALL_DBEAVER" "INSTALL_VLC" "INSTALL_CLOUDFLARED" "INSTALL_DOCKER" "INSTALL_CLAUDE" "APPLY_JETSON_FIX")
+    # Build menu dynamically based on architecture and device
+    local -a APP_NAMES=()
+    local -a APP_DESCS=()
+    local -a APP_VARS=()
+    local idx=0
 
-    local TOTAL_ITEMS=15
-    local -a SELECTED=(0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0)
-    local cursor=1
+    # Always available apps
+    APP_NAMES+=("VNC");         APP_DESCS+=("RealVNC Connect (Remote Desktop)");      APP_VARS+=("INSTALL_VNC")
+    APP_NAMES+=("RustDesk");    APP_DESCS+=("RustDesk (Open Source Remote Desktop)"); APP_VARS+=("INSTALL_RUSTDESK")
+    APP_NAMES+=("NodeJS");      APP_DESCS+=("NVM + Node.js 22 + Yarn + CLI Tools");  APP_VARS+=("INSTALL_NODEJS")
+
+    # Chrome only on amd64, Chromium on ARM
+    if [ "$DEB_ARCH" == "amd64" ]; then
+        APP_NAMES+=("Chrome");  APP_DESCS+=("Google Chrome");                         APP_VARS+=("INSTALL_CHROME")
+    else
+        APP_NAMES+=("Chromium"); APP_DESCS+=("Chromium Browser (ARM)");               APP_VARS+=("INSTALL_CHROME")
+    fi
+
+    APP_NAMES+=("Cursor");      APP_DESCS+=("Cursor IDE (AI Code Editor)");           APP_VARS+=("INSTALL_CURSOR")
+    APP_NAMES+=("Antigravity"); APP_DESCS+=("Antigravity Tool");                      APP_VARS+=("INSTALL_ANTIGRAVITY")
+    APP_NAMES+=("VSCode");      APP_DESCS+=("Visual Studio Code + Extensions");       APP_VARS+=("INSTALL_VSCODE")
+    APP_NAMES+=("Python");      APP_DESCS+=("Python 3 + pip + venv");                 APP_VARS+=("INSTALL_PYTHON")
+    APP_NAMES+=("GNOME");       APP_DESCS+=("GNOME Extensions + Dash to Dock");       APP_VARS+=("INSTALL_GNOME")
+    APP_NAMES+=("DBeaver");     APP_DESCS+=("DBeaver CE (Database Tool)");            APP_VARS+=("INSTALL_DBEAVER")
+    APP_NAMES+=("VLC");         APP_DESCS+=("VLC Media Player");                      APP_VARS+=("INSTALL_VLC")
+    APP_NAMES+=("Cloudflared"); APP_DESCS+=("Cloudflare Tunnel Client");              APP_VARS+=("INSTALL_CLOUDFLARED")
+    APP_NAMES+=("Docker");      APP_DESCS+=("Docker Engine + Compose");               APP_VARS+=("INSTALL_DOCKER")
+    APP_NAMES+=("Claude Code"); APP_DESCS+=("Claude Code (AI Coding CLI)");           APP_VARS+=("INSTALL_CLAUDE")
+
+    # JetsonFix only on Jetson devices
+    if $IS_JETSON; then
+        APP_NAMES+=("JetsonFix"); APP_DESCS+=("Jetson Snapd Fix (Browser Fix)");      APP_VARS+=("APPLY_JETSON_FIX")
+    fi
+
+    local TOTAL_ITEMS=${#APP_NAMES[@]}
+    local -a SELECTED=()
+    for ((idx=0; idx<TOTAL_ITEMS; idx++)); do
+        SELECTED+=(0)
+    done
+    local cursor=0
     local key=""
     local count=0
 
@@ -447,10 +479,10 @@ show_interactive_install_menu() {
 
         # Draw menu items
         local i
-        for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do
+        for ((i=0; i<TOTAL_ITEMS; i++)); do
             local name="${APP_NAMES[$i]}"
             local desc="${APP_DESCS[$i]}"
-            local num_display=$(printf "%2d" $i)
+            local num_display=$(printf "%2d" $((i + 1)))
             local checkbox="[ ]"
             local line_start="   "
 
@@ -475,7 +507,7 @@ show_interactive_install_menu() {
         # Count selected
         count=0
         local selected_names=""
-        for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do
+        for ((i=0; i<TOTAL_ITEMS; i++)); do
             if [ "${SELECTED[$i]}" = "1" ]; then
                 count=$((count + 1))
                 selected_names="${selected_names}${APP_NAMES[$i]}, "
@@ -506,12 +538,12 @@ show_interactive_install_menu() {
         # Handle keys
         case "$key" in
             $'\x1b[A'|'k') # Up arrow or k
-                if [ $cursor -gt 1 ]; then
+                if [ $cursor -gt 0 ]; then
                     cursor=$((cursor - 1))
                 fi
                 ;;
             $'\x1b[B'|'j') # Down arrow or j
-                if [ $cursor -lt $TOTAL_ITEMS ]; then
+                if [ $cursor -lt $((TOTAL_ITEMS - 1)) ]; then
                     cursor=$((cursor + 1))
                 fi
                 ;;
@@ -523,12 +555,12 @@ show_interactive_install_menu() {
                 fi
                 ;;
             'a'|'A') # Select all
-                for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do
+                for ((i=0; i<TOTAL_ITEMS; i++)); do
                     SELECTED[$i]=1
                 done
                 ;;
             'n'|'N') # Clear all
-                for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do
+                for ((i=0; i<TOTAL_ITEMS; i++)); do
                     SELECTED[$i]=0
                 done
                 ;;
@@ -539,7 +571,7 @@ show_interactive_install_menu() {
                     continue
                 fi
                 # Set flags
-                for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do
+                for ((i=0; i<TOTAL_ITEMS; i++)); do
                     if [ "${SELECTED[$i]}" = "1" ]; then
                         eval "${APP_VARS[$i]}=true"
                     fi
@@ -553,8 +585,8 @@ show_interactive_install_menu() {
                 exit 0
                 ;;
             [1-9]) # Number keys
-                local num=$key
-                if [ $num -le $TOTAL_ITEMS ]; then
+                local num=$((key - 1))
+                if [ $num -lt $TOTAL_ITEMS ]; then
                     if [ "${SELECTED[$num]}" = "1" ]; then
                         SELECTED[$num]=0
                     else
@@ -2063,8 +2095,9 @@ running-indicator-style='DASHES'
 show-apps-always-in-the-edge=false
 show-apps-at-top=true
 show-favorites=true
-show-mounts=true
+show-mounts=false
 show-mounts-only-mounted=false
+show-mounts-network=false
 show-running=true
 show-trash=false
 show-windows-preview=true
@@ -2072,6 +2105,12 @@ transparency-mode='FIXED'
 DOCKCONF
 
     log_success "Dash to Dock configured successfully"
+
+    # Disable dynamic workspaces and set to 1
+    log_info "Disabling virtual desktops (setting to 1 static workspace)..."
+    dconf write /org/gnome/mutter/dynamic-workspaces false
+    dconf write /org/gnome/desktop/wm/preferences/num-workspaces 1
+    log_success "Virtual desktops disabled (1 static workspace)"
 }
 
 #===============================================================================

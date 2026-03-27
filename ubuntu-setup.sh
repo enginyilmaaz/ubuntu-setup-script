@@ -1101,6 +1101,81 @@ menu_system_info() {
 }
 
 # Run installations based on flags
+# Check already installed software and ask user for reinstall decisions
+check_already_installed() {
+    # Ensure claude PATH is available for detection
+    export PATH="$HOME/.claude/bin:$HOME/.local/bin:$PATH"
+
+    # Define: FLAG_VAR | Display Name | Detection Command
+    local -a CHECKS=(
+        "INSTALL_VNC|RealVNC|command_exists vncserver-x11 || command_exists vncserver || package_installed realvnc-connect"
+        "INSTALL_RUSTDESK|RustDesk|command_exists rustdesk"
+        "INSTALL_NODEJS|Node.js + NVM|[ -d \"\$HOME/.nvm\" ] && command_exists node"
+        "INSTALL_CHROME|Chrome/Chromium|command_exists google-chrome || command_exists google-chrome-stable || command_exists chromium-browser || command_exists chromium"
+        "INSTALL_CURSOR|Cursor IDE|command_exists cursor || dpkg -l cursor 2>/dev/null | grep -q '^ii'"
+        "INSTALL_ANTIGRAVITY|Antigravity|command_exists antigravity"
+        "INSTALL_VSCODE|VS Code|command_exists code"
+        "INSTALL_PYTHON|Python 3|command_exists python3"
+        "INSTALL_GNOME|GNOME Extensions|package_installed gnome-shell-extensions"
+        "INSTALL_DBEAVER|DBeaver|package_installed dbeaver-ce || command_exists dbeaver"
+        "INSTALL_VLC|VLC|command_exists vlc"
+        "INSTALL_CLOUDFLARED|Cloudflared|command_exists cloudflared"
+        "INSTALL_DOCKER|Docker|command_exists docker"
+        "INSTALL_CLAUDE|Claude Code|command_exists claude"
+        "INSTALL_GH|GitHub CLI|command_exists gh"
+    )
+
+    local found_any=false
+
+    # First pass: detect which selected apps are already installed
+    local -a ALREADY_INSTALLED=()
+    for check in "${CHECKS[@]}"; do
+        IFS='|' read -r flag_var display_name detect_cmd <<< "$check"
+        # Check if this app was selected for install
+        if eval "\$$flag_var"; then
+            # Check if already installed
+            if eval "$detect_cmd" 2>/dev/null; then
+                ALREADY_INSTALLED+=("$check")
+                found_any=true
+            fi
+        fi
+    done
+
+    # If nothing is already installed, skip
+    if ! $found_any; then
+        return
+    fi
+
+    echo ""
+    echo -e "${YELLOW}═══════════════════════════════════════════════════════════════${NC}"
+    echo -e "${YELLOW}  Some selected software is already installed${NC}"
+    echo -e "${YELLOW}═══════════════════════════════════════════════════════════════${NC}"
+    echo ""
+
+    # Ask for each already-installed app
+    local idx=1
+    local total=${#ALREADY_INSTALLED[@]}
+    for check in "${ALREADY_INSTALLED[@]}"; do
+        IFS='|' read -r flag_var display_name detect_cmd <<< "$check"
+        echo -e "  ${CYAN}[$idx/$total]${NC} ${GREEN}$display_name${NC} is already installed."
+        read -p "  Reinstall from scratch? (y/n): " choice < /dev/tty
+        if [[ ! "$choice" =~ ^[Yy]$ ]]; then
+            # User doesn't want to reinstall, disable this flag
+            eval "$flag_var=false"
+            echo -e "  ${YELLOW}→ Skipping $display_name${NC}"
+        else
+            # Mark for force reinstall
+            eval "FORCE_REINSTALL_${flag_var}=true"
+            echo -e "  ${GREEN}→ Will reinstall $display_name${NC}"
+        fi
+        echo ""
+        idx=$((idx + 1))
+    done
+
+    echo -e "${YELLOW}═══════════════════════════════════════════════════════════════${NC}"
+    echo ""
+}
+
 run_installations() {
     # Check if running as root
     if [ "$EUID" -eq 0 ]; then
@@ -1110,6 +1185,9 @@ run_installations() {
 
     # Detect system
     detect_system
+
+    # Check already installed apps and ask for reinstall one by one
+    check_already_installed
 
     # Apply Jetson snapd fix if selected
     if $APPLY_JETSON_FIX; then
@@ -1590,13 +1668,9 @@ install_claude_code() {
         fi
     fi
 
-    # Install Claude Code plugins via settings.json
+    # Install Claude Code plugins
     if command_exists claude; then
         log_info "Installing Claude Code plugins..."
-
-        local claude_settings_dir="$HOME/.claude"
-        local claude_settings="$claude_settings_dir/settings.json"
-        mkdir -p "$claude_settings_dir"
 
         local -a CLAUDE_PLUGINS=(
             "frontend-design"
@@ -1607,43 +1681,16 @@ install_claude_code() {
             "security-guidance"
         )
 
-        # Build plugins JSON and merge into settings
-        local plugins_json="["
         for plugin_name in "${CLAUDE_PLUGINS[@]}"; do
-            plugins_json+="\"https://claude.com/plugins/${plugin_name}\","
-            log_info "  Added plugin: $plugin_name"
-        done
-        plugins_json="${plugins_json%,}]"
-
-        # Create or update settings.json with plugin marketplace sources
-        if [ -f "$claude_settings" ]; then
-            # Merge plugins into existing settings
-            python3 -c "
-import json, sys
-try:
-    with open('$claude_settings', 'r') as f:
-        settings = json.load(f)
-except:
-    settings = {}
-settings['plugin_marketplace_sources'] = json.loads('$plugins_json')
-with open('$claude_settings', 'w') as f:
-    json.dump(settings, f, indent=2)
-print('Settings updated')
-" 2>/dev/null || {
-                # Fallback: write directly if python3 fails
-                echo "{\"plugin_marketplace_sources\": $plugins_json}" > "$claude_settings"
-            }
-        else
-            echo "{\"plugin_marketplace_sources\": $plugins_json}" > "$claude_settings"
-        fi
-
-        for plugin_name in "${CLAUDE_PLUGINS[@]}"; do
-            log_success "  Plugin $plugin_name registered"
+            log_info "  Installing plugin: $plugin_name"
+            if claude plugin install "$plugin_name" --scope user 2>/dev/null; then
+                log_success "  ✓ $plugin_name installed"
+            else
+                log_warning "  ✗ $plugin_name failed (install manually: claude plugin install $plugin_name)"
+            fi
         done
 
-        log_success "Claude Code plugins configured"
-        log_info "Plugins will be available when you start Claude Code"
-        log_info "You can manage them with: /plugin install <name> inside Claude"
+        log_success "Claude Code plugins installation completed"
     fi
 }
 

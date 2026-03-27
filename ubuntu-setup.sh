@@ -1656,16 +1656,63 @@ install_claude_code() {
 
     log_info "Installing Claude Code via native installer..."
 
-    if curl -fsSL https://claude.ai/install.sh | bash; then
-        # Reload PATH - installer adds to .bashrc, source it
+    # Capture installer output to extract the install path
+    local install_output
+    install_output=$(curl -fsSL https://claude.ai/install.sh | bash 2>&1)
+    local install_exit=$?
+
+    echo "$install_output"
+
+    if [ $install_exit -eq 0 ]; then
+        # Try to extract path from installer output (e.g. "Installed to /home/user/.local/bin/claude")
+        local detected_path=""
+        detected_path=$(echo "$install_output" | grep -oP '(?:installed to|path:|location:)\s*\K\S+' -i | head -1)
+
+        if [ -n "$detected_path" ] && [ -f "$detected_path" ]; then
+            # Got path from installer output
+            local detected_dir
+            detected_dir=$(dirname "$detected_path")
+            export PATH="$detected_dir:$PATH"
+            log_info "Detected install path from installer: $detected_path"
+        else
+            # Fallback: search known locations
+            local -a CLAUDE_SEARCH_PATHS=(
+                "$HOME/.local/bin/claude"
+                "$HOME/.claude/bin/claude"
+                "/usr/local/bin/claude"
+            )
+            for cpath in "${CLAUDE_SEARCH_PATHS[@]}"; do
+                if [ -f "$cpath" ]; then
+                    detected_path="$cpath"
+                    local detected_dir
+                    detected_dir=$(dirname "$cpath")
+                    export PATH="$detected_dir:$PATH"
+                    log_info "Found claude binary at: $cpath"
+                    break
+                fi
+            done
+        fi
+
+        # Also try sourcing shell configs
         [ -f "$HOME/.bashrc" ] && source "$HOME/.bashrc" 2>/dev/null
-        export PATH="$HOME/.claude/bin:$HOME/.local/bin:$PATH"
         hash -r 2>/dev/null
+
         if command_exists claude; then
             log_success "Claude Code installed successfully ($(claude --version 2>/dev/null || echo ''))"
+            log_info "Binary location: $(which claude)"
         else
             log_warning "Claude Code installed but 'claude' command not found in PATH"
             log_info "Try: source ~/.bashrc  or restart terminal"
+        fi
+
+        # Add to .bashrc if not already there
+        local claude_bin_dir=""
+        if [ -n "$detected_path" ]; then
+            claude_bin_dir=$(dirname "$detected_path")
+        fi
+        if [ -n "$claude_bin_dir" ] && ! grep -q "$claude_bin_dir" "$HOME/.bashrc" 2>/dev/null; then
+            echo "export PATH=\"$claude_bin_dir:\$PATH\"  # Added by ubuntu-setup-script" >> "$HOME/.bashrc"
+            log_info "Added $claude_bin_dir to ~/.bashrc PATH"
         fi
     else
         log_warning "Native installer failed, trying npm fallback..."

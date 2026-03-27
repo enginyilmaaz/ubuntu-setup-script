@@ -1729,68 +1729,35 @@ install_claude_code() {
         fi
     fi
 
-    # Install Claude Code plugins & MCP servers
+    # Install Claude Code plugins (all from claude-plugins-official)
     export PATH="$HOME/.claude/bin:$HOME/.local/bin:$PATH"
     hash -r 2>/dev/null
     if command_exists claude; then
         log_info "Installing Claude Code plugins..."
 
-        # Step 1: Add marketplaces
-        log_info "  Adding plugin marketplaces..."
-        claude plugin marketplace add anthropics/claude-code 2>/dev/null && \
-            log_success "  ✓ Marketplace: anthropics/claude-code" || \
-            log_info "  Marketplace anthropics/claude-code already added"
-        claude plugin marketplace add obra/superpowers 2>/dev/null && \
-            log_success "  ✓ Marketplace: obra/superpowers" || \
-            log_info "  Marketplace obra/superpowers already added"
-
-        # Step 2: Install plugins from anthropics/claude-code marketplace
-        local -a ANTHROPIC_PLUGINS=(
-            "frontend-design@anthropics-claude-code"
-            "code-review@anthropics-claude-code"
-            "security-guidance@anthropics-claude-code"
+        local -a CLAUDE_PLUGINS=(
+            "playwright"
+            "security-guidance"
+            "frontend-design"
+            "code-review"
+            "superpowers"
+            "code-simplifier"
         )
-        for plugin in "${ANTHROPIC_PLUGINS[@]}"; do
-            local name="${plugin%%@*}"
-            log_info "  Installing plugin: $name"
-            if claude plugin install "$plugin" --scope user 2>/dev/null; then
-                log_success "  ✓ $name installed"
+
+        for plugin_name in "${CLAUDE_PLUGINS[@]}"; do
+            log_info "  Installing plugin: $plugin_name"
+            if claude plugin install "${plugin_name}@claude-plugins-official" --scope user 2>/dev/null; then
+                log_success "  ✓ $plugin_name installed"
             else
-                log_warning "  ✗ $name failed"
+                log_warning "  ✗ $plugin_name failed (run manually: claude plugin install ${plugin_name}@claude-plugins-official)"
             fi
         done
 
-        # Step 3: Install superpowers from obra marketplace
-        log_info "  Installing plugin: superpowers"
-        if claude plugin install "superpowers@superpowers-marketplace" --scope user 2>/dev/null; then
-            log_success "  ✓ superpowers installed"
-        else
-            log_warning "  ✗ superpowers failed"
-        fi
-
-        # Step 4: Install code-simplifier from official marketplace
-        log_info "  Installing plugin: code-simplifier"
-        if claude plugin install "code-simplifier" --scope user 2>/dev/null; then
-            log_success "  ✓ code-simplifier installed"
-        else
-            log_warning "  ✗ code-simplifier failed"
-        fi
-
-        # Step 5: Add Playwright MCP server (not a plugin, it's an MCP)
-        log_info "  Adding Playwright MCP server..."
-        if claude mcp add playwright -- npx @playwright/mcp 2>/dev/null; then
-            log_success "  ✓ Playwright MCP server added"
-        else
-            log_warning "  ✗ Playwright MCP failed (install manually: claude mcp add playwright -- npx @playwright/mcp)"
-        fi
-
-        log_success "Claude Code plugins & MCP installation completed"
+        log_success "Claude Code plugins installation completed"
     else
         log_warning "Claude plugins skipped: 'claude' command not in PATH yet"
-        log_info "After install, run these commands manually:"
-        log_info "  claude plugin marketplace add anthropics/claude-code"
-        log_info "  claude plugin marketplace add obra/superpowers"
-        log_info "  claude plugin install frontend-design@anthropics-claude-code"
+        log_info "After install, run manually:"
+        log_info "  claude plugin install frontend-design@claude-plugins-official"
     fi
 }
 

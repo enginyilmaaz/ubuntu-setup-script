@@ -36,6 +36,7 @@ INSTALL_VLC=false
 INSTALL_CLOUDFLARED=false
 INSTALL_DOCKER=false
 INSTALL_CLAUDE=false
+INSTALL_GH=false
 DO_CLI_LOGIN=false
 DO_REMOVE_FIREFOX=false
 
@@ -94,6 +95,9 @@ for arg in "$@"; do
         --claude|--claude-code)
             INSTALL_CLAUDE=true
             ;;
+        --gh|--github-cli)
+            INSTALL_GH=true
+            ;;
         --login)
             DO_CLI_LOGIN=true
             ;;
@@ -139,6 +143,7 @@ if $INSTALL_ALL; then
     INSTALL_CLOUDFLARED=true
     INSTALL_DOCKER=true
     INSTALL_CLAUDE=true
+    INSTALL_GH=true
     DO_REMOVE_FIREFOX=true
 fi
 
@@ -293,6 +298,11 @@ show_help() {
     echo "      Claude Code - AI coding assistant CLI"
     echo "      - Native installer (no Node.js required)"
     echo "      - Auto-updates in background"
+    echo ""
+    echo -e "  ${YELLOW}--gh${NC}"
+    echo "      GitHub CLI (gh)"
+    echo "      - Official GitHub apt repository"
+    echo "      - Manage repos, PRs, issues from terminal"
     echo ""
     echo -e "${GREEN}ACTION OPTIONS:${NC}"
     echo ""
@@ -450,6 +460,7 @@ show_interactive_install_menu() {
     APP_NAMES+=("Cloudflared"); APP_DESCS+=("Cloudflare Tunnel Client");              APP_VARS+=("INSTALL_CLOUDFLARED")
     APP_NAMES+=("Docker");      APP_DESCS+=("Docker Engine + Compose");               APP_VARS+=("INSTALL_DOCKER")
     APP_NAMES+=("Claude Code"); APP_DESCS+=("Claude Code (AI Coding CLI)");           APP_VARS+=("INSTALL_CLAUDE")
+    APP_NAMES+=("GitHub CLI"); APP_DESCS+=("GitHub CLI (gh)");                        APP_VARS+=("INSTALL_GH")
 
     # JetsonFix only on Jetson devices
     if $IS_JETSON; then
@@ -1121,6 +1132,7 @@ run_installations() {
     if $INSTALL_CLOUDFLARED; then install_cloudflared || handle_error "Cloudflared installation failed"; fi
     if $INSTALL_DOCKER; then install_docker || handle_error "Docker installation failed"; fi
     if $INSTALL_CLAUDE; then install_claude_code || handle_error "Claude Code installation failed"; fi
+    if $INSTALL_GH; then install_gh || handle_error "GitHub CLI installation failed"; fi
     if $INSTALL_RUSTDESK; then install_rustdesk || handle_error "RustDesk installation failed"; fi
 
     # CLI logins (requires nodejs to be installed)
@@ -1511,6 +1523,38 @@ install_nvm_nodejs() {
 # Claude Code Installation (native installer)
 #===============================================================================
 
+#===============================================================================
+# GitHub CLI (gh) Installation
+#===============================================================================
+install_gh() {
+    log_step "Installing GitHub CLI (gh)"
+
+    if command_exists gh; then
+        log_warning "GitHub CLI already installed ($(gh --version 2>/dev/null | head -1)), skipping..."
+        return 0
+    fi
+
+    log_info "Adding GitHub CLI official repository..."
+
+    # Add GitHub CLI GPG key and repo
+    sudo mkdir -p -m 755 /etc/apt/keyrings
+    if ! retry_command "Adding GitHub CLI GPG key" bash -c 'curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo tee /etc/apt/keyrings/githubcli-archive-keyring.gpg > /dev/null'; then
+        handle_error "GitHub CLI GPG key could not be added"
+        return 1
+    fi
+    sudo chmod go+r /etc/apt/keyrings/githubcli-archive-keyring.gpg
+
+    echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null
+
+    safe_apt_update
+    if retry_apt_install gh; then
+        log_success "GitHub CLI installed successfully ($(gh --version 2>/dev/null | head -1))"
+    else
+        log_warning "GitHub CLI installation failed"
+        return 1
+    fi
+}
+
 install_claude_code() {
     log_step "Installing Claude Code"
 
@@ -1536,6 +1580,27 @@ install_claude_code() {
             log_warning "Claude Code installation failed (npm not available for fallback)"
             return 1
         fi
+    fi
+
+    # Install Claude Code plugins
+    if command_exists claude; then
+        log_info "Installing Claude Code plugins..."
+        local -a CLAUDE_PLUGINS=(
+            "https://claude.com/plugins/frontend-design"
+            "https://claude.com/plugins/code-review"
+            "https://claude.com/plugins/code-simplifier"
+            "https://claude.com/plugins/superpowers"
+            "https://claude.com/plugins/playwright"
+            "https://claude.com/plugins/security-guidance"
+        )
+        for plugin_url in "${CLAUDE_PLUGINS[@]}"; do
+            local plugin_name="${plugin_url##*/}"
+            log_info "  Installing plugin: $plugin_name"
+            claude plugins add "$plugin_url" 2>/dev/null && \
+                log_success "  Plugin $plugin_name installed" || \
+                log_warning "  Plugin $plugin_name failed to install"
+        done
+        log_success "Claude Code plugins installation completed"
     fi
 }
 
@@ -2111,6 +2176,25 @@ DOCKCONF
     dconf write /org/gnome/mutter/dynamic-workspaces false
     dconf write /org/gnome/desktop/wm/preferences/num-workspaces 1
     log_success "Virtual desktops disabled (1 static workspace)"
+
+    # Set power profile to Performance
+    if command_exists powerprofilesctl; then
+        log_info "Setting power profile to Performance..."
+        powerprofilesctl set performance
+        log_success "Power profile set to Performance"
+    else
+        log_warning "powerprofilesctl not found, trying via dconf..."
+    fi
+
+    # Disable screen blank / screen off (set to never)
+    log_info "Disabling screen timeout (set to never)..."
+    gsettings set org.gnome.desktop.session idle-delay 0
+    gsettings set org.gnome.desktop.screensaver lock-enabled false
+    gsettings set org.gnome.desktop.screensaver idle-activation-enabled false
+    # Disable automatic suspend
+    gsettings set org.gnome.settings-daemon.plugins.power sleep-inactive-ac-type 'nothing'
+    gsettings set org.gnome.settings-daemon.plugins.power sleep-inactive-battery-type 'nothing'
+    log_success "Screen timeout disabled (never turns off)"
 }
 
 #===============================================================================
@@ -2598,6 +2682,7 @@ print_summary() {
     command_exists vlc && echo -e "  ${GREEN}✓${NC} VLC Media Player"
     command_exists cloudflared && echo -e "  ${GREEN}✓${NC} Cloudflared $(cloudflared --version 2>&1 | head -1 | cut -d' ' -f3)"
     command_exists docker && echo -e "  ${GREEN}✓${NC} Docker $(docker --version 2>&1 | cut -d' ' -f3 | tr -d ',')"
+    command_exists gh && echo -e "  ${GREEN}✓${NC} GitHub CLI $(gh --version 2>/dev/null | head -1 | awk '{print $NF}')"
 
     echo ""
     echo -e "${YELLOW}Note: You may need to restart your terminal or run:${NC}"

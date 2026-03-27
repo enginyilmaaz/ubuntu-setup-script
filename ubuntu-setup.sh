@@ -1637,22 +1637,36 @@ install_gh() {
 install_claude_code() {
     log_step "Installing Claude Code"
 
-    # Ensure claude is in PATH even if installed previously
-    export PATH="$HOME/.claude/bin:$HOME/.local/bin:$PATH"
-    hash -r 2>/dev/null
-
-    if command_exists claude; then
-        log_warning "Claude Code already installed ($(claude --version 2>/dev/null || echo 'unknown')), skipping..."
-        return 0
+    # Clean up old claude installations and PATH entries before fresh install
+    # Remove old npm-based claude if exists
+    if command_exists npm; then
+        npm uninstall -g @anthropic-ai/claude-code 2>/dev/null
     fi
+    # Remove old native install binaries
+    rm -f "$HOME/.claude/bin/claude" 2>/dev/null
+    rm -f "$HOME/.local/bin/claude" 2>/dev/null
+    # Remove old PATH entries from shell configs (installer will re-add)
+    for rcfile in "$HOME/.bashrc" "$HOME/.zshrc" "$HOME/.profile"; do
+        if [ -f "$rcfile" ]; then
+            sed -i '/\.claude\/bin/d' "$rcfile" 2>/dev/null
+            sed -i '/# Added by Claude/d' "$rcfile" 2>/dev/null
+        fi
+    done
+    hash -r 2>/dev/null
 
     log_info "Installing Claude Code via native installer..."
 
     if curl -fsSL https://claude.ai/install.sh | bash; then
-        # Reload PATH so claude command is available immediately
+        # Reload PATH - installer adds to .bashrc, source it
+        [ -f "$HOME/.bashrc" ] && source "$HOME/.bashrc" 2>/dev/null
         export PATH="$HOME/.claude/bin:$HOME/.local/bin:$PATH"
         hash -r 2>/dev/null
-        log_success "Claude Code installed successfully"
+        if command_exists claude; then
+            log_success "Claude Code installed successfully ($(claude --version 2>/dev/null || echo ''))"
+        else
+            log_warning "Claude Code installed but 'claude' command not found in PATH"
+            log_info "Try: source ~/.bashrc  or restart terminal"
+        fi
     else
         log_warning "Native installer failed, trying npm fallback..."
         if command_exists npm; then
@@ -1669,6 +1683,8 @@ install_claude_code() {
     fi
 
     # Install Claude Code plugins
+    export PATH="$HOME/.claude/bin:$HOME/.local/bin:$PATH"
+    hash -r 2>/dev/null
     if command_exists claude; then
         log_info "Installing Claude Code plugins..."
 
@@ -1691,6 +1707,9 @@ install_claude_code() {
         done
 
         log_success "Claude Code plugins installation completed"
+    else
+        log_warning "Claude plugins skipped: 'claude' command not in PATH yet"
+        log_info "After install, run: claude plugin install frontend-design"
     fi
 }
 

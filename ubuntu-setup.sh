@@ -1739,51 +1739,9 @@ install_claude_code() {
         fi
     fi
 
-    # Install Claude Code plugins (all from claude-plugins-official)
-    export PATH="$HOME/.claude/bin:$HOME/.local/bin:$PATH"
-    hash -r 2>/dev/null
+    # Plugins will be installed after CLI login (requires auth)
     if command_exists claude; then
-        log_info "Installing Claude Code plugins..."
-
-        local -a CLAUDE_PLUGINS=(
-            "playwright"
-            "security-guidance"
-            "frontend-design"
-            "code-review"
-            "superpowers"
-            "code-simplifier"
-        )
-
-        local plugin_fail_count=0
-        for plugin_name in "${CLAUDE_PLUGINS[@]}"; do
-            log_info "  Installing plugin: $plugin_name ..."
-            local plugin_output
-            plugin_output=$(claude plugin install "${plugin_name}@claude-plugins-official" --scope user 2>&1)
-            local plugin_exit=$?
-            if [ $plugin_exit -eq 0 ]; then
-                log_success "  ✓ $plugin_name installed"
-            else
-                plugin_fail_count=$((plugin_fail_count + 1))
-                log_warning "  ✗ $plugin_name failed (exit: $plugin_exit)"
-                log_warning "    Output: $plugin_output"
-            fi
-        done
-
-        if [ $plugin_fail_count -gt 0 ]; then
-            log_warning "$plugin_fail_count plugin(s) failed. You can install manually:"
-            log_info "  claude plugin install frontend-design@claude-plugins-official"
-            log_info "  claude plugin install code-review@claude-plugins-official"
-            log_info "  claude plugin install code-simplifier@claude-plugins-official"
-            log_info "  claude plugin install superpowers@claude-plugins-official"
-            log_info "  claude plugin install playwright@claude-plugins-official"
-            log_info "  claude plugin install security-guidance@claude-plugins-official"
-        else
-            log_success "All Claude Code plugins installed successfully"
-        fi
-    else
-        log_warning "Claude plugins skipped: 'claude' command not in PATH yet"
-        log_info "After install, run manually:"
-        log_info "  claude plugin install frontend-design@claude-plugins-official"
+        log_info "Claude Code plugins will be installed after login step"
     fi
 }
 
@@ -2631,6 +2589,60 @@ install_docker() {
 #===============================================================================
 # 13. CLI Login Commands
 #===============================================================================
+# Install Claude Code plugins (requires auth - run after login)
+install_claude_plugins() {
+    export PATH="$HOME/.claude/bin:$HOME/.local/bin:$PATH"
+    hash -r 2>/dev/null
+
+    if ! command_exists claude; then
+        log_warning "Claude plugins skipped: 'claude' command not found"
+        return
+    fi
+
+    # Check if authenticated
+    if ! claude auth status &>/dev/null; then
+        log_warning "Claude plugins skipped: not authenticated"
+        log_info "Login first, then run plugins manually:"
+        log_info "  claude plugin install frontend-design@claude-plugins-official"
+        return
+    fi
+
+    log_info "Installing Claude Code plugins..."
+
+    local -a CLAUDE_PLUGINS=(
+        "playwright"
+        "security-guidance"
+        "frontend-design"
+        "code-review"
+        "superpowers"
+        "code-simplifier"
+    )
+
+    local plugin_fail_count=0
+    for plugin_name in "${CLAUDE_PLUGINS[@]}"; do
+        log_info "  Installing plugin: $plugin_name ..."
+        local plugin_output
+        plugin_output=$(claude plugin install "${plugin_name}@claude-plugins-official" --scope user 2>&1)
+        local plugin_exit=$?
+        if [ $plugin_exit -eq 0 ]; then
+            log_success "  ✓ $plugin_name installed"
+        else
+            plugin_fail_count=$((plugin_fail_count + 1))
+            log_warning "  ✗ $plugin_name failed (exit: $plugin_exit)"
+            log_warning "    Output: $plugin_output"
+        fi
+    done
+
+    if [ $plugin_fail_count -gt 0 ]; then
+        log_warning "$plugin_fail_count plugin(s) failed. Install manually:"
+        for p in "${CLAUDE_PLUGINS[@]}"; do
+            log_info "  claude plugin install ${p}@claude-plugins-official"
+        done
+    else
+        log_success "All Claude Code plugins installed successfully"
+    fi
+}
+
 run_cli_logins() {
     log_step "13. CLI Login Commands"
 
@@ -2699,6 +2711,9 @@ run_cli_logins() {
         fi
 
         log_success "CLI logins completed"
+
+        # Install Claude Code plugins after successful auth
+        install_claude_plugins
     else
         log_info "Skipping CLI logins. You can run them later manually:"
         echo "  - claude auth login"

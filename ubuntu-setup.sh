@@ -2,7 +2,8 @@
 
 #===============================================================================
 # Ubuntu Post-Installation Setup Script
-# Author: Auto-generated
+# Version: 2.5.0 (rev-53)
+# Author: Smart Marine / enginyilmaaz
 # Description: Automates Ubuntu post-installation setup with modular options
 #
 # Usage:
@@ -11,7 +12,12 @@
 #   ./ubuntu-setup.sh --help                   # Show all options
 #   ./ubuntu-setup.sh --show-backup-gnome      # Show GNOME backup
 #   ./ubuntu-setup.sh --restore-gnome-desktop  # Restore GNOME settings
+#   ./ubuntu-setup.sh --version                # Show version
 #===============================================================================
+
+SCRIPT_VERSION="2.5.0"
+SCRIPT_REVISION="53"
+SCRIPT_DATE="2026-03-27"
 
 # NOTE: We intentionally do NOT use set -e here.
 # Instead, errors are handled interactively via handle_error() so the user
@@ -118,6 +124,10 @@ for arg in "$@"; do
             ;;
         --jetson-fix)
             APPLY_JETSON_FIX=true
+            ;;
+        --version|-v)
+            echo "Ubuntu Setup Script v${SCRIPT_VERSION} (rev-${SCRIPT_REVISION}) [${SCRIPT_DATE}]"
+            exit 0
             ;;
         *)
             echo "Unknown option: $arg"
@@ -416,7 +426,7 @@ detect_system_silent() {
 # Show system info header
 show_system_header() {
     echo -e "${CYAN}╔═══════════════════════════════════════════════════════════════════════════╗${NC}"
-    echo -e "${CYAN}║              Ubuntu Post-Installation Setup Script                        ║${NC}"
+    echo -e "${CYAN}║         Ubuntu Post-Installation Setup Script  ${YELLOW}v${SCRIPT_VERSION}${CYAN} (rev-${SCRIPT_REVISION})       ║${NC}"
     echo -e "${CYAN}╚═══════════════════════════════════════════════════════════════════════════╝${NC}"
     echo ""
     echo -e "${GREEN}System Information:${NC}"

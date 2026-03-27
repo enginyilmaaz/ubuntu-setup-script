@@ -1754,16 +1754,32 @@ install_claude_code() {
             "code-simplifier"
         )
 
+        local plugin_fail_count=0
         for plugin_name in "${CLAUDE_PLUGINS[@]}"; do
-            log_info "  Installing plugin: $plugin_name"
-            if claude plugin install "${plugin_name}@claude-plugins-official" --scope user 2>/dev/null; then
+            log_info "  Installing plugin: $plugin_name ..."
+            local plugin_output
+            plugin_output=$(claude plugin install "${plugin_name}@claude-plugins-official" --scope user 2>&1)
+            local plugin_exit=$?
+            if [ $plugin_exit -eq 0 ]; then
                 log_success "  ✓ $plugin_name installed"
             else
-                log_warning "  ✗ $plugin_name failed (run manually: claude plugin install ${plugin_name}@claude-plugins-official)"
+                plugin_fail_count=$((plugin_fail_count + 1))
+                log_warning "  ✗ $plugin_name failed (exit: $plugin_exit)"
+                log_warning "    Output: $plugin_output"
             fi
         done
 
-        log_success "Claude Code plugins installation completed"
+        if [ $plugin_fail_count -gt 0 ]; then
+            log_warning "$plugin_fail_count plugin(s) failed. You can install manually:"
+            log_info "  claude plugin install frontend-design@claude-plugins-official"
+            log_info "  claude plugin install code-review@claude-plugins-official"
+            log_info "  claude plugin install code-simplifier@claude-plugins-official"
+            log_info "  claude plugin install superpowers@claude-plugins-official"
+            log_info "  claude plugin install playwright@claude-plugins-official"
+            log_info "  claude plugin install security-guidance@claude-plugins-official"
+        else
+            log_success "All Claude Code plugins installed successfully"
+        fi
     else
         log_warning "Claude plugins skipped: 'claude' command not in PATH yet"
         log_info "After install, run manually:"

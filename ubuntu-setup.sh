@@ -1093,6 +1093,7 @@ menu_system_info() {
     command_exists cloudflared && echo -e "  ${GREEN}✓${NC} Cloudflared"
     command_exists docker && echo -e "  ${GREEN}✓${NC} Docker"
     command_exists claude && echo -e "  ${GREEN}✓${NC} Claude Code"
+    command_exists gh && echo -e "  ${GREEN}✓${NC} GitHub CLI"
     command_exists firefox && echo -e "  ${GREEN}✓${NC} Firefox"
 
     echo ""
@@ -1558,6 +1559,10 @@ install_gh() {
 install_claude_code() {
     log_step "Installing Claude Code"
 
+    # Ensure claude is in PATH even if installed previously
+    export PATH="$HOME/.claude/bin:$HOME/.local/bin:$PATH"
+    hash -r 2>/dev/null
+
     if command_exists claude; then
         log_warning "Claude Code already installed ($(claude --version 2>/dev/null || echo 'unknown')), skipping..."
         return 0
@@ -1566,6 +1571,9 @@ install_claude_code() {
     log_info "Installing Claude Code via native installer..."
 
     if curl -fsSL https://claude.ai/install.sh | bash; then
+        # Reload PATH so claude command is available immediately
+        export PATH="$HOME/.claude/bin:$HOME/.local/bin:$PATH"
+        hash -r 2>/dev/null
         log_success "Claude Code installed successfully"
     else
         log_warning "Native installer failed, trying npm fallback..."
@@ -1582,25 +1590,60 @@ install_claude_code() {
         fi
     fi
 
-    # Install Claude Code plugins
+    # Install Claude Code plugins via settings.json
     if command_exists claude; then
         log_info "Installing Claude Code plugins..."
+
+        local claude_settings_dir="$HOME/.claude"
+        local claude_settings="$claude_settings_dir/settings.json"
+        mkdir -p "$claude_settings_dir"
+
         local -a CLAUDE_PLUGINS=(
-            "https://claude.com/plugins/frontend-design"
-            "https://claude.com/plugins/code-review"
-            "https://claude.com/plugins/code-simplifier"
-            "https://claude.com/plugins/superpowers"
-            "https://claude.com/plugins/playwright"
-            "https://claude.com/plugins/security-guidance"
+            "frontend-design"
+            "code-review"
+            "code-simplifier"
+            "superpowers"
+            "playwright"
+            "security-guidance"
         )
-        for plugin_url in "${CLAUDE_PLUGINS[@]}"; do
-            local plugin_name="${plugin_url##*/}"
-            log_info "  Installing plugin: $plugin_name"
-            claude plugins add "$plugin_url" 2>/dev/null && \
-                log_success "  Plugin $plugin_name installed" || \
-                log_warning "  Plugin $plugin_name failed to install"
+
+        # Build plugins JSON and merge into settings
+        local plugins_json="["
+        for plugin_name in "${CLAUDE_PLUGINS[@]}"; do
+            plugins_json+="\"https://claude.com/plugins/${plugin_name}\","
+            log_info "  Added plugin: $plugin_name"
         done
-        log_success "Claude Code plugins installation completed"
+        plugins_json="${plugins_json%,}]"
+
+        # Create or update settings.json with plugin marketplace sources
+        if [ -f "$claude_settings" ]; then
+            # Merge plugins into existing settings
+            python3 -c "
+import json, sys
+try:
+    with open('$claude_settings', 'r') as f:
+        settings = json.load(f)
+except:
+    settings = {}
+settings['plugin_marketplace_sources'] = json.loads('$plugins_json')
+with open('$claude_settings', 'w') as f:
+    json.dump(settings, f, indent=2)
+print('Settings updated')
+" 2>/dev/null || {
+                # Fallback: write directly if python3 fails
+                echo "{\"plugin_marketplace_sources\": $plugins_json}" > "$claude_settings"
+            }
+        else
+            echo "{\"plugin_marketplace_sources\": $plugins_json}" > "$claude_settings"
+        fi
+
+        for plugin_name in "${CLAUDE_PLUGINS[@]}"; do
+            log_success "  Plugin $plugin_name registered"
+        done
+
+        log_success "Claude Code plugins configured"
+        log_info "Plugins will be available when you start Claude Code"
+        log_info "You can manage them with: /plugin install <name> inside Claude"
     fi
 }
 

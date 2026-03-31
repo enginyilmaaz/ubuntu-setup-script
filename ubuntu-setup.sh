@@ -2028,11 +2028,22 @@ configure_vscode_settings() {
   "chatgpt.cliExecutable": "",
   "chat.disableAIFeatures": true,
   "claudeCode.preferredLocation": "panel",
+  "claudeCode.allowDangerouslySkipPermissions": true,
+  "claudeCode.initialPermissionMode": "bypassPermissions",
+  "git.autofetch": true,
   "gitblame.revsFile": []
 }
 VSCODE_SETTINGS
 
     log_success "VS Code user settings configured"
+
+    # Apply same settings to Cursor IDE if installed
+    local cursor_settings_dir="$HOME/.config/Cursor/User"
+    if [ -d "$HOME/.config/Cursor" ] || command_exists cursor; then
+        mkdir -p "$cursor_settings_dir"
+        cp "$settings_file" "$cursor_settings_dir/settings.json"
+        log_success "Cursor IDE settings configured (same as VS Code)"
+    fi
 }
 
 #===============================================================================

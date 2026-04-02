@@ -24,7 +24,7 @@ SCRIPT_DATE="2026-03-27"
 # can decide whether to continue or abort.
 
 # Backup directory
-BACKUP_DIR="$HOME/.smarine"
+BACKUP_DIR="$HOME/.gnome_desktop_conf_backup"
 
 # Command line flags - all default to false
 INSTALL_ALL=false
@@ -277,7 +277,7 @@ show_help() {
     echo "      - GNOME Shell Extensions"
     echo "      - Extension Manager, GNOME Tweaks"
     echo "      - Dash to Dock configuration"
-    echo "      - ${CYAN}Creates backup before changes (~/.smarine/)${NC}"
+    echo "      - ${CYAN}Creates backup before changes (~/.gnome_desktop_conf_backup/)${NC}"
     echo ""
     echo -e "  ${YELLOW}--dbeaver${NC}"
     echo "      DBeaver CE - Universal database tool"
@@ -330,11 +330,11 @@ show_help() {
     echo ""
     echo -e "  ${YELLOW}--show-backup-gnome${NC}"
     echo "      Display saved GNOME desktop backup"
-    echo "      - Shows backup from ~/.smarine/gnome-backup/"
+    echo "      - Shows backup from ~/.gnome_desktop_conf_backup/gnome-backup/"
     echo ""
     echo -e "  ${YELLOW}--restore-gnome-desktop${NC}"
     echo "      Restore GNOME desktop to previous state"
-    echo "      - Restores from ~/.smarine/gnome-backup/"
+    echo "      - Restores from ~/.gnome_desktop_conf_backup/gnome-backup/"
     echo ""
     echo -e "${GREEN}MENU & INTERACTIVE:${NC}"
     echo ""
@@ -387,7 +387,7 @@ show_help() {
     echo "  - Jetson devices: Automatically applies snapd fix for browser compatibility"
     echo "  - ARM64: Some packages use alternative sources (Chromium instead of Chrome)"
     echo "  - GNOME backup is created automatically before any GNOME changes"
-    echo "  - Backups stored in: ~/.smarine/"
+    echo "  - Backups stored in: ~/.gnome_desktop_conf_backup/"
     echo ""
 }
 

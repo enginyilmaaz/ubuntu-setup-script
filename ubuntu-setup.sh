@@ -16,7 +16,7 @@
 #===============================================================================
 
 SCRIPT_VERSION="2.5.0"
-SCRIPT_REVISION="55"
+SCRIPT_REVISION="56"
 SCRIPT_DATE="2026-03-27"
 
 # NOTE: We intentionally do NOT use set -e here.
@@ -2328,16 +2328,29 @@ disable_wayland() {
     # Backup original config
     sudo cp "$gdm_config" "$gdm_config.backup"
 
-    # Enable the WaylandEnable=false line (uncomment if commented, or add if missing)
-    if grep -q "^#WaylandEnable=false" "$gdm_config"; then
-        sudo sed -i 's/^#WaylandEnable=false/WaylandEnable=false/' "$gdm_config"
-    elif grep -q "^\[daemon\]" "$gdm_config"; then
-        sudo sed -i '/^\[daemon\]/a WaylandEnable=false' "$gdm_config"
-    else
-        echo -e "[daemon]\nWaylandEnable=false" | sudo tee -a "$gdm_config" > /dev/null
+    # Handle all cases: commented out (with or without spaces), set to true, or missing
+    if grep -qi "^#\s*WaylandEnable" "$gdm_config"; then
+        # Remove any commented WaylandEnable line
+        sudo sed -i '/^#\s*WaylandEnable/d' "$gdm_config"
     fi
 
-    log_success "Wayland disabled successfully"
+    if grep -qi "^WaylandEnable" "$gdm_config"; then
+        # Replace any existing WaylandEnable line (e.g. WaylandEnable=true)
+        sudo sed -i 's/^WaylandEnable=.*/WaylandEnable=false/' "$gdm_config"
+    elif grep -q "^\[daemon\]" "$gdm_config"; then
+        # Add under [daemon] section
+        sudo sed -i '/^\[daemon\]/a WaylandEnable=false' "$gdm_config"
+    else
+        # No [daemon] section exists, create it
+        echo -e "\n[daemon]\nWaylandEnable=false" | sudo tee -a "$gdm_config" > /dev/null
+    fi
+
+    # Verify it was actually set
+    if grep -q "^WaylandEnable=false" "$gdm_config"; then
+        log_success "Wayland disabled successfully"
+    else
+        log_warning "Wayland disable may have failed, check /etc/gdm3/custom.conf manually"
+    fi
     log_info "Note: Restart required for changes to take effect"
 }
 

@@ -16,7 +16,7 @@
 #===============================================================================
 
 SCRIPT_VERSION="2.5.0"
-SCRIPT_REVISION="54"
+SCRIPT_REVISION="55"
 SCRIPT_DATE="2026-03-27"
 
 # NOTE: We intentionally do NOT use set -e here.
@@ -32,8 +32,6 @@ INSTALL_VNC=false
 INSTALL_RUSTDESK=false
 INSTALL_NODEJS=false
 INSTALL_CHROME=false
-INSTALL_CURSOR=false
-INSTALL_ANTIGRAVITY=false
 INSTALL_VSCODE=false
 INSTALL_PYTHON=false
 INSTALL_GNOME=false
@@ -70,12 +68,6 @@ for arg in "$@"; do
             ;;
         --chrome)
             INSTALL_CHROME=true
-            ;;
-        --cursor)
-            INSTALL_CURSOR=true
-            ;;
-        --antigravity)
-            INSTALL_ANTIGRAVITY=true
             ;;
         --vscode)
             INSTALL_VSCODE=true
@@ -143,8 +135,6 @@ if $INSTALL_ALL; then
     INSTALL_RUSTDESK=true
     INSTALL_NODEJS=true
     INSTALL_CHROME=true
-    INSTALL_CURSOR=true
-    INSTALL_ANTIGRAVITY=true
     INSTALL_VSCODE=true
     INSTALL_PYTHON=true
     INSTALL_GNOME=true
@@ -247,20 +237,12 @@ show_help() {
     echo "      - NVM (Node Version Manager)"
     echo "      - Node.js 22 LTS"
     echo "      - Yarn package manager"
-    echo "      - CLI tools: codex, gemini-cli"
+    echo "      - CLI tools: codex"
     echo ""
     echo -e "  ${YELLOW}--chrome${NC}"
     echo "      Web browser"
     echo "      - AMD64: Google Chrome"
     echo "      - ARM64: Chromium (Chrome not available)"
-    echo ""
-    echo -e "  ${YELLOW}--cursor${NC}"
-    echo "      Cursor IDE - AI-powered code editor"
-    echo "      - Downloads latest .deb from cursor.sh"
-    echo ""
-    echo -e "  ${YELLOW}--antigravity${NC}"
-    echo "      Antigravity - Development tool"
-    echo "      - Installed via apt"
     echo ""
     echo -e "  ${YELLOW}--vscode${NC}"
     echo "      Visual Studio Code"
@@ -319,7 +301,7 @@ show_help() {
     echo -e "  ${YELLOW}--login${NC}"
     echo "      Run CLI login prompts"
     echo "      - Requires --nodejs to be installed first"
-    echo "      - Prompts for Claude, Gemini, Codex authentication"
+    echo "      - Prompts for Claude, Codex authentication"
     echo ""
     echo -e "  ${YELLOW}--remove-firefox${NC}"
     echo "      Remove Firefox browser"
@@ -462,8 +444,6 @@ show_interactive_install_menu() {
         APP_NAMES+=("Chromium"); APP_DESCS+=("Chromium Browser (ARM)");               APP_VARS+=("INSTALL_CHROME")
     fi
 
-    APP_NAMES+=("Cursor");      APP_DESCS+=("Cursor IDE (AI Code Editor)");           APP_VARS+=("INSTALL_CURSOR")
-    APP_NAMES+=("Antigravity"); APP_DESCS+=("Antigravity Tool");                      APP_VARS+=("INSTALL_ANTIGRAVITY")
     APP_NAMES+=("VSCode");      APP_DESCS+=("Visual Studio Code + Extensions");       APP_VARS+=("INSTALL_VSCODE")
     APP_NAMES+=("Python");      APP_DESCS+=("Python 3 + pip + venv");                 APP_VARS+=("INSTALL_PYTHON")
     APP_NAMES+=("GNOME");       APP_DESCS+=("GNOME Extensions + Dash to Dock");       APP_VARS+=("INSTALL_GNOME")
@@ -713,12 +693,6 @@ menu_remove_apps() {
             ((idx++))
         fi
 
-        if command_exists cursor; then
-            echo -e "  ${BLUE}[$idx]${NC}  Cursor IDE"
-            REMOVABLE[$idx]="cursor"
-            ((idx++))
-        fi
-
         if command_exists code; then
             echo -e "  ${BLUE}[$idx]${NC}  VS Code"
             REMOVABLE[$idx]="vscode"
@@ -809,9 +783,6 @@ remove_application() {
             ;;
         chromium)
             sudo apt-get remove -y chromium-browser chromium 2>/dev/null
-            ;;
-        cursor)
-            sudo apt-get remove -y cursor 2>/dev/null
             ;;
         vscode)
             sudo apt-get remove -y code 2>/dev/null
@@ -1106,7 +1077,6 @@ menu_system_info() {
     command_exists yarn && echo -e "  ${GREEN}✓${NC} Yarn"
     (command_exists google-chrome || command_exists google-chrome-stable) && echo -e "  ${GREEN}✓${NC} Google Chrome"
     (command_exists chromium-browser || command_exists chromium) && echo -e "  ${GREEN}✓${NC} Chromium"
-    command_exists cursor && echo -e "  ${GREEN}✓${NC} Cursor IDE"
     command_exists code && echo -e "  ${GREEN}✓${NC} VS Code"
     command_exists python3 && echo -e "  ${GREEN}✓${NC} Python $(python3 --version 2>&1 | cut -d' ' -f2)"
     command_exists dbeaver && echo -e "  ${GREEN}✓${NC} DBeaver"
@@ -1133,8 +1103,6 @@ check_already_installed() {
         "INSTALL_RUSTDESK|RustDesk|command_exists rustdesk"
         "INSTALL_NODEJS|Node.js + NVM|[ -d \"\$HOME/.nvm\" ] && command_exists node"
         "INSTALL_CHROME|Chrome/Chromium|command_exists google-chrome || command_exists google-chrome-stable || command_exists chromium-browser || command_exists chromium"
-        "INSTALL_CURSOR|Cursor IDE|command_exists cursor || dpkg -l cursor 2>/dev/null | grep -q '^ii'"
-        "INSTALL_ANTIGRAVITY|Antigravity|command_exists antigravity"
         "INSTALL_VSCODE|VS Code|command_exists code"
         "INSTALL_PYTHON|Python 3|command_exists python3"
         "INSTALL_GNOME|GNOME Extensions|package_installed gnome-shell-extensions"
@@ -1222,8 +1190,6 @@ run_installations() {
     if $INSTALL_VNC; then install_realvnc || handle_error "RealVNC installation failed"; fi
     if $INSTALL_NODEJS; then install_nvm_nodejs || handle_error "Node.js installation failed"; fi
     if $INSTALL_CHROME; then install_chrome || handle_error "Chrome/Chromium installation failed"; fi
-    if $INSTALL_CURSOR; then install_cursor || handle_error "Cursor installation failed"; fi
-    if $INSTALL_ANTIGRAVITY; then install_antigravity || handle_error "Antigravity installation failed"; fi
     if $INSTALL_VSCODE; then install_vscode || handle_error "VS Code installation failed"; fi
     if $INSTALL_PYTHON; then install_python || handle_error "Python installation failed"; fi
     if $INSTALL_GNOME; then install_gnome_extensions || handle_error "GNOME extensions installation failed"; fi
@@ -1601,18 +1567,6 @@ install_nvm_nodejs() {
         fi
     fi
 
-    # 2.4 Install Gemini CLI
-    log_info "2.4 Installing Gemini CLI..."
-    if command_exists gemini; then
-        log_warning "Gemini CLI already installed, skipping..."
-    else
-        if retry_npm_install @google/gemini-cli; then
-            log_success "Gemini CLI installed successfully"
-        else
-            log_warning "Gemini CLI installation skipped after 3 failed attempts"
-        fi
-    fi
-
 }
 
 #===============================================================================
@@ -1811,73 +1765,6 @@ install_chrome() {
 }
 
 #===============================================================================
-# 4. Cursor IDE Installation (via deb)
-#===============================================================================
-install_cursor() {
-    log_step "4. Installing Cursor IDE"
-
-    if command_exists cursor || dpkg -l cursor 2>/dev/null | grep -q "^ii"; then
-        log_warning "Cursor already installed, skipping..."
-        return
-    fi
-
-    local temp_file="/tmp/cursor.deb"
-    local download_url
-
-    # Cursor deb packages
-    if [ "$DEB_ARCH" == "amd64" ]; then
-        download_url="https://api2.cursor.sh/updates/download/golden/linux-x64-deb/cursor/latest"
-    else
-        download_url="https://api2.cursor.sh/updates/download/golden/linux-arm64-deb/cursor/latest"
-    fi
-
-    # Download with retry (3 attempts, 5s delay)
-    if ! retry_curl_download "$download_url" "$temp_file" "Downloading Cursor deb"; then
-        log_warning "Cursor installation skipped after 3 failed attempts. Install manually from https://cursor.sh"
-        return
-    fi
-
-    log_info "Installing Cursor..."
-    sudo DEBIAN_FRONTEND=noninteractive apt-get install -y "$temp_file"
-    rm -f "$temp_file"
-
-    log_success "Cursor installed successfully"
-}
-
-#===============================================================================
-# 5. Antigravity Installation (via apt repository)
-#===============================================================================
-install_antigravity() {
-    log_step "5. Installing Antigravity"
-
-    if command_exists antigravity; then
-        log_warning "Antigravity already installed, skipping..."
-        return
-    fi
-
-    log_info "Installing Antigravity via apt repository..."
-
-    # Create keyrings directory
-    sudo mkdir -p /etc/apt/keyrings
-
-    # Add Antigravity GPG key
-    if ! retry_command "Adding Antigravity GPG key" bash -c 'curl -fsSL https://us-central1-apt.pkg.dev/doc/repo-signing-key.gpg | sudo gpg --dearmor --yes -o /etc/apt/keyrings/antigravity-repo-key.gpg'; then
-        handle_error "Antigravity GPG key could not be added. Installation may fail."
-    fi
-
-    # Add repository
-    echo "deb [signed-by=/etc/apt/keyrings/antigravity-repo-key.gpg] https://us-central1-apt.pkg.dev/projects/antigravity-auto-updater-dev/ antigravity-debian main" | sudo tee /etc/apt/sources.list.d/antigravity.list > /dev/null
-
-    # Update and install
-    safe_apt_update
-    if retry_apt_install antigravity; then
-        log_success "Antigravity installed successfully (via apt repository)"
-    else
-        handle_error "Antigravity installation failed after 3 attempts"
-    fi
-}
-
-#===============================================================================
 # 6. Visual Studio Code Installation (via apt repository)
 #===============================================================================
 install_vscode() {
@@ -1913,16 +1800,7 @@ install_vscode() {
 install_vscode_extensions() {
     log_info "6.1-6.4 Installing VS Code Extensions..."
 
-    # 6.1 Gemini CLI VS Code Companion
-    log_info "6.1 Installing Gemini CLI VS Code Companion extension..."
-    if code --list-extensions 2>/dev/null | grep -qi "Google.gemini-cli-vscode-ide-companion"; then
-        log_warning "Gemini CLI Companion already installed, skipping..."
-    else
-        code --install-extension Google.gemini-cli-vscode-ide-companion --force 2>/dev/null || \
-        log_warning "Could not install Gemini CLI Companion extension"
-    fi
-
-    # 6.2 Claude Code (Claude Dev)
+    # 6.1 Claude Code (Claude Dev)
     log_info "6.2 Installing Claude Code extension..."
     if code --list-extensions 2>/dev/null | grep -qi "anthropic.claude-code"; then
         log_warning "Claude Code already installed, skipping..."
@@ -2044,13 +1922,6 @@ VSCODE_SETTINGS
 
     log_success "VS Code user settings configured"
 
-    # Apply same settings to Cursor IDE if installed
-    local cursor_settings_dir="$HOME/.config/Cursor/User"
-    if [ -d "$HOME/.config/Cursor" ] || command_exists cursor; then
-        mkdir -p "$cursor_settings_dir"
-        cp "$settings_file" "$cursor_settings_dir/settings.json"
-        log_success "Cursor IDE settings configured (same as VS Code)"
-    fi
 }
 
 #===============================================================================
@@ -2680,16 +2551,6 @@ run_cli_logins() {
         fi
     fi
 
-    # Check Gemini CLI auth status
-    if command_exists gemini; then
-        if gemini auth status &>/dev/null; then
-            log_warning "Gemini CLI already authenticated, skipping..."
-        else
-            log_info "Gemini CLI needs authentication"
-            need_login=true
-        fi
-    fi
-
     # Check Codex CLI auth status
     if command_exists codex; then
         if codex auth status &>/dev/null; then
@@ -2716,12 +2577,6 @@ run_cli_logins() {
             claude auth login || log_warning "Claude login skipped or failed"
         fi
 
-        # Gemini CLI login
-        if command_exists gemini && ! gemini auth status &>/dev/null; then
-            log_info "Starting Gemini CLI login..."
-            gemini auth login || log_warning "Gemini login skipped or failed"
-        fi
-
         # Codex CLI login
         if command_exists codex && ! codex auth status &>/dev/null; then
             log_info "Starting Codex CLI login..."
@@ -2735,7 +2590,6 @@ run_cli_logins() {
     else
         log_info "Skipping CLI logins. You can run them later manually:"
         echo "  - claude auth login"
-        echo "  - gemini auth login"
         echo "  - codex auth login"
     fi
 }
@@ -2882,12 +2736,9 @@ print_summary() {
     command_exists node && echo -e "  ${GREEN}✓${NC} Node.js $(node -v)"
     command_exists yarn && echo -e "  ${GREEN}✓${NC} Yarn $(yarn -v)"
     command_exists codex && echo -e "  ${GREEN}✓${NC} Codex CLI"
-    command_exists gemini && echo -e "  ${GREEN}✓${NC} Gemini CLI"
     command_exists claude && echo -e "  ${GREEN}✓${NC} Claude Code $(claude --version 2>/dev/null || echo '')"
     (command_exists google-chrome || command_exists google-chrome-stable) && echo -e "  ${GREEN}✓${NC} Google Chrome"
     (command_exists chromium-browser || command_exists chromium) && echo -e "  ${GREEN}✓${NC} Chromium"
-    command_exists cursor && echo -e "  ${GREEN}✓${NC} Cursor IDE"
-    command_exists antigravity && echo -e "  ${GREEN}✓${NC} Antigravity"
     command_exists code && echo -e "  ${GREEN}✓${NC} VS Code"
     command_exists python3 && echo -e "  ${GREEN}✓${NC} Python $(python3 --version 2>&1 | cut -d' ' -f2)"
     package_installed gnome-shell-extensions && echo -e "  ${GREEN}✓${NC} GNOME Shell Extensions"
@@ -2934,8 +2785,8 @@ main() {
 
     # Check if any installation option is selected
     local has_install=false
-    if $INSTALL_VNC || $INSTALL_NODEJS || $INSTALL_CHROME || $INSTALL_CURSOR || \
-       $INSTALL_ANTIGRAVITY || $INSTALL_VSCODE || $INSTALL_PYTHON || $INSTALL_GNOME || \
+    if $INSTALL_VNC || $INSTALL_NODEJS || $INSTALL_CHROME || \
+       $INSTALL_VSCODE || $INSTALL_PYTHON || $INSTALL_GNOME || \
        $INSTALL_DBEAVER || $INSTALL_VLC || $INSTALL_CLOUDFLARED || $INSTALL_DOCKER || \
        $INSTALL_CLAUDE || $INSTALL_RUSTDESK || $DO_CLI_LOGIN || $DO_REMOVE_FIREFOX || $APPLY_JETSON_FIX; then
         has_install=true

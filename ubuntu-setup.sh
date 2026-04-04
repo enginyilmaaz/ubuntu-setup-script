@@ -16,7 +16,7 @@
 #===============================================================================
 
 SCRIPT_VERSION="2.5.0"
-SCRIPT_REVISION="53"
+SCRIPT_REVISION="54"
 SCRIPT_DATE="2026-03-27"
 
 # NOTE: We intentionally do NOT use set -e here.
@@ -122,7 +122,7 @@ for arg in "$@"; do
         --menu)
             SHOW_MENU=true
             ;;
-        --jetson-fix)
+        --jetson-fix|--arm-fix)
             APPLY_JETSON_FIX=true
             ;;
         --version|-v)
@@ -352,10 +352,10 @@ show_help() {
     echo ""
     echo -e "${GREEN}SPECIAL:${NC}"
     echo ""
-    echo -e "  ${YELLOW}--jetson-fix${NC}"
-    echo "      Apply Jetson snapd fix manually"
-    echo "      - Required for browsers on Jetson devices"
-    echo "      - Usually auto-detected"
+    echo -e "  ${YELLOW}--arm-fix${NC}"
+    echo "      Apply ARM snapd fix manually"
+    echo "      - Required for browsers on ARM devices"
+    echo "      - Auto-selected when VNC is chosen on ARM"
     echo ""
     echo -e "  ${YELLOW}--help, -h${NC}"
     echo "      Show this help message"
@@ -433,7 +433,9 @@ show_system_header() {
     echo -e "  OS:           ${YELLOW}$OS_NAME $OS_VERSION${NC} ($OS_CODENAME)"
     echo -e "  Architecture: ${YELLOW}$ARCH${NC} ($DEB_ARCH)"
     if $IS_JETSON; then
-        echo -e "  Device:       ${YELLOW}NVIDIA Jetson${NC}"
+        echo -e "  Device:       ${YELLOW}NVIDIA Jetson (ARM)${NC}"
+    elif [ "$DEB_ARCH" == "arm64" ] || [ "$DEB_ARCH" == "armhf" ]; then
+        echo -e "  Device:       ${YELLOW}ARM Device${NC}"
     fi
     echo ""
 }
@@ -472,9 +474,9 @@ show_interactive_install_menu() {
     APP_NAMES+=("Claude Code"); APP_DESCS+=("Claude Code (AI Coding CLI)");           APP_VARS+=("INSTALL_CLAUDE")
     APP_NAMES+=("GitHub CLI"); APP_DESCS+=("GitHub CLI (gh)");                        APP_VARS+=("INSTALL_GH")
 
-    # JetsonFix only on Jetson devices
-    if $IS_JETSON; then
-        APP_NAMES+=("JetsonFix"); APP_DESCS+=("Jetson Snapd Fix (Browser Fix)");      APP_VARS+=("APPLY_JETSON_FIX")
+    # ARM Fix on all ARM devices (snapd fix for browsers)
+    if [ "$DEB_ARCH" == "arm64" ] || [ "$DEB_ARCH" == "armhf" ]; then
+        APP_NAMES+=("ARM Fix"); APP_DESCS+=("ARM Snapd Fix (Browser Fix)");           APP_VARS+=("APPLY_JETSON_FIX")
     fi
 
     local TOTAL_ITEMS=${#APP_NAMES[@]}
@@ -573,6 +575,15 @@ show_interactive_install_menu() {
                     SELECTED[$cursor]=0
                 else
                     SELECTED[$cursor]=1
+                    # Auto-select ARM Fix when VNC is selected on ARM devices
+                    if [ "${APP_VARS[$cursor]}" = "INSTALL_VNC" ]; then
+                        for ((ai=0; ai<TOTAL_ITEMS; ai++)); do
+                            if [ "${APP_VARS[$ai]}" = "APPLY_JETSON_FIX" ]; then
+                                SELECTED[$ai]=1
+                                break
+                            fi
+                        done
+                    fi
                 fi
                 ;;
             'a'|'A') # Select all
@@ -1199,7 +1210,7 @@ run_installations() {
     # Check already installed apps and ask for reinstall one by one
     check_already_installed
 
-    # Apply Jetson snapd fix if selected
+    # Apply ARM snapd fix if selected
     if $APPLY_JETSON_FIX; then
         fix_jetson_snapd
     fi
@@ -1294,16 +1305,12 @@ detect_system() {
 }
 
 #===============================================================================
-# Jetson Snapd Fix (browsers don't work without this on Jetson devices)
+# ARM Snapd Fix (browsers don't work without this on ARM devices)
 # Reference: https://forums.developer.nvidia.com/t/neither-chromium-nor-firefox-work-with-my-jetson-orin-nano/338669
 #===============================================================================
 fix_jetson_snapd() {
-    if ! $IS_JETSON; then
-        return
-    fi
-
-    log_step "Applying Jetson Snapd Fix"
-    log_info "Jetson devices require a specific snapd version for browsers to work"
+    log_step "Applying ARM Snapd Fix"
+    log_info "ARM devices require a specific snapd version for browsers to work"
 
     local temp_dir="/tmp/jetson-snapd-fix"
     mkdir -p "$temp_dir"
@@ -1312,7 +1319,7 @@ fix_jetson_snapd() {
     # Download specific snapd revision
     log_info "Downloading snapd revision 24724..."
     if ! snap download snapd --revision=24724; then
-        log_warning "Failed to download snapd, skipping Jetson fix"
+        log_warning "Failed to download snapd, skipping ARM fix"
         cd - > /dev/null
         rm -rf "$temp_dir"
         return
@@ -1330,7 +1337,7 @@ fix_jetson_snapd() {
     cd - > /dev/null
     rm -rf "$temp_dir"
 
-    log_success "Jetson snapd fix applied successfully"
+    log_success "ARM snapd fix applied successfully"
 }
 
 #===============================================================================

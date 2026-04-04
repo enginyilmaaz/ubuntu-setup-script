@@ -16,7 +16,7 @@
 #===============================================================================
 
 SCRIPT_VERSION="2.5.0"
-SCRIPT_REVISION="56"
+SCRIPT_REVISION="57"
 SCRIPT_DATE="2026-03-27"
 
 # NOTE: We intentionally do NOT use set -e here.
@@ -446,7 +446,7 @@ show_interactive_install_menu() {
 
     APP_NAMES+=("VSCode");      APP_DESCS+=("Visual Studio Code + Extensions");       APP_VARS+=("INSTALL_VSCODE")
     APP_NAMES+=("Python");      APP_DESCS+=("Python 3 + pip + venv");                 APP_VARS+=("INSTALL_PYTHON")
-    APP_NAMES+=("GNOME");       APP_DESCS+=("GNOME Extensions + Dash to Dock");       APP_VARS+=("INSTALL_GNOME")
+    APP_NAMES+=("GNOME");       APP_DESCS+=("Ubuntu (GNOME) Tweaks + Wayland Off");    APP_VARS+=("INSTALL_GNOME")
     APP_NAMES+=("DBeaver");     APP_DESCS+=("DBeaver CE (Database Tool)");            APP_VARS+=("INSTALL_DBEAVER")
     APP_NAMES+=("VLC");         APP_DESCS+=("VLC Media Player");                      APP_VARS+=("INSTALL_VLC")
     APP_NAMES+=("Cloudflared"); APP_DESCS+=("Cloudflare Tunnel Client");              APP_VARS+=("INSTALL_CLOUDFLARED")
@@ -1950,7 +1950,7 @@ install_python() {
 # 8. GNOME Shell Extensions
 #===============================================================================
 install_gnome_extensions() {
-    log_step "8. Installing GNOME Shell Extensions"
+    log_step "8. Ubuntu (GNOME) Tweaks"
 
     # Check if GNOME is installed
     if ! command_exists gnome-shell; then
@@ -2225,6 +2225,9 @@ DOCKCONF
     gsettings set org.gnome.settings-daemon.plugins.power sleep-inactive-ac-type 'nothing'
     gsettings set org.gnome.settings-daemon.plugins.power sleep-inactive-battery-type 'nothing'
     log_success "Screen timeout disabled (never turns off)"
+
+    # Disable Wayland (X11 is more compatible with VNC and remote desktop)
+    disable_wayland
 }
 
 #===============================================================================

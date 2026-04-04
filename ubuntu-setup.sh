@@ -16,7 +16,7 @@
 #===============================================================================
 
 SCRIPT_VERSION="2.5.0"
-SCRIPT_REVISION="57"
+SCRIPT_REVISION="58"
 SCRIPT_DATE="2026-03-27"
 
 # NOTE: We intentionally do NOT use set -e here.
@@ -2322,37 +2322,29 @@ disable_wayland() {
         return
     fi
 
-    # Check if Wayland is already disabled
-    if grep -q "^WaylandEnable=false" "$gdm_config"; then
-        log_warning "Wayland already disabled, skipping..."
-        return
-    fi
-
     # Backup original config
     sudo cp "$gdm_config" "$gdm_config.backup"
 
-    # Handle all cases: commented out (with or without spaces), set to true, or missing
-    if grep -qi "^#\s*WaylandEnable" "$gdm_config"; then
-        # Remove any commented WaylandEnable line
-        sudo sed -i '/^#\s*WaylandEnable/d' "$gdm_config"
-    fi
+    # Step 1: Remove ALL WaylandEnable lines (commented or not, true or false, with spaces)
+    sudo sed -i '/^#.*WaylandEnable/d' "$gdm_config"
+    sudo sed -i '/^WaylandEnable/d' "$gdm_config"
 
-    if grep -qi "^WaylandEnable" "$gdm_config"; then
-        # Replace any existing WaylandEnable line (e.g. WaylandEnable=true)
-        sudo sed -i 's/^WaylandEnable=.*/WaylandEnable=false/' "$gdm_config"
-    elif grep -q "^\[daemon\]" "$gdm_config"; then
-        # Add under [daemon] section
+    # Step 2: Add WaylandEnable=false under [daemon] section
+    if grep -q "^\[daemon\]" "$gdm_config"; then
         sudo sed -i '/^\[daemon\]/a WaylandEnable=false' "$gdm_config"
     else
-        # No [daemon] section exists, create it
         echo -e "\n[daemon]\nWaylandEnable=false" | sudo tee -a "$gdm_config" > /dev/null
     fi
 
-    # Verify it was actually set
-    if grep -q "^WaylandEnable=false" "$gdm_config"; then
+    # Verify: must have exactly one WaylandEnable=false and no WaylandEnable=true
+    local count_false count_true
+    count_false=$(grep -c "^WaylandEnable=false" "$gdm_config" 2>/dev/null || echo 0)
+    count_true=$(grep -c "^WaylandEnable=true" "$gdm_config" 2>/dev/null || echo 0)
+
+    if [ "$count_false" -eq 1 ] && [ "$count_true" -eq 0 ]; then
         log_success "Wayland disabled successfully"
     else
-        log_warning "Wayland disable may have failed, check /etc/gdm3/custom.conf manually"
+        log_warning "Wayland disable may have failed (false=$count_false, true=$count_true), check $gdm_config manually"
     fi
     log_info "Note: Restart required for changes to take effect"
 }

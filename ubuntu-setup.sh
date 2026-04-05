@@ -16,7 +16,7 @@
 #===============================================================================
 
 SCRIPT_VERSION="2.5.0"
-SCRIPT_REVISION="58"
+SCRIPT_REVISION="59"
 SCRIPT_DATE="2026-03-27"
 
 # NOTE: We intentionally do NOT use set -e here.
@@ -452,7 +452,7 @@ show_interactive_install_menu() {
     APP_NAMES+=("Cloudflared"); APP_DESCS+=("Cloudflare Tunnel Client");              APP_VARS+=("INSTALL_CLOUDFLARED")
     APP_NAMES+=("Docker");      APP_DESCS+=("Docker Engine + Compose");               APP_VARS+=("INSTALL_DOCKER")
     APP_NAMES+=("Claude Code"); APP_DESCS+=("Claude Code (AI Coding CLI)");           APP_VARS+=("INSTALL_CLAUDE")
-    APP_NAMES+=("GitHub CLI"); APP_DESCS+=("GitHub CLI (gh)");                        APP_VARS+=("INSTALL_GH")
+    APP_NAMES+=("Git & GitHub CLI"); APP_DESCS+=("Git + GitHub CLI (gh)");               APP_VARS+=("INSTALL_GH")
 
     # ARM Fix on all ARM devices (snapd fix for browsers)
     if [ "$DEB_ARCH" == "arm64" ] || [ "$DEB_ARCH" == "armhf" ]; then
@@ -2225,6 +2225,16 @@ DOCKCONF
     gsettings set org.gnome.settings-daemon.plugins.power sleep-inactive-ac-type 'nothing'
     gsettings set org.gnome.settings-daemon.plugins.power sleep-inactive-battery-type 'nothing'
     log_success "Screen timeout disabled (never turns off)"
+
+    # Show hidden files in file manager
+    log_info "Enabling show hidden files in file manager..."
+    gsettings set org.gtk.Settings.FileChooser show-hidden true 2>/dev/null
+    gsettings set org.gtk.gtk4.Settings.FileChooser show-hidden true 2>/dev/null
+    dconf write /org/gtk/settings/file-chooser/show-hidden true 2>/dev/null
+    dconf write /org/gtk/gtk4/settings/file-chooser/show-hidden true 2>/dev/null
+    # Nautilus (Files app)
+    gsettings set org.gnome.nautilus.preferences show-hidden-files true 2>/dev/null
+    log_success "Show hidden files enabled"
 
     # Disable Wayland (X11 is more compatible with VNC and remote desktop)
     disable_wayland

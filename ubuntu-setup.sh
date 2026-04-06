@@ -16,7 +16,7 @@
 #===============================================================================
 
 SCRIPT_VERSION="2.5.0"
-SCRIPT_REVISION="59"
+SCRIPT_REVISION="60"
 SCRIPT_DATE="2026-03-27"
 
 # NOTE: We intentionally do NOT use set -e here.
@@ -1213,6 +1213,9 @@ run_installations() {
     # Firefox removal
     if $DO_REMOVE_FIREFOX; then remove_firefox || handle_error "Firefox removal failed"; fi
 
+    # Setup bash aliases and Nautilus right-click actions for AI CLI tools
+    setup_cli_shortcuts
+
     # Print summary
     print_summary
 }
@@ -2238,6 +2241,116 @@ DOCKCONF
 
     # Disable Wayland (X11 is more compatible with VNC and remote desktop)
     disable_wayland
+}
+
+#===============================================================================
+# CLI Shortcuts: Bash Aliases + Nautilus Right-Click Actions
+#===============================================================================
+setup_cli_shortcuts() {
+    log_info "Setting up CLI shortcuts and Nautilus context menu actions..."
+
+    local bashrc="$HOME/.bashrc"
+    local added=false
+
+    # --- Bash Aliases ---
+    # Claude Code skip permissions alias
+    if command_exists claude; then
+        if ! grep -q "alias claude-skip=" "$bashrc" 2>/dev/null; then
+            echo "" >> "$bashrc"
+            echo "# Claude Code aliases (added by ubuntu-setup-script)" >> "$bashrc"
+            echo "alias claude-skip='claude --dangerously-skip-permissions'" >> "$bashrc"
+            log_success "Alias added: claude-skip"
+            added=true
+        else
+            log_warning "Alias claude-skip already exists in .bashrc"
+        fi
+    fi
+
+    # Codex full-auto alias
+    if command_exists codex; then
+        if ! grep -q "alias codex-skip=" "$bashrc" 2>/dev/null; then
+            if ! $added; then echo "" >> "$bashrc"; fi
+            echo "# Codex aliases (added by ubuntu-setup-script)" >> "$bashrc"
+            echo "alias codex-skip='codex --full-auto'" >> "$bashrc"
+            log_success "Alias added: codex-skip"
+        else
+            log_warning "Alias codex-skip already exists in .bashrc"
+        fi
+    fi
+
+    # --- Nautilus Right-Click Scripts ---
+    local scripts_dir="$HOME/.local/share/nautilus/scripts"
+    mkdir -p "$scripts_dir"
+
+    # "Open with Claude Code Terminal" script
+    if command_exists claude; then
+        local claude_script="$scripts_dir/Open with Claude Code Terminal"
+        cat > "$claude_script" << 'CLAUDE_SCRIPT'
+#!/bin/bash
+# Get the selected directory (or current directory)
+target="$NAUTILUS_SCRIPT_CURRENT_URI"
+target="${target#file://}"
+target="$(python3 -c "import urllib.parse; print(urllib.parse.unquote('$target'))" 2>/dev/null || echo "$target")"
+
+if [ -z "$target" ] || [ ! -d "$target" ]; then
+    # If a file is selected, use its parent directory
+    target="$(echo "$NAUTILUS_SCRIPT_SELECTED_FILE_PATHS" | head -1)"
+    if [ -f "$target" ]; then
+        target="$(dirname "$target")"
+    fi
+fi
+
+[ -z "$target" ] && target="$HOME"
+
+# Open terminal with Claude Code (skip permissions)
+if command -v gnome-terminal &>/dev/null; then
+    gnome-terminal -- bash -c "cd '$target' && claude --dangerously-skip-permissions; exec bash"
+elif command -v xterm &>/dev/null; then
+    xterm -e "cd '$target' && claude --dangerously-skip-permissions; bash"
+fi
+CLAUDE_SCRIPT
+        chmod +x "$claude_script"
+        log_success "Nautilus script added: Open with Claude Code Terminal"
+    fi
+
+    # "Open with Codex Terminal" script
+    if command_exists codex; then
+        local codex_script="$scripts_dir/Open with Codex Terminal"
+        cat > "$codex_script" << 'CODEX_SCRIPT'
+#!/bin/bash
+# Get the selected directory (or current directory)
+target="$NAUTILUS_SCRIPT_CURRENT_URI"
+target="${target#file://}"
+target="$(python3 -c "import urllib.parse; print(urllib.parse.unquote('$target'))" 2>/dev/null || echo "$target")"
+
+if [ -z "$target" ] || [ ! -d "$target" ]; then
+    # If a file is selected, use its parent directory
+    target="$(echo "$NAUTILUS_SCRIPT_SELECTED_FILE_PATHS" | head -1)"
+    if [ -f "$target" ]; then
+        target="$(dirname "$target")"
+    fi
+fi
+
+[ -z "$target" ] && target="$HOME"
+
+# Open terminal with Codex (full-auto)
+if command -v gnome-terminal &>/dev/null; then
+    gnome-terminal -- bash -c "cd '$target' && codex --full-auto; exec bash"
+elif command -v xterm &>/dev/null; then
+    xterm -e "cd '$target' && codex --full-auto; bash"
+fi
+CODEX_SCRIPT
+        chmod +x "$codex_script"
+        log_success "Nautilus script added: Open with Codex Terminal"
+    fi
+
+    # Refresh Nautilus to pick up new scripts
+    if pgrep -x nautilus &>/dev/null; then
+        nautilus -q 2>/dev/null &
+        log_info "Nautilus refreshed to load new scripts"
+    fi
+
+    log_info "Right-click any folder in Files > Scripts to see Claude/Codex options"
 }
 
 #===============================================================================

@@ -16,7 +16,7 @@
 #===============================================================================
 
 SCRIPT_VERSION="2.5.0"
-SCRIPT_REVISION="62"
+SCRIPT_REVISION="63"
 SCRIPT_DATE="2026-03-27"
 
 # NOTE: We intentionally do NOT use set -e here.
@@ -2080,6 +2080,9 @@ install_gnome_extensions() {
         log_success "GNOME Tweaks installed"
     fi
 
+    # Install Script Launcher GNOME extension (custom fork)
+    install_gnome_script_launcher
+
     log_success "GNOME Shell Extensions setup completed"
     log_info "You can manage extensions via:"
     echo "  - Extension Manager app"
@@ -2229,6 +2232,71 @@ restore_gnome_settings() {
     echo ""
     echo -e "${GREEN}GNOME settings restored successfully!${NC}"
     echo -e "${YELLOW}Note: You may need to restart GNOME Shell (Alt+F2, then 'r') for changes to take effect.${NC}"
+}
+
+#===============================================================================
+# Script Launcher GNOME Extension (custom fork)
+#===============================================================================
+install_gnome_script_launcher() {
+    log_info "Installing Script Launcher GNOME extension..."
+
+    local gnome_version
+    gnome_version=$(gnome-shell --version 2>/dev/null | awk '{print $3}' | cut -d. -f1)
+
+    if [ -z "$gnome_version" ]; then
+        log_warning "Could not detect GNOME Shell version, skipping Script Launcher..."
+        return
+    fi
+
+    local ext_uuid="script-launcher@enginyilmaaz"
+    local ext_dir="$HOME/.local/share/gnome-shell/extensions/$ext_uuid"
+    local zip_url="https://github.com/enginyilmaaz/gnome_extension_script_launcher/releases/latest/download/script-launcher.zip"
+    local temp_zip="/tmp/script-launcher.zip"
+
+    # Check if already installed
+    if [ -d "$ext_dir" ]; then
+        log_info "Script Launcher already installed, updating..."
+        rm -rf "$ext_dir"
+    fi
+
+    # Download latest release
+    if ! retry_curl_download "$zip_url" "$temp_zip" "Downloading Script Launcher extension"; then
+        log_warning "Script Launcher download failed, skipping..."
+        return
+    fi
+
+    # Create extension directory and extract
+    mkdir -p "$ext_dir"
+    if unzip -o "$temp_zip" -d "$ext_dir" > /dev/null 2>&1; then
+        log_success "Script Launcher extension extracted to $ext_dir"
+    else
+        log_warning "Failed to extract Script Launcher, skipping..."
+        rm -f "$temp_zip"
+        return
+    fi
+    rm -f "$temp_zip"
+
+    # Read actual UUID from metadata.json if it differs
+    if [ -f "$ext_dir/metadata.json" ]; then
+        local actual_uuid
+        actual_uuid=$(python3 -c "import json; print(json.load(open('$ext_dir/metadata.json'))['uuid'])" 2>/dev/null)
+        if [ -n "$actual_uuid" ] && [ "$actual_uuid" != "$ext_uuid" ]; then
+            local actual_dir="$HOME/.local/share/gnome-shell/extensions/$actual_uuid"
+            mv "$ext_dir" "$actual_dir"
+            ext_uuid="$actual_uuid"
+            ext_dir="$actual_dir"
+            log_info "Extension UUID: $ext_uuid"
+        fi
+    fi
+
+    # Enable the extension
+    gnome-extensions enable "$ext_uuid" 2>/dev/null || \
+        dbus-send --session --dest=org.gnome.Shell --type=method_call \
+        /org/gnome/Shell org.gnome.Shell.Extensions.EnableExtension \
+        string:"$ext_uuid" 2>/dev/null || true
+
+    log_success "Script Launcher GNOME extension installed and enabled"
+    log_info "You may need to restart GNOME Shell (Alt+F2 > r) or log out/in for it to appear"
 }
 
 #===============================================================================

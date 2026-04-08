@@ -16,7 +16,7 @@
 #===============================================================================
 
 SCRIPT_VERSION="2.5.0"
-SCRIPT_REVISION="60"
+SCRIPT_REVISION="62"
 SCRIPT_DATE="2026-03-27"
 
 # NOTE: We intentionally do NOT use set -e here.
@@ -41,6 +41,8 @@ INSTALL_CLOUDFLARED=false
 INSTALL_DOCKER=false
 INSTALL_CLAUDE=false
 INSTALL_GH=false
+INSTALL_POSTMAN=false
+INSTALL_FILEZILLA=false
 DO_CLI_LOGIN=false
 DO_REMOVE_FIREFOX=false
 
@@ -96,6 +98,12 @@ for arg in "$@"; do
         --gh|--github-cli)
             INSTALL_GH=true
             ;;
+        --postman)
+            INSTALL_POSTMAN=true
+            ;;
+        --filezilla)
+            INSTALL_FILEZILLA=true
+            ;;
         --login)
             DO_CLI_LOGIN=true
             ;;
@@ -144,6 +152,8 @@ if $INSTALL_ALL; then
     INSTALL_DOCKER=true
     INSTALL_CLAUDE=true
     INSTALL_GH=true
+    INSTALL_POSTMAN=true
+    INSTALL_FILEZILLA=true
     DO_REMOVE_FIREFOX=true
 fi
 
@@ -453,6 +463,8 @@ show_interactive_install_menu() {
     APP_NAMES+=("Docker");      APP_DESCS+=("Docker Engine + Compose");               APP_VARS+=("INSTALL_DOCKER")
     APP_NAMES+=("Claude Code"); APP_DESCS+=("Claude Code (AI Coding CLI)");           APP_VARS+=("INSTALL_CLAUDE")
     APP_NAMES+=("Git & GitHub CLI"); APP_DESCS+=("Git + GitHub CLI (gh)");               APP_VARS+=("INSTALL_GH")
+    APP_NAMES+=("Postman");     APP_DESCS+=("Postman (API Testing Tool)");             APP_VARS+=("INSTALL_POSTMAN")
+    APP_NAMES+=("FileZilla");   APP_DESCS+=("FileZilla (FTP/SFTP Client)");            APP_VARS+=("INSTALL_FILEZILLA")
 
     # ARM Fix on all ARM devices (snapd fix for browsers)
     if [ "$DEB_ARCH" == "arm64" ] || [ "$DEB_ARCH" == "armhf" ]; then
@@ -1085,6 +1097,8 @@ menu_system_info() {
     command_exists docker && echo -e "  ${GREEN}✓${NC} Docker"
     command_exists claude && echo -e "  ${GREEN}✓${NC} Claude Code"
     command_exists gh && echo -e "  ${GREEN}✓${NC} GitHub CLI"
+    (command_exists postman || snap list postman 2>/dev/null | grep -q postman) && echo -e "  ${GREEN}✓${NC} Postman"
+    command_exists filezilla && echo -e "  ${GREEN}✓${NC} FileZilla"
     command_exists firefox && echo -e "  ${GREEN}✓${NC} Firefox"
 
     echo ""
@@ -1112,6 +1126,8 @@ check_already_installed() {
         "INSTALL_DOCKER|Docker|command_exists docker"
         "INSTALL_CLAUDE|Claude Code|command_exists claude"
         "INSTALL_GH|GitHub CLI|command_exists gh"
+        "INSTALL_POSTMAN|Postman|command_exists postman || snap list postman 2>/dev/null | grep -q postman"
+        "INSTALL_FILEZILLA|FileZilla|command_exists filezilla"
     )
 
     local found_any=false
@@ -1199,6 +1215,8 @@ run_installations() {
     if $INSTALL_DOCKER; then install_docker || handle_error "Docker installation failed"; fi
     if $INSTALL_CLAUDE; then install_claude_code || handle_error "Claude Code installation failed"; fi
     if $INSTALL_GH; then install_gh || handle_error "GitHub CLI installation failed"; fi
+    if $INSTALL_POSTMAN; then install_postman || handle_error "Postman installation failed"; fi
+    if $INSTALL_FILEZILLA; then install_filezilla || handle_error "FileZilla installation failed"; fi
     if $INSTALL_RUSTDESK; then install_rustdesk || handle_error "RustDesk installation failed"; fi
 
     # CLI logins (requires nodejs to be installed)
@@ -1608,6 +1626,46 @@ install_gh() {
     fi
 }
 
+#===============================================================================
+# Postman Installation (via snap)
+#===============================================================================
+install_postman() {
+    log_step "Installing Postman"
+
+    if command_exists postman || snap list postman 2>/dev/null | grep -q postman; then
+        log_warning "Postman already installed, skipping..."
+        return 0
+    fi
+
+    log_info "Installing Postman via snap..."
+    if retry_snap_install postman; then
+        log_success "Postman installed successfully"
+    else
+        log_warning "Postman installation failed"
+        return 1
+    fi
+}
+
+#===============================================================================
+# FileZilla Installation (via apt)
+#===============================================================================
+install_filezilla() {
+    log_step "Installing FileZilla"
+
+    if command_exists filezilla; then
+        log_warning "FileZilla already installed, skipping..."
+        return 0
+    fi
+
+    log_info "Installing FileZilla via apt..."
+    if retry_apt_install filezilla; then
+        log_success "FileZilla installed successfully"
+    else
+        log_warning "FileZilla installation failed"
+        return 1
+    fi
+}
+
 install_claude_code() {
     log_step "Installing Claude Code"
 
@@ -1750,6 +1808,9 @@ install_chrome() {
         if retry_apt_install google-chrome-stable; then
             log_success "Google Chrome installed successfully (via apt repository)"
             BROWSER_INSTALLED=true
+
+            # Open recommended extensions in browser
+            open_browser_extensions "google-chrome"
         else
             handle_error "Chrome installation failed after 3 attempts"
         fi
@@ -1760,11 +1821,34 @@ install_chrome() {
         if retry_snap_install chromium; then
             log_success "Chromium installed successfully (via snap)"
             BROWSER_INSTALLED=true
+
+            # Open recommended extensions in browser
+            open_browser_extensions "chromium-browser"
         else
             log_warning "Chromium installation failed after 3 attempts"
             log_info "Firefox will be kept as the default browser"
         fi
     fi
+}
+
+# Open recommended browser extensions after install
+open_browser_extensions() {
+    local browser_cmd="$1"
+    local extensions=(
+        "https://chromewebstore.google.com/detail/ublock/epcnnfbjfcgphgdmggkamkmgojdagdnn"
+        "https://chromewebstore.google.com/detail/claude/fcoeoabgfenejglbffodgkkbkcdhcgfn"
+        "https://chromewebstore.google.com/detail/postman/fhbjgbiflinjbdggehcddcbncdddomop"
+    )
+
+    log_info "Opening recommended browser extensions for install..."
+    log_info "Please click 'Add to Chrome' for each extension tab"
+
+    for url in "${extensions[@]}"; do
+        "$browser_cmd" "$url" &>/dev/null &
+        sleep 1
+    done
+
+    log_success "Extension pages opened in browser (uBlock, Claude, Postman)"
 }
 
 #===============================================================================
@@ -2881,6 +2965,8 @@ print_summary() {
     command_exists cloudflared && echo -e "  ${GREEN}✓${NC} Cloudflared $(cloudflared --version 2>&1 | head -1 | cut -d' ' -f3)"
     command_exists docker && echo -e "  ${GREEN}✓${NC} Docker $(docker --version 2>&1 | cut -d' ' -f3 | tr -d ',')"
     command_exists gh && echo -e "  ${GREEN}✓${NC} GitHub CLI $(gh --version 2>/dev/null | head -1 | awk '{print $NF}')"
+    (command_exists postman || snap list postman 2>/dev/null | grep -q postman) && echo -e "  ${GREEN}✓${NC} Postman"
+    command_exists filezilla && echo -e "  ${GREEN}✓${NC} FileZilla"
 
     echo ""
     echo -e "${YELLOW}Note: You may need to restart your terminal or run:${NC}"
@@ -2919,7 +3005,8 @@ main() {
     if $INSTALL_VNC || $INSTALL_NODEJS || $INSTALL_CHROME || \
        $INSTALL_VSCODE || $INSTALL_PYTHON || $INSTALL_GNOME || \
        $INSTALL_DBEAVER || $INSTALL_VLC || $INSTALL_CLOUDFLARED || $INSTALL_DOCKER || \
-       $INSTALL_CLAUDE || $INSTALL_RUSTDESK || $DO_CLI_LOGIN || $DO_REMOVE_FIREFOX || $APPLY_JETSON_FIX; then
+       $INSTALL_CLAUDE || $INSTALL_GH || $INSTALL_POSTMAN || $INSTALL_FILEZILLA || \
+       $INSTALL_RUSTDESK || $DO_CLI_LOGIN || $DO_REMOVE_FIREFOX || $APPLY_JETSON_FIX; then
         has_install=true
     fi
 

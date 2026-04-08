@@ -16,7 +16,7 @@
 #===============================================================================
 
 SCRIPT_VERSION="2.5.0"
-SCRIPT_REVISION="63"
+SCRIPT_REVISION="64"
 SCRIPT_DATE="2026-03-27"
 
 # NOTE: We intentionally do NOT use set -e here.
@@ -1837,7 +1837,6 @@ open_browser_extensions() {
     local extensions=(
         "https://chromewebstore.google.com/detail/ublock/epcnnfbjfcgphgdmggkamkmgojdagdnn"
         "https://chromewebstore.google.com/detail/claude/fcoeoabgfenejglbffodgkkbkcdhcgfn"
-        "https://chromewebstore.google.com/detail/postman/fhbjgbiflinjbdggehcddcbncdddomop"
     )
 
     log_info "Opening recommended browser extensions for install..."
@@ -1848,7 +1847,7 @@ open_browser_extensions() {
         sleep 1
     done
 
-    log_success "Extension pages opened in browser (uBlock, Claude, Postman)"
+    log_success "Extension pages opened in browser (uBlock, Claude)"
 }
 
 #===============================================================================
@@ -2405,29 +2404,31 @@ setup_cli_shortcuts() {
     local added=false
 
     # --- Bash Aliases ---
-    # Claude Code skip permissions alias
+    # Remove old aliases if they exist (to update to new versions)
+    sed -i '/^alias claude-skip=/d' "$bashrc" 2>/dev/null
+    sed -i '/^alias ccskip=/d' "$bashrc" 2>/dev/null
+    sed -i '/^alias codex-skip=/d' "$bashrc" 2>/dev/null
+    sed -i '/^alias cxskip=/d' "$bashrc" 2>/dev/null
+    sed -i '/^# Claude Code aliases/d' "$bashrc" 2>/dev/null
+    sed -i '/^# Codex aliases/d' "$bashrc" 2>/dev/null
+
+    # Claude Code aliases
     if command_exists claude; then
-        if ! grep -q "alias claude-skip=" "$bashrc" 2>/dev/null; then
-            echo "" >> "$bashrc"
-            echo "# Claude Code aliases (added by ubuntu-setup-script)" >> "$bashrc"
-            echo "alias claude-skip='claude --dangerously-skip-permissions'" >> "$bashrc"
-            log_success "Alias added: claude-skip"
-            added=true
-        else
-            log_warning "Alias claude-skip already exists in .bashrc"
-        fi
+        echo "" >> "$bashrc"
+        echo "# Claude Code aliases (added by ubuntu-setup-script)" >> "$bashrc"
+        echo "alias claude-skip='claude --dangerously-skip-permissions --effort max'" >> "$bashrc"
+        echo "alias ccskip='claude --dangerously-skip-permissions --effort max'" >> "$bashrc"
+        log_success "Aliases added: claude-skip, ccskip"
+        added=true
     fi
 
-    # Codex full-auto alias
+    # Codex aliases
     if command_exists codex; then
-        if ! grep -q "alias codex-skip=" "$bashrc" 2>/dev/null; then
-            if ! $added; then echo "" >> "$bashrc"; fi
-            echo "# Codex aliases (added by ubuntu-setup-script)" >> "$bashrc"
-            echo "alias codex-skip='codex --full-auto'" >> "$bashrc"
-            log_success "Alias added: codex-skip"
-        else
-            log_warning "Alias codex-skip already exists in .bashrc"
-        fi
+        if ! $added; then echo "" >> "$bashrc"; fi
+        echo "# Codex aliases (added by ubuntu-setup-script)" >> "$bashrc"
+        echo "alias codex-skip='codex --sandbox danger-full-access -c model_reasoning_effort=\"xhigh\"'" >> "$bashrc"
+        echo "alias cxskip='codex --sandbox danger-full-access -c model_reasoning_effort=\"xhigh\"'" >> "$bashrc"
+        log_success "Aliases added: codex-skip, cxskip"
     fi
 
     # --- Nautilus Right-Click Scripts ---
@@ -2456,9 +2457,9 @@ fi
 
 # Open terminal with Claude Code (skip permissions)
 if command -v gnome-terminal &>/dev/null; then
-    gnome-terminal -- bash -c "cd '$target' && claude --dangerously-skip-permissions; exec bash"
+    gnome-terminal -- bash -c "cd '$target' && claude --dangerously-skip-permissions --effort max; exec bash"
 elif command -v xterm &>/dev/null; then
-    xterm -e "cd '$target' && claude --dangerously-skip-permissions; bash"
+    xterm -e "cd '$target' && claude --dangerously-skip-permissions --effort max; bash"
 fi
 CLAUDE_SCRIPT
         chmod +x "$claude_script"
@@ -2487,9 +2488,9 @@ fi
 
 # Open terminal with Codex (full-auto)
 if command -v gnome-terminal &>/dev/null; then
-    gnome-terminal -- bash -c "cd '$target' && codex --full-auto; exec bash"
+    gnome-terminal -- bash -c "cd '$target' && codex --sandbox danger-full-access -c model_reasoning_effort='xhigh'; exec bash"
 elif command -v xterm &>/dev/null; then
-    xterm -e "cd '$target' && codex --full-auto; bash"
+    xterm -e "cd '$target' && codex --sandbox danger-full-access -c model_reasoning_effort='xhigh'; bash"
 fi
 CODEX_SCRIPT
         chmod +x "$codex_script"

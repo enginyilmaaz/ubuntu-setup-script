@@ -16,7 +16,7 @@
 #===============================================================================
 
 SCRIPT_VERSION="2.5.0"
-SCRIPT_REVISION="64"
+SCRIPT_REVISION="65"
 SCRIPT_DATE="2026-03-27"
 
 # NOTE: We intentionally do NOT use set -e here.
@@ -2247,6 +2247,12 @@ install_gnome_script_launcher() {
         return
     fi
 
+    # Ensure unzip is available
+    if ! command_exists unzip; then
+        log_info "Installing unzip..."
+        sudo apt-get install -y unzip
+    fi
+
     local ext_uuid="script-launcher@enginyilmaaz"
     local ext_dir="$HOME/.local/share/gnome-shell/extensions/$ext_uuid"
     local zip_url="https://github.com/enginyilmaaz/gnome_extension_script_launcher/releases/latest/download/script-launcher.zip"
@@ -2288,14 +2294,24 @@ install_gnome_script_launcher() {
         fi
     fi
 
-    # Enable the extension
-    gnome-extensions enable "$ext_uuid" 2>/dev/null || \
-        dbus-send --session --dest=org.gnome.Shell --type=method_call \
-        /org/gnome/Shell org.gnome.Shell.Extensions.EnableExtension \
-        string:"$ext_uuid" 2>/dev/null || true
+    # Compile GSettings schema if present
+    if [ -d "$ext_dir/schemas" ] && command_exists glib-compile-schemas; then
+        glib-compile-schemas "$ext_dir/schemas/" 2>/dev/null
+        log_info "GSettings schemas compiled"
+    fi
 
-    log_success "Script Launcher GNOME extension installed and enabled"
-    log_info "You may need to restart GNOME Shell (Alt+F2 > r) or log out/in for it to appear"
+    # Enable the extension via gnome-extensions CLI
+    log_info "Enabling Script Launcher extension..."
+    gnome-extensions enable "$ext_uuid" 2>&1 || true
+
+    # Verify it's enabled
+    if gnome-extensions list --enabled 2>/dev/null | grep -q "$ext_uuid"; then
+        log_success "Script Launcher GNOME extension installed and enabled"
+    else
+        log_success "Script Launcher GNOME extension installed"
+        log_warning "Extension may require log out/in or GNOME Shell restart to activate"
+        log_info "After reboot, enable manually: gnome-extensions enable $ext_uuid"
+    fi
 }
 
 #===============================================================================

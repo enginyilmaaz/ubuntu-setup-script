@@ -16,7 +16,7 @@
 #===============================================================================
 
 SCRIPT_VERSION="2.5.0"
-SCRIPT_REVISION="67"
+SCRIPT_REVISION="68"
 SCRIPT_DATE="2026-03-27"
 
 # NOTE: We intentionally do NOT use set -e here.
@@ -2416,12 +2416,27 @@ DOCKCONF
 
     # Set system language to English
     log_info "Setting system language to English (US)..."
+    # Install English language pack if missing
+    sudo apt-get install -y language-pack-en language-pack-gnome-en 2>/dev/null || true
+    # System-wide locale
     sudo localectl set-locale LANG=en_US.UTF-8 LANGUAGE=en_US 2>/dev/null || true
-    # Also set for current user via gsettings/dconf
-    dconf write /system/locale/region "'en_US.UTF-8'" 2>/dev/null || true
-    # Ensure locale is generated
     sudo locale-gen en_US.UTF-8 2>/dev/null || true
-    sudo update-locale LANG=en_US.UTF-8 LANGUAGE=en_US 2>/dev/null || true
+    sudo update-locale LANG=en_US.UTF-8 LANGUAGE=en_US LC_ALL=en_US.UTF-8 2>/dev/null || true
+    # GNOME display language (this is what changes the UI language)
+    dconf write /system/locale/region "'en_US.UTF-8'" 2>/dev/null || true
+    gsettings set org.gnome.system.locale region 'en_US.UTF-8' 2>/dev/null || true
+    # Set AccountsService language for the user (changes login screen + GNOME session language)
+    local current_user
+    current_user=$(whoami)
+    sudo bash -c "cat > /var/lib/AccountsService/users/$current_user" << ACCOUNTSEOF 2>/dev/null || true
+[User]
+Language=en_US.UTF-8
+XSession=
+ACCOUNTSEOF
+    # Export for current session
+    export LANG=en_US.UTF-8
+    export LANGUAGE=en_US
+    export LC_ALL=en_US.UTF-8
     log_success "System language set to English (US)"
 
     # Set keyboard layout to Turkish Q

@@ -16,7 +16,7 @@
 #===============================================================================
 
 SCRIPT_VERSION="2.5.0"
-SCRIPT_REVISION="68"
+SCRIPT_REVISION="69"
 SCRIPT_DATE="2026-03-27"
 
 # NOTE: We intentionally do NOT use set -e here.
@@ -2333,6 +2333,35 @@ configure_dash_to_dock() {
         log_warning "dconf not available, skipping Dash to Dock configuration..."
         return
     fi
+
+    # Install Dash to Dock extension if not already installed
+    local dtd_uuid="dash-to-dock@micxgx.gmail.com"
+    local dtd_dir="$HOME/.local/share/gnome-shell/extensions/$dtd_uuid"
+
+    if [ ! -d "$dtd_dir" ] && ! gnome-extensions list 2>/dev/null | grep -q "$dtd_uuid"; then
+        log_info "Dash to Dock not found, installing..."
+
+        local gnome_ver
+        gnome_ver=$(gnome-shell --version 2>/dev/null | awk '{print $3}' | cut -d. -f1)
+
+        if [ -n "$gnome_ver" ]; then
+            # Try installing via apt first (Ubuntu ships it as a package)
+            if sudo apt-get install -y gnome-shell-extension-dash-to-dock 2>/dev/null; then
+                log_success "Dash to Dock installed via apt"
+            else
+                log_warning "Dash to Dock apt package not available, trying extensions.gnome.org..."
+                # Fallback: install via gnome-extensions CLI if available
+                if command_exists gext; then
+                    gext install dash-to-dock@micxgx.gmail.com 2>/dev/null || true
+                fi
+            fi
+        fi
+    else
+        log_info "Dash to Dock already installed"
+    fi
+
+    # Enable the extension
+    gnome-extensions enable "$dtd_uuid" 2>/dev/null || true
 
     # Backup current settings before making changes
     backup_gnome_settings

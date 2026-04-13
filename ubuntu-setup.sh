@@ -16,7 +16,7 @@
 #===============================================================================
 
 SCRIPT_VERSION="2.5.0"
-SCRIPT_REVISION="70"
+SCRIPT_REVISION="71"
 SCRIPT_DATE="2026-03-27"
 
 # NOTE: We intentionally do NOT use set -e here.
@@ -2347,33 +2347,46 @@ configure_dash_to_dock() {
     fi
 
     # Install Dash to Dock extension if not already installed
-    local dtd_uuid="dash-to-dock@micxgx.gmail.com"
-    local dtd_dir="$HOME/.local/share/gnome-shell/extensions/$dtd_uuid"
+    # Ubuntu uses "ubuntu-dock" (fork of dash-to-dock) or the original "dash-to-dock"
+    local dtd_installed=false
 
-    if [ ! -d "$dtd_dir" ] && ! gnome-extensions list 2>/dev/null | grep -q "$dtd_uuid"; then
-        log_info "Dash to Dock not found, installing..."
-
-        local gnome_ver
-        gnome_ver=$(gnome-shell --version 2>/dev/null | awk '{print $3}' | cut -d. -f1)
-
-        if [ -n "$gnome_ver" ]; then
-            # Try installing via apt first (Ubuntu ships it as a package)
-            if sudo apt-get install -y gnome-shell-extension-dash-to-dock 2>/dev/null; then
-                log_success "Dash to Dock installed via apt"
-            else
-                log_warning "Dash to Dock apt package not available, trying extensions.gnome.org..."
-                # Fallback: install via gnome-extensions CLI if available
-                if command_exists gext; then
-                    gext install dash-to-dock@micxgx.gmail.com 2>/dev/null || true
-                fi
-            fi
-        fi
-    else
-        log_info "Dash to Dock already installed"
+    if gnome-extensions list 2>/dev/null | grep -q "dash-to-dock\|ubuntu-dock"; then
+        dtd_installed=true
+        log_info "Dash to Dock / Ubuntu Dock already installed"
+    elif [ -d "$HOME/.local/share/gnome-shell/extensions/dash-to-dock@micxgx.gmail.com" ]; then
+        dtd_installed=true
     fi
 
-    # Enable the extension
-    gnome-extensions enable "$dtd_uuid" 2>/dev/null || true
+    if ! $dtd_installed; then
+        log_info "Dash to Dock not found, installing..."
+
+        # Try Ubuntu Dock first (Ubuntu's fork), then original Dash to Dock
+        if sudo apt-get install -y gnome-shell-extension-ubuntu-dock 2>/dev/null; then
+            log_success "Ubuntu Dock installed via apt"
+        elif sudo apt-get install -y gnome-shell-extension-dash-to-dock 2>/dev/null; then
+            log_success "Dash to Dock installed via apt"
+        else
+            # Manual install from GitHub releases
+            log_info "Downloading Dash to Dock from GitHub..."
+            local gnome_ver
+            gnome_ver=$(gnome-shell --version 2>/dev/null | awk '{print $3}' | cut -d. -f1)
+            local dtd_zip="/tmp/dash-to-dock.zip"
+            local dtd_dir="$HOME/.local/share/gnome-shell/extensions/dash-to-dock@micxgx.gmail.com"
+
+            if curl -fsSL -o "$dtd_zip" "https://github.com/micheleg/dash-to-dock/releases/latest/download/dash-to-dock@micxgx.gmail.com.shell-extension.zip" 2>/dev/null; then
+                mkdir -p "$dtd_dir"
+                unzip -o "$dtd_zip" -d "$dtd_dir" > /dev/null 2>&1
+                rm -f "$dtd_zip"
+                log_success "Dash to Dock installed from GitHub"
+            else
+                log_warning "Could not install Dash to Dock"
+            fi
+        fi
+    fi
+
+    # Enable the extension (try both UUIDs)
+    gnome-extensions enable "dash-to-dock@micxgx.gmail.com" 2>/dev/null || true
+    gnome-extensions enable "ubuntu-dock@ubuntu.com" 2>/dev/null || true
 
     # Backup current settings before making changes
     backup_gnome_settings

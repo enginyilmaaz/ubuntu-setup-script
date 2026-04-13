@@ -16,7 +16,7 @@
 #===============================================================================
 
 SCRIPT_VERSION="2.5.0"
-SCRIPT_REVISION="65"
+SCRIPT_REVISION="66"
 SCRIPT_DATE="2026-03-27"
 
 # NOTE: We intentionally do NOT use set -e here.
@@ -1788,6 +1788,14 @@ install_chrome() {
     if command_exists google-chrome || command_exists google-chrome-stable || command_exists chromium-browser || command_exists chromium; then
         log_warning "Browser already installed, skipping..."
         BROWSER_INSTALLED=true
+        # Still open extension pages for existing browser
+        if command_exists google-chrome || command_exists google-chrome-stable; then
+            open_browser_extensions "google-chrome"
+        elif command_exists chromium-browser; then
+            open_browser_extensions "chromium-browser"
+        elif command_exists chromium; then
+            open_browser_extensions "chromium"
+        fi
         return
     fi
 

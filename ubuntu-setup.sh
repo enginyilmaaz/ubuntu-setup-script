@@ -16,7 +16,7 @@
 #===============================================================================
 
 SCRIPT_VERSION="2.5.0"
-SCRIPT_REVISION="73"
+SCRIPT_REVISION="74"
 SCRIPT_DATE="2026-03-27"
 
 # NOTE: We intentionally do NOT use set -e here.
@@ -2041,6 +2041,37 @@ install_python() {
 }
 
 #===============================================================================
+# Helper: Force-enable a GNOME extension via gsettings (fallback for Armbian etc.)
+#===============================================================================
+force_enable_extension() {
+    local ext_uuid="$1"
+    if [ -z "$ext_uuid" ]; then return; fi
+
+    # Method 1: gnome-extensions CLI (works when GNOME Shell is running)
+    gnome-extensions enable "$ext_uuid" 2>/dev/null || true
+
+    # Method 2: gsettings fallback - directly add to enabled-extensions list
+    # This ensures extensions are enabled even if GNOME Shell isn't fully running
+    local current_extensions
+    current_extensions=$(gsettings get org.gnome.shell enabled-extensions 2>/dev/null) || return 0
+
+    # Check if already in the list
+    if echo "$current_extensions" | grep -q "'$ext_uuid'"; then
+        return 0
+    fi
+
+    # Add to the enabled list
+    if [ "$current_extensions" = "@as []" ] || [ -z "$current_extensions" ]; then
+        gsettings set org.gnome.shell enabled-extensions "['$ext_uuid']" 2>/dev/null || true
+    else
+        # Remove trailing ] and append new UUID
+        local new_extensions
+        new_extensions=$(echo "$current_extensions" | sed "s/]$/, '$ext_uuid']/")
+        gsettings set org.gnome.shell enabled-extensions "$new_extensions" 2>/dev/null || true
+    fi
+}
+
+#===============================================================================
 # 8. GNOME Shell Extensions
 #===============================================================================
 install_gnome_extensions() {
@@ -2095,8 +2126,8 @@ install_gnome_extensions() {
         sudo apt-get install -y gnome-shell-extension-appindicator 2>/dev/null || \
         log_warning "AppIndicator package not available"
     fi
-    gnome-extensions enable appindicatorsupport@rgcjonas.gmail.com 2>/dev/null || \
-    gnome-extensions enable ubuntu-appindicators@ubuntu.com 2>/dev/null || true
+    force_enable_extension "appindicatorsupport@rgcjonas.gmail.com"
+    force_enable_extension "ubuntu-appindicators@ubuntu.com"
     log_success "AppIndicator (system tray) enabled"
 
     # Install Script Launcher GNOME extension (custom fork)
@@ -2320,9 +2351,9 @@ install_gnome_script_launcher() {
         log_info "GSettings schemas compiled"
     fi
 
-    # Enable the extension via gnome-extensions CLI
+    # Enable the extension (gnome-extensions CLI + gsettings fallback for Armbian)
     log_info "Enabling Script Launcher extension..."
-    gnome-extensions enable "$ext_uuid" 2>&1 || true
+    force_enable_extension "$ext_uuid"
 
     # Verify it's enabled
     if gnome-extensions list --enabled 2>/dev/null | grep -q "$ext_uuid"; then
@@ -2415,9 +2446,9 @@ for ver, info in data.get('shell_version_map', {}).items():
         fi
     fi
 
-    # Enable the extension (try both UUIDs)
-    gnome-extensions enable "dash-to-dock@micxgx.gmail.com" 2>/dev/null || true
-    gnome-extensions enable "ubuntu-dock@ubuntu.com" 2>/dev/null || true
+    # Enable the extension (try both UUIDs + gsettings fallback for Armbian)
+    force_enable_extension "dash-to-dock@micxgx.gmail.com"
+    force_enable_extension "ubuntu-dock@ubuntu.com"
 
     # Backup current settings before making changes
     backup_gnome_settings
@@ -2787,8 +2818,8 @@ disable_wayland() {
 
     # Verify: must have exactly one WaylandEnable=false and no WaylandEnable=true
     local count_false count_true
-    count_false=$(grep -c "^WaylandEnable=false" "$gdm_config" 2>/dev/null || echo 0)
-    count_true=$(grep -c "^WaylandEnable=true" "$gdm_config" 2>/dev/null || echo 0)
+    count_false=$(grep -c "^WaylandEnable=false" "$gdm_config" 2>/dev/null) || count_false=0
+    count_true=$(grep -c "^WaylandEnable=true" "$gdm_config" 2>/dev/null) || count_true=0
 
     if [ "$count_false" -eq 1 ] && [ "$count_true" -eq 0 ]; then
         log_success "Wayland disabled successfully"

@@ -16,7 +16,7 @@
 #===============================================================================
 
 SCRIPT_VERSION="2.5.0"
-SCRIPT_REVISION="71"
+SCRIPT_REVISION="72"
 SCRIPT_DATE="2026-03-27"
 
 # NOTE: We intentionally do NOT use set -e here.
@@ -2360,26 +2360,57 @@ configure_dash_to_dock() {
     if ! $dtd_installed; then
         log_info "Dash to Dock not found, installing..."
 
-        # Try Ubuntu Dock first (Ubuntu's fork), then original Dash to Dock
+        local gnome_ver
+        gnome_ver=$(gnome-shell --version 2>/dev/null | awk '{print $3}' | cut -d. -f1)
+        local dtd_zip="/tmp/dash-to-dock.zip"
+        local dtd_uuid="dash-to-dock@micxgx.gmail.com"
+        local dtd_dir="$HOME/.local/share/gnome-shell/extensions/$dtd_uuid"
+
+        # Method 1: Try apt packages first
         if sudo apt-get install -y gnome-shell-extension-ubuntu-dock 2>/dev/null; then
             log_success "Ubuntu Dock installed via apt"
         elif sudo apt-get install -y gnome-shell-extension-dash-to-dock 2>/dev/null; then
             log_success "Dash to Dock installed via apt"
         else
-            # Manual install from GitHub releases
-            log_info "Downloading Dash to Dock from GitHub..."
-            local gnome_ver
-            gnome_ver=$(gnome-shell --version 2>/dev/null | awk '{print $3}' | cut -d. -f1)
-            local dtd_zip="/tmp/dash-to-dock.zip"
-            local dtd_dir="$HOME/.local/share/gnome-shell/extensions/dash-to-dock@micxgx.gmail.com"
+            # Method 2: Download from extensions.gnome.org (same as manual install)
+            log_info "Downloading Dash to Dock from extensions.gnome.org..."
 
-            if curl -fsSL -o "$dtd_zip" "https://github.com/micheleg/dash-to-dock/releases/latest/download/dash-to-dock@micxgx.gmail.com.shell-extension.zip" 2>/dev/null; then
-                mkdir -p "$dtd_dir"
-                unzip -o "$dtd_zip" -d "$dtd_dir" > /dev/null 2>&1
-                rm -f "$dtd_zip"
-                log_success "Dash to Dock installed from GitHub"
+            # Query the API for the correct version matching our GNOME Shell
+            local ext_info
+            ext_info=$(curl -fsSL "https://extensions.gnome.org/extension-info/?uuid=${dtd_uuid}&shell_version=${gnome_ver}" 2>/dev/null)
+
+            if [ -n "$ext_info" ]; then
+                local download_url
+                download_url=$(echo "$ext_info" | python3 -c "
+import sys, json
+data = json.load(sys.stdin)
+# Get download URL for our shell version
+for ver, info in data.get('shell_version_map', {}).items():
+    print('https://extensions.gnome.org' + info.get('download_url', ''))
+    break
+" 2>/dev/null)
+
+                if [ -n "$download_url" ] && curl -fsSL -o "$dtd_zip" "$download_url" 2>/dev/null; then
+                    # Use gnome-extensions install (proper way)
+                    if gnome-extensions install --force "$dtd_zip" 2>/dev/null; then
+                        log_success "Dash to Dock installed from extensions.gnome.org"
+                    else
+                        # Fallback: manual extract
+                        mkdir -p "$dtd_dir"
+                        unzip -o "$dtd_zip" -d "$dtd_dir" > /dev/null 2>&1
+                        if [ -d "$dtd_dir/schemas" ] && command_exists glib-compile-schemas; then
+                            glib-compile-schemas "$dtd_dir/schemas/" 2>/dev/null
+                        fi
+                        log_success "Dash to Dock installed (manual extract)"
+                    fi
+                    rm -f "$dtd_zip"
+                else
+                    log_warning "Could not download Dash to Dock. Install manually from:"
+                    log_warning "https://extensions.gnome.org/extension/307/dash-to-dock/"
+                fi
             else
-                log_warning "Could not install Dash to Dock"
+                log_warning "Could not query extensions.gnome.org API"
+                log_warning "Install Dash to Dock manually: https://extensions.gnome.org/extension/307/dash-to-dock/"
             fi
         fi
     fi

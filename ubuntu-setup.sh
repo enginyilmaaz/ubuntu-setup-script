@@ -16,7 +16,7 @@
 #===============================================================================
 
 SCRIPT_VERSION="2.5.0"
-SCRIPT_REVISION="66"
+SCRIPT_REVISION="67"
 SCRIPT_DATE="2026-03-27"
 
 # NOTE: We intentionally do NOT use set -e here.
@@ -2413,6 +2413,23 @@ DOCKCONF
     # Nautilus (Files app)
     gsettings set org.gnome.nautilus.preferences show-hidden-files true 2>/dev/null
     log_success "Show hidden files enabled"
+
+    # Set system language to English
+    log_info "Setting system language to English (US)..."
+    sudo localectl set-locale LANG=en_US.UTF-8 LANGUAGE=en_US 2>/dev/null || true
+    # Also set for current user via gsettings/dconf
+    dconf write /system/locale/region "'en_US.UTF-8'" 2>/dev/null || true
+    # Ensure locale is generated
+    sudo locale-gen en_US.UTF-8 2>/dev/null || true
+    sudo update-locale LANG=en_US.UTF-8 LANGUAGE=en_US 2>/dev/null || true
+    log_success "System language set to English (US)"
+
+    # Set keyboard layout to Turkish Q
+    log_info "Setting keyboard layout to Turkish Q..."
+    gsettings set org.gnome.desktop.input-sources sources "[('xkb', 'tr')]" 2>/dev/null || true
+    # Also set via localectl for console
+    sudo localectl set-x11-keymap tr pc105 "" "" 2>/dev/null || true
+    log_success "Keyboard layout set to Turkish Q"
 
     # Disable Wayland (X11 is more compatible with VNC and remote desktop)
     disable_wayland

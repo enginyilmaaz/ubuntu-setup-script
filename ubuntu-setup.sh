@@ -16,7 +16,7 @@
 #===============================================================================
 
 SCRIPT_VERSION="2.5.0"
-SCRIPT_REVISION="69"
+SCRIPT_REVISION="70"
 SCRIPT_DATE="2026-03-27"
 
 # NOTE: We intentionally do NOT use set -e here.
@@ -2086,6 +2086,18 @@ install_gnome_extensions() {
         sudo apt-get install -y gnome-tweaks
         log_success "GNOME Tweaks installed"
     fi
+
+    # Install AppIndicator extension (system tray support)
+    log_info "Installing AppIndicator extension (system tray)..."
+    if package_installed gnome-shell-extension-appindicator; then
+        log_warning "AppIndicator already installed"
+    else
+        sudo apt-get install -y gnome-shell-extension-appindicator 2>/dev/null || \
+        log_warning "AppIndicator package not available"
+    fi
+    gnome-extensions enable appindicatorsupport@rgcjonas.gmail.com 2>/dev/null || \
+    gnome-extensions enable ubuntu-appindicators@ubuntu.com 2>/dev/null || true
+    log_success "AppIndicator (system tray) enabled"
 
     # Install Script Launcher GNOME extension (custom fork)
     install_gnome_script_launcher

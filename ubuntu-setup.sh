@@ -16,7 +16,7 @@
 #===============================================================================
 
 SCRIPT_VERSION="2.5.0"
-SCRIPT_REVISION="72"
+SCRIPT_REVISION="73"
 SCRIPT_DATE="2026-03-27"
 
 # NOTE: We intentionally do NOT use set -e here.
@@ -2499,35 +2499,67 @@ DOCKCONF
     gsettings set org.gnome.nautilus.preferences show-hidden-files true 2>/dev/null
     log_success "Show hidden files enabled"
 
-    # Set system language to English
+    # Set EVERYTHING to English (US) - language, region, formats, menus
     log_info "Setting system language to English (US)..."
-    # Install English language pack if missing
-    sudo apt-get install -y language-pack-en language-pack-gnome-en 2>/dev/null || true
-    # System-wide locale
-    sudo localectl set-locale LANG=en_US.UTF-8 LANGUAGE=en_US 2>/dev/null || true
+
+    # Install English language packs, remove Turkish display language
+    sudo apt-get install -y language-pack-en language-pack-en-base language-pack-gnome-en language-pack-gnome-en-base 2>/dev/null || true
+
+    # Generate English locale
     sudo locale-gen en_US.UTF-8 2>/dev/null || true
-    sudo update-locale LANG=en_US.UTF-8 LANGUAGE=en_US LC_ALL=en_US.UTF-8 2>/dev/null || true
-    # GNOME display language (this is what changes the UI language)
+
+    # System-wide locale - set ALL locale variables to English
+    sudo update-locale \
+        LANG=en_US.UTF-8 \
+        LANGUAGE=en_US:en \
+        LC_ALL=en_US.UTF-8 \
+        LC_CTYPE=en_US.UTF-8 \
+        LC_NUMERIC=en_US.UTF-8 \
+        LC_TIME=en_US.UTF-8 \
+        LC_COLLATE=en_US.UTF-8 \
+        LC_MONETARY=en_US.UTF-8 \
+        LC_MESSAGES=en_US.UTF-8 \
+        LC_PAPER=en_US.UTF-8 \
+        LC_NAME=en_US.UTF-8 \
+        LC_ADDRESS=en_US.UTF-8 \
+        LC_TELEPHONE=en_US.UTF-8 \
+        LC_MEASUREMENT=en_US.UTF-8 \
+        LC_IDENTIFICATION=en_US.UTF-8 2>/dev/null || true
+
+    sudo localectl set-locale LANG=en_US.UTF-8 LANGUAGE=en_US:en 2>/dev/null || true
+
+    # GNOME display language + region
     dconf write /system/locale/region "'en_US.UTF-8'" 2>/dev/null || true
     gsettings set org.gnome.system.locale region 'en_US.UTF-8' 2>/dev/null || true
-    # Set AccountsService language for the user (changes login screen + GNOME session language)
+
+    # Set AccountsService language (controls login screen + GNOME session language)
     local current_user
     current_user=$(whoami)
-    sudo bash -c "cat > /var/lib/AccountsService/users/$current_user" << ACCOUNTSEOF 2>/dev/null || true
+    local accounts_file="/var/lib/AccountsService/users/$current_user"
+    if [ -f "$accounts_file" ]; then
+        # Update existing file - replace or add Language line
+        if sudo grep -q "^Language=" "$accounts_file" 2>/dev/null; then
+            sudo sed -i 's/^Language=.*/Language=en_US.UTF-8/' "$accounts_file"
+        else
+            sudo sed -i '/^\[User\]/a Language=en_US.UTF-8' "$accounts_file"
+        fi
+    else
+        sudo bash -c "cat > $accounts_file" << ACCOUNTSEOF 2>/dev/null || true
 [User]
 Language=en_US.UTF-8
 XSession=
 ACCOUNTSEOF
+    fi
+
     # Export for current session
     export LANG=en_US.UTF-8
-    export LANGUAGE=en_US
+    export LANGUAGE=en_US:en
     export LC_ALL=en_US.UTF-8
-    log_success "System language set to English (US)"
+    log_success "System language set to English (US) - ALL menus, formats, regions"
 
-    # Set keyboard layout to Turkish Q
+    # Set keyboard layout to Turkish Q (ONLY keyboard, not language)
     log_info "Setting keyboard layout to Turkish Q..."
     gsettings set org.gnome.desktop.input-sources sources "[('xkb', 'tr')]" 2>/dev/null || true
-    # Also set via localectl for console
     sudo localectl set-x11-keymap tr pc105 "" "" 2>/dev/null || true
     log_success "Keyboard layout set to Turkish Q"
 

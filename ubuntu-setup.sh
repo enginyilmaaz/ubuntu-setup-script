@@ -16,7 +16,7 @@
 #===============================================================================
 
 SCRIPT_VERSION="2.5.0"
-SCRIPT_REVISION="74"
+SCRIPT_REVISION="75"
 SCRIPT_DATE="2026-03-27"
 
 # NOTE: We intentionally do NOT use set -e here.
@@ -2596,6 +2596,83 @@ ACCOUNTSEOF
 
     # Disable Wayland (X11 is more compatible with VNC and remote desktop)
     disable_wayland
+
+    # Enable OpenSSH server (auto-start on boot + start now)
+    enable_ssh_server
+
+    # Enable RDP server (xrdp, auto-start on boot + start now)
+    enable_rdp_server
+}
+
+#===============================================================================
+# Enable OpenSSH Server (auto-install, enable, start)
+#===============================================================================
+enable_ssh_server() {
+    log_info "Enabling OpenSSH server..."
+
+    # Install openssh-server if missing
+    if ! package_installed openssh-server; then
+        sudo apt-get install -y openssh-server 2>/dev/null || {
+            log_warning "openssh-server could not be installed, skipping..."
+            return
+        }
+        log_success "openssh-server installed"
+    else
+        log_info "openssh-server already installed"
+    fi
+
+    # Enable on boot and start now
+    sudo systemctl enable ssh 2>/dev/null || sudo systemctl enable sshd 2>/dev/null || true
+    sudo systemctl start ssh 2>/dev/null || sudo systemctl start sshd 2>/dev/null || true
+
+    # Allow through UFW if active
+    if command_exists ufw && sudo ufw status 2>/dev/null | grep -q "Status: active"; then
+        sudo ufw allow ssh 2>/dev/null || true
+    fi
+
+    # Verify
+    if systemctl is-active ssh &>/dev/null || systemctl is-active sshd &>/dev/null; then
+        log_success "OpenSSH server active and enabled on boot (port 22)"
+    else
+        log_warning "OpenSSH service status unknown, check with: sudo systemctl status ssh"
+    fi
+}
+
+#===============================================================================
+# Enable RDP Server (xrdp, auto-install, enable, start)
+#===============================================================================
+enable_rdp_server() {
+    log_info "Enabling RDP server (xrdp)..."
+
+    # Install xrdp if missing
+    if ! package_installed xrdp; then
+        sudo apt-get install -y xrdp 2>/dev/null || {
+            log_warning "xrdp could not be installed, skipping..."
+            return
+        }
+        log_success "xrdp installed"
+    else
+        log_info "xrdp already installed"
+    fi
+
+    # Add xrdp user to ssl-cert group (required for cert access)
+    sudo adduser xrdp ssl-cert 2>/dev/null || true
+
+    # Enable on boot and start now
+    sudo systemctl enable xrdp 2>/dev/null || true
+    sudo systemctl start xrdp 2>/dev/null || true
+
+    # Allow through UFW if active
+    if command_exists ufw && sudo ufw status 2>/dev/null | grep -q "Status: active"; then
+        sudo ufw allow 3389/tcp 2>/dev/null || true
+    fi
+
+    # Verify
+    if systemctl is-active xrdp &>/dev/null; then
+        log_success "RDP (xrdp) server active and enabled on boot (port 3389)"
+    else
+        log_warning "xrdp service status unknown, check with: sudo systemctl status xrdp"
+    fi
 }
 
 #===============================================================================

@@ -16,7 +16,7 @@
 #===============================================================================
 
 SCRIPT_VERSION="2.5.0"
-SCRIPT_REVISION="75"
+SCRIPT_REVISION="76"
 SCRIPT_DATE="2026-03-27"
 
 # NOTE: We intentionally do NOT use set -e here.
@@ -2712,79 +2712,113 @@ setup_cli_shortcuts() {
         log_success "Aliases added: codex-skip, cxskip"
     fi
 
-    # --- Nautilus Right-Click Scripts ---
-    local scripts_dir="$HOME/.local/share/nautilus/scripts"
-    mkdir -p "$scripts_dir"
+    # --- Nautilus Context Menu (python3-nautilus MenuProvider) ---
+    # Clean up legacy script-based approach from previous revisions
+    rm -f "$HOME/.local/share/nautilus/scripts/Open with Claude Code Terminal" 2>/dev/null
+    rm -f "$HOME/.local/share/nautilus/scripts/Open with Codex Terminal" 2>/dev/null
 
-    # "Open with Claude Code Terminal" script
-    if command_exists claude; then
-        local claude_script="$scripts_dir/Open with Claude Code Terminal"
-        cat > "$claude_script" << 'CLAUDE_SCRIPT'
-#!/bin/bash
-# Get the selected directory (or current directory)
-target="$NAUTILUS_SCRIPT_CURRENT_URI"
-target="${target#file://}"
-target="$(python3 -c "import urllib.parse; print(urllib.parse.unquote('$target'))" 2>/dev/null || echo "$target")"
+    log_info "Installing Nautilus context menu extension (Claude Code / Codex / VS Code)..."
 
-if [ -z "$target" ] || [ ! -d "$target" ]; then
-    # If a file is selected, use its parent directory
-    target="$(echo "$NAUTILUS_SCRIPT_SELECTED_FILE_PATHS" | head -1)"
-    if [ -f "$target" ]; then
-        target="$(dirname "$target")"
-    fi
-fi
-
-[ -z "$target" ] && target="$HOME"
-
-# Open terminal with Claude Code (skip permissions)
-if command -v gnome-terminal &>/dev/null; then
-    gnome-terminal -- bash -c "cd '$target' && claude --dangerously-skip-permissions --effort max; exec bash"
-elif command -v xterm &>/dev/null; then
-    xterm -e "cd '$target' && claude --dangerously-skip-permissions --effort max; bash"
-fi
-CLAUDE_SCRIPT
-        chmod +x "$claude_script"
-        log_success "Nautilus script added: Open with Claude Code Terminal"
+    # Install python3-nautilus (required for MenuProvider extensions)
+    if ! package_installed python3-nautilus; then
+        sudo apt-get install -y python3-nautilus 2>/dev/null || {
+            log_warning "python3-nautilus could not be installed, skipping context menu setup..."
+            return
+        }
     fi
 
-    # "Open with Codex Terminal" script
-    if command_exists codex; then
-        local codex_script="$scripts_dir/Open with Codex Terminal"
-        cat > "$codex_script" << 'CODEX_SCRIPT'
-#!/bin/bash
-# Get the selected directory (or current directory)
-target="$NAUTILUS_SCRIPT_CURRENT_URI"
-target="${target#file://}"
-target="$(python3 -c "import urllib.parse; print(urllib.parse.unquote('$target'))" 2>/dev/null || echo "$target")"
+    local ext_dir="$HOME/.local/share/nautilus-python/extensions"
+    mkdir -p "$ext_dir"
 
-if [ -z "$target" ] || [ ! -d "$target" ]; then
-    # If a file is selected, use its parent directory
-    target="$(echo "$NAUTILUS_SCRIPT_SELECTED_FILE_PATHS" | head -1)"
-    if [ -f "$target" ]; then
-        target="$(dirname "$target")"
-    fi
-fi
+    cat > "$ext_dir/smai-context-menus.py" << 'PY_EOF'
+#!/usr/bin/env python3
+import os
+import shlex
+import subprocess
 
-[ -z "$target" ] && target="$HOME"
+import gi
+try:
+    gi.require_version('Nautilus', '4.0')
+except ValueError:
+    try:
+        gi.require_version('Nautilus', '3.0')
+    except ValueError:
+        pass
+from gi.repository import Nautilus, GObject  # noqa: E402
 
-# Open terminal with Codex (full-auto)
-if command -v gnome-terminal &>/dev/null; then
-    gnome-terminal -- bash -c "cd '$target' && codex --sandbox danger-full-access -c model_reasoning_effort='xhigh'; exec bash"
-elif command -v xterm &>/dev/null; then
-    xterm -e "cd '$target' && codex --sandbox danger-full-access -c model_reasoning_effort='xhigh'; bash"
-fi
-CODEX_SCRIPT
-        chmod +x "$codex_script"
-        log_success "Nautilus script added: Open with Codex Terminal"
-    fi
 
-    # Refresh Nautilus to pick up new scripts
+CLAUDE_CMD = 'claude --dangerously-skip-permissions --effort max'
+CODEX_CMD  = 'codex --sandbox danger-full-access -c model_reasoning_effort="xhigh"'
+
+ACTIONS = (
+    ('SmaiOpenClaude', 'Open in Claude Code', CLAUDE_CMD, True),
+    ('SmaiOpenCodex',  'Open in Codex CLI',   CODEX_CMD,  True),
+    ('SmaiOpenVscode', 'Open in VS Code',     'code',     False),
+)
+
+
+def _run_in_terminal(_mi, cmd, path):
+    subprocess.Popen([
+        'gnome-terminal', '--working-directory=' + path, '--',
+        'bash', '-ic', cmd + '; exec bash'
+    ])
+
+
+def _run_gui(_mi, cmd, path):
+    subprocess.Popen(['bash', '-ic', cmd + ' ' + shlex.quote(path)])
+
+
+class SmaiContextMenus(GObject.GObject, Nautilus.MenuProvider):
+
+    def _items_for_path(self, path):
+        if not path:
+            return []
+        items = []
+        for name, label, cmd, in_terminal in ACTIONS:
+            mi = Nautilus.MenuItem(name=name, label=label, tip='')
+            if in_terminal:
+                mi.connect('activate', _run_in_terminal, cmd, path)
+            else:
+                mi.connect('activate', _run_gui, cmd, path)
+            items.append(mi)
+        return items
+
+    def get_file_items(self, *args):
+        files = args[-1] if args else []
+        if not files:
+            return []
+        f = files[0]
+        try:
+            if not f.is_directory():
+                return []
+        except Exception:
+            return []
+        try:
+            path = f.get_location().get_path()
+        except Exception:
+            return []
+        return self._items_for_path(path)
+
+    def get_background_items(self, *args):
+        folder = args[-1] if args else None
+        if folder is None:
+            return []
+        try:
+            path = folder.get_location().get_path()
+        except Exception:
+            return []
+        return self._items_for_path(path)
+PY_EOF
+
+    log_success "Nautilus context menu extension installed: Open in Claude Code / Codex CLI / VS Code"
+
+    # Restart Nautilus so the extension is loaded
     if pgrep -x nautilus &>/dev/null; then
         nautilus -q 2>/dev/null &
-        log_info "Nautilus refreshed to load new scripts"
+        log_info "Nautilus refreshed to load new context menu"
     fi
 
-    log_info "Right-click any folder in Files > Scripts to see Claude/Codex options"
+    log_info "Right-click any folder in Files to see the 3 options"
 }
 
 #===============================================================================

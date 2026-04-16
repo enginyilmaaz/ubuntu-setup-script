@@ -16,7 +16,7 @@
 #===============================================================================
 
 SCRIPT_VERSION="2.5.0"
-SCRIPT_REVISION="77"
+SCRIPT_REVISION="78"
 SCRIPT_DATE="2026-03-27"
 
 # NOTE: We intentionally do NOT use set -e here.
@@ -466,8 +466,8 @@ show_interactive_install_menu() {
     APP_NAMES+=("Postman");     APP_DESCS+=("Postman (API Testing Tool)");             APP_VARS+=("INSTALL_POSTMAN")
     APP_NAMES+=("FileZilla");   APP_DESCS+=("FileZilla (FTP/SFTP Client)");            APP_VARS+=("INSTALL_FILEZILLA")
 
-    # ARM Fix on all ARM devices (snapd fix for browsers)
-    if [ "$DEB_ARCH" == "arm64" ] || [ "$DEB_ARCH" == "armhf" ]; then
+    # ARM Fix on all ARM devices (snapd fix for browsers) - only show if snap is installed
+    if ([ "$DEB_ARCH" == "arm64" ] || [ "$DEB_ARCH" == "armhf" ]) && command_exists snap; then
         APP_NAMES+=("ARM Fix"); APP_DESCS+=("ARM Snapd Fix (Browser Fix)");           APP_VARS+=("APPLY_JETSON_FIX")
     fi
 
@@ -567,8 +567,8 @@ show_interactive_install_menu() {
                     SELECTED[$cursor]=0
                 else
                     SELECTED[$cursor]=1
-                    # Auto-select ARM Fix when VNC is selected on ARM devices
-                    if [ "${APP_VARS[$cursor]}" = "INSTALL_VNC" ]; then
+                    # Auto-select ARM Fix when VNC is selected on ARM devices (only if snap exists)
+                    if [ "${APP_VARS[$cursor]}" = "INSTALL_VNC" ] && command_exists snap; then
                         for ((ai=0; ai<TOTAL_ITEMS; ai++)); do
                             if [ "${APP_VARS[$ai]}" = "APPLY_JETSON_FIX" ]; then
                                 SELECTED[$ai]=1

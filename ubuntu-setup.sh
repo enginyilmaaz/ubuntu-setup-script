@@ -16,7 +16,7 @@
 #===============================================================================
 
 SCRIPT_VERSION="2.5.0"
-SCRIPT_REVISION="76"
+SCRIPT_REVISION="77"
 SCRIPT_DATE="2026-03-27"
 
 # NOTE: We intentionally do NOT use set -e here.
@@ -1823,17 +1823,51 @@ install_chrome() {
             handle_error "Chrome installation failed after 3 attempts"
         fi
     else
-        # ARM64: Install Chromium via snap (Chrome is not available for ARM64)
-        log_info "Installing Chromium via snap (ARM64 - Chrome not available)..."
+        # ARM64: Install Chromium (Chrome is not available for ARM64)
+        log_info "Installing Chromium for ARM64 (Chrome not available)..."
 
-        if retry_snap_install chromium; then
-            log_success "Chromium installed successfully (via snap)"
+        local chromium_installed=false
+
+        # Method 1: Try apt first (works on Armbian, Debian-based without snap)
+        if ! $chromium_installed; then
+            log_info "Trying Chromium via apt..."
+            if sudo apt-get install -y chromium-browser 2>/dev/null; then
+                log_success "Chromium installed via apt (chromium-browser)"
+                chromium_installed=true
+            elif sudo apt-get install -y chromium 2>/dev/null; then
+                log_success "Chromium installed via apt (chromium)"
+                chromium_installed=true
+            fi
+        fi
+
+        # Method 2: Try snap (standard Ubuntu)
+        if ! $chromium_installed && command_exists snap; then
+            log_info "Trying Chromium via snap..."
+            if retry_snap_install chromium; then
+                log_success "Chromium installed via snap"
+                chromium_installed=true
+            fi
+        fi
+
+        # Method 3: Try flatpak as last resort
+        if ! $chromium_installed && command_exists flatpak; then
+            log_info "Trying Chromium via flatpak..."
+            if flatpak install -y flathub org.chromium.Chromium 2>/dev/null; then
+                log_success "Chromium installed via flatpak"
+                chromium_installed=true
+            fi
+        fi
+
+        if $chromium_installed; then
             BROWSER_INSTALLED=true
-
             # Open recommended extensions in browser
-            open_browser_extensions "chromium-browser"
+            if command_exists chromium-browser; then
+                open_browser_extensions "chromium-browser"
+            elif command_exists chromium; then
+                open_browser_extensions "chromium"
+            fi
         else
-            log_warning "Chromium installation failed after 3 attempts"
+            log_warning "Chromium installation failed (apt/snap/flatpak all failed)"
             log_info "Firefox will be kept as the default browser"
         fi
     fi

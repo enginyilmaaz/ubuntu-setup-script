@@ -16,7 +16,7 @@
 #===============================================================================
 
 SCRIPT_VERSION="2.5.0"
-SCRIPT_REVISION="79"
+SCRIPT_REVISION="80"
 SCRIPT_DATE="2026-03-27"
 
 # NOTE: We intentionally do NOT use set -e here.
@@ -1843,31 +1843,20 @@ install_chrome() {
 
         local chromium_installed=false
 
-        # Method 1: Try apt first (works on Armbian, Debian-based without snap)
+        # Method 1: xtradeb PPA - real .deb Chromium (no snap dependency)
+        # MUST come first because Ubuntu's apt chromium-browser is a snap wrapper
         if ! $chromium_installed; then
-            log_info "Trying Chromium via apt..."
-            if sudo apt-get install -y chromium-browser 2>/dev/null; then
-                log_success "Chromium installed via apt (chromium-browser)"
-                chromium_installed=true
-            elif sudo apt-get install -y chromium 2>/dev/null; then
-                log_success "Chromium installed via apt (chromium)"
-                chromium_installed=true
-            fi
-        fi
-
-        # Method 2: Try xtradeb PPA (provides .deb Chromium for arm64/armhf without snap)
-        if ! $chromium_installed; then
-            log_info "Trying Chromium via xtradeb PPA..."
+            log_info "Trying Chromium via xtradeb PPA (native .deb)..."
             if sudo add-apt-repository -y ppa:xtradeb/apps 2>/dev/null; then
                 safe_apt_update
                 if sudo apt-get install -y chromium 2>/dev/null; then
-                    log_success "Chromium installed via xtradeb PPA (deb)"
+                    log_success "Chromium installed via xtradeb PPA (native deb)"
                     chromium_installed=true
                 fi
             fi
         fi
 
-        # Method 3: Try snap (standard Ubuntu)
+        # Method 2: Try snap (standard Ubuntu where snap is expected)
         if ! $chromium_installed && command_exists snap; then
             log_info "Trying Chromium via snap..."
             if retry_snap_install chromium; then
@@ -1885,7 +1874,7 @@ install_chrome() {
                 open_browser_extensions "chromium"
             fi
         else
-            log_warning "Chromium installation failed (apt/xtradeb/snap all failed)"
+            log_warning "Chromium installation failed (xtradeb/snap all failed)"
             log_info "Firefox will be kept as the default browser"
         fi
     fi

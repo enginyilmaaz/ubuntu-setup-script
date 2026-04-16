@@ -16,7 +16,7 @@
 #===============================================================================
 
 SCRIPT_VERSION="2.5.0"
-SCRIPT_REVISION="82"
+SCRIPT_REVISION="83"
 SCRIPT_DATE="2026-03-27"
 
 # NOTE: We intentionally do NOT use set -e here.
@@ -3429,45 +3429,125 @@ install_prerequisites() {
 print_summary() {
     log_step "Installation Summary"
 
-    echo -e "${GREEN}Installed Components:${NC}"
     echo ""
 
-    # RealVNC & Wayland
-    (package_installed realvnc-connect || command_exists vncserver-x11) && echo -e "  ${GREEN}✓${NC} RealVNC Connect"
-    grep -q "^WaylandEnable=false" /etc/gdm3/custom.conf 2>/dev/null && echo -e "  ${GREEN}✓${NC} Wayland Disabled"
-
-    # NVM & Node
-    if [ -d "$HOME/.nvm" ]; then
-        echo -e "  ${GREEN}✓${NC} NVM"
-    fi
+    # Helper: show status for a selected item
+    # Usage: show_item FLAG "Label" check_command
+    show_selected() {
+        local flag="$1" label="$2" installed="$3"
+        if $flag; then
+            if $installed; then
+                echo -e "  ${GREEN}✓${NC} $label"
+            else
+                echo -e "  ${RED}✗${NC} $label (failed)"
+            fi
+        fi
+    }
 
     # Reload NVM for checks
     export NVM_DIR="$HOME/.nvm"
     [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
 
-    command_exists node && echo -e "  ${GREEN}✓${NC} Node.js $(node -v)"
-    command_exists yarn && echo -e "  ${GREEN}✓${NC} Yarn $(yarn -v)"
-    command_exists codex && echo -e "  ${GREEN}✓${NC} Codex CLI"
-    command_exists claude && echo -e "  ${GREEN}✓${NC} Claude Code $(claude --version 2>/dev/null || echo '')"
-    (command_exists google-chrome || command_exists google-chrome-stable) && echo -e "  ${GREEN}✓${NC} Google Chrome"
-    (command_exists chromium-browser || command_exists chromium) && echo -e "  ${GREEN}✓${NC} Chromium"
-    command_exists code && echo -e "  ${GREEN}✓${NC} VS Code"
-    command_exists python3 && echo -e "  ${GREEN}✓${NC} Python $(python3 --version 2>&1 | cut -d' ' -f2)"
-    package_installed gnome-shell-extensions && echo -e "  ${GREEN}✓${NC} GNOME Shell Extensions"
-    package_installed gnome-shell-extension-manager && echo -e "  ${GREEN}✓${NC} GNOME Extension Manager"
-    package_installed gnome-tweaks && echo -e "  ${GREEN}✓${NC} GNOME Tweaks"
-    dconf list /org/gnome/shell/extensions/dash-to-dock/ &>/dev/null && echo -e "  ${GREEN}✓${NC} Dash to Dock (configured)"
-    (package_installed dbeaver-ce || command_exists dbeaver) && echo -e "  ${GREEN}✓${NC} DBeaver CE"
-    command_exists vlc && echo -e "  ${GREEN}✓${NC} VLC Media Player"
-    command_exists cloudflared && echo -e "  ${GREEN}✓${NC} Cloudflared $(cloudflared --version 2>&1 | head -1 | cut -d' ' -f3)"
-    command_exists docker && echo -e "  ${GREEN}✓${NC} Docker $(docker --version 2>&1 | cut -d' ' -f3 | tr -d ',')"
-    command_exists gh && echo -e "  ${GREEN}✓${NC} GitHub CLI $(gh --version 2>/dev/null | head -1 | awk '{print $NF}')"
-    (command_exists postman || snap list postman 2>/dev/null | grep -q postman) && echo -e "  ${GREEN}✓${NC} Postman"
-    command_exists filezilla && echo -e "  ${GREEN}✓${NC} FileZilla"
+    # VNC
+    show_selected $INSTALL_VNC "RealVNC Connect" "$(package_installed realvnc-connect || command_exists vncserver-x11 && echo true || echo false)"
+
+    # Node.js
+    if $INSTALL_NODEJS; then
+        local node_ok=false
+        [ -d "$HOME/.nvm" ] && command_exists node && node_ok=true
+        if $node_ok; then
+            echo -e "  ${GREEN}✓${NC} Node.js $(node -v) + NVM"
+            command_exists yarn && echo -e "  ${GREEN}✓${NC} Yarn $(yarn -v)"
+            command_exists codex && echo -e "  ${GREEN}✓${NC} Codex CLI"
+        else
+            echo -e "  ${RED}✗${NC} Node.js (failed)"
+        fi
+    fi
+
+    # Chrome/Chromium
+    if $INSTALL_CHROME; then
+        if command_exists google-chrome || command_exists google-chrome-stable; then
+            echo -e "  ${GREEN}✓${NC} Google Chrome"
+        elif command_exists chromium-browser || command_exists chromium; then
+            echo -e "  ${GREEN}✓${NC} Chromium"
+        else
+            echo -e "  ${RED}✗${NC} Browser (failed)"
+        fi
+    fi
+
+    # VS Code
+    show_selected $INSTALL_VSCODE "VS Code" "$(command_exists code && echo true || echo false)"
+
+    # Python
+    if $INSTALL_PYTHON; then
+        if command_exists python3; then
+            echo -e "  ${GREEN}✓${NC} Python $(python3 --version 2>&1 | cut -d' ' -f2)"
+        else
+            echo -e "  ${RED}✗${NC} Python (failed)"
+        fi
+    fi
+
+    # GNOME Tweaks
+    if $INSTALL_GNOME; then
+        echo -e "  ${GREEN}✓${NC} GNOME Tweaks"
+        package_installed gnome-shell-extensions && echo -e "    ${GREEN}✓${NC} Shell Extensions"
+        package_installed gnome-shell-extension-manager && echo -e "    ${GREEN}✓${NC} Extension Manager"
+        package_installed gnome-tweaks && echo -e "    ${GREEN}✓${NC} Tweaks App"
+        dconf list /org/gnome/shell/extensions/dash-to-dock/ &>/dev/null && echo -e "    ${GREEN}✓${NC} Dash to Dock"
+        grep -q "^WaylandEnable=false" /etc/gdm3/custom.conf 2>/dev/null && echo -e "    ${GREEN}✓${NC} Wayland Disabled"
+        systemctl is-active ssh &>/dev/null && echo -e "    ${GREEN}✓${NC} SSH Server"
+        systemctl is-active xrdp &>/dev/null && echo -e "    ${GREEN}✓${NC} RDP Server (xrdp)"
+        grep -q "alias claude-skip=" "$HOME/.bashrc" 2>/dev/null && echo -e "    ${GREEN}✓${NC} CLI Aliases"
+        [ -f "$HOME/.local/share/nautilus-python/extensions/smai-context-menus.py" ] && echo -e "    ${GREEN}✓${NC} Nautilus Context Menu"
+    fi
+
+    # DBeaver
+    show_selected $INSTALL_DBEAVER "DBeaver CE" "$(package_installed dbeaver-ce || command_exists dbeaver && echo true || echo false)"
+
+    # VLC
+    show_selected $INSTALL_VLC "VLC Media Player" "$(command_exists vlc && echo true || echo false)"
+
+    # Cloudflared
+    if $INSTALL_CLOUDFLARED; then
+        if command_exists cloudflared; then
+            echo -e "  ${GREEN}✓${NC} Cloudflared $(cloudflared --version 2>&1 | head -1 | cut -d' ' -f3)"
+        else
+            echo -e "  ${RED}✗${NC} Cloudflared (failed)"
+        fi
+    fi
+
+    # Docker
+    if $INSTALL_DOCKER; then
+        if command_exists docker; then
+            echo -e "  ${GREEN}✓${NC} Docker $(docker --version 2>&1 | cut -d' ' -f3 | tr -d ',')"
+        else
+            echo -e "  ${RED}✗${NC} Docker (failed)"
+        fi
+    fi
+
+    # Claude Code
+    show_selected $INSTALL_CLAUDE "Claude Code" "$(command_exists claude && echo true || echo false)"
+
+    # Git & GitHub CLI
+    if $INSTALL_GH; then
+        if command_exists gh; then
+            echo -e "  ${GREEN}✓${NC} Git & GitHub CLI $(gh --version 2>/dev/null | head -1 | awk '{print $NF}')"
+        else
+            echo -e "  ${RED}✗${NC} Git & GitHub CLI (failed)"
+        fi
+    fi
+
+    # Postman
+    show_selected $INSTALL_POSTMAN "Postman" "$(command_exists postman && echo true || echo false)"
+
+    # FileZilla
+    show_selected $INSTALL_FILEZILLA "FileZilla" "$(command_exists filezilla && echo true || echo false)"
+
+    # RustDesk
+    show_selected $INSTALL_RUSTDESK "RustDesk" "$(command_exists rustdesk && echo true || echo false)"
 
     echo ""
-    echo -e "${YELLOW}Note: You may need to restart your terminal or run:${NC}"
-    echo -e "  source ~/.bashrc"
+    echo -e "${YELLOW}Note: You may need to log out/in for all changes to take effect${NC}"
     echo ""
     echo -e "${GREEN}Setup completed!${NC}"
 }

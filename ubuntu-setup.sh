@@ -16,7 +16,7 @@
 #===============================================================================
 
 SCRIPT_VERSION="2.5.0"
-SCRIPT_REVISION="80"
+SCRIPT_REVISION="81"
 SCRIPT_DATE="2026-03-27"
 
 # NOTE: We intentionally do NOT use set -e here.
@@ -1867,6 +1867,10 @@ install_chrome() {
 
         if $chromium_installed; then
             BROWSER_INSTALLED=true
+
+            # Configure Chromium search engines via managed policy
+            configure_chromium_search_engines
+
             # Open recommended extensions in browser
             if command_exists chromium-browser; then
                 open_browser_extensions "chromium-browser"
@@ -1878,6 +1882,64 @@ install_chrome() {
             log_info "Firefox will be kept as the default browser"
         fi
     fi
+}
+
+# Configure Chromium search engines via managed policy (Google default + DuckDuckGo)
+configure_chromium_search_engines() {
+    log_info "Configuring Chromium search engines (Google + DuckDuckGo)..."
+
+    # Create policy directories for both chromium and chromium-browser
+    local policy_dirs=(
+        "/etc/chromium/policies/managed"
+        "/etc/chromium-browser/policies/managed"
+    )
+
+    for policy_dir in "${policy_dirs[@]}"; do
+        sudo mkdir -p "$policy_dir"
+
+        sudo tee "$policy_dir/search-engines.json" > /dev/null << 'SEARCH_POLICY'
+{
+    "DefaultSearchProviderEnabled": true,
+    "DefaultSearchProviderName": "Google",
+    "DefaultSearchProviderSearchURL": "https://www.google.com/search?q={searchTerms}",
+    "DefaultSearchProviderSuggestURL": "https://www.google.com/complete/search?output=chrome&q={searchTerms}",
+    "DefaultSearchProviderIconURL": "https://www.google.com/favicon.ico",
+    "DefaultSearchProviderKeyword": "google.com",
+    "ManagedSearchEngines": [
+        {
+            "name": "Google",
+            "keyword": "google.com",
+            "search_url": "https://www.google.com/search?q={searchTerms}",
+            "suggest_url": "https://www.google.com/complete/search?output=chrome&q={searchTerms}",
+            "favicon_url": "https://www.google.com/favicon.ico",
+            "is_default": true
+        },
+        {
+            "name": "DuckDuckGo",
+            "keyword": "duckduckgo.com",
+            "search_url": "https://duckduckgo.com/?q={searchTerms}",
+            "suggest_url": "https://duckduckgo.com/ac/?q={searchTerms}&type=list",
+            "favicon_url": "https://duckduckgo.com/favicon.ico"
+        },
+        {
+            "name": "Bing",
+            "keyword": "bing.com",
+            "search_url": "https://www.bing.com/search?q={searchTerms}",
+            "suggest_url": "https://www.bing.com/osjson.aspx?query={searchTerms}",
+            "favicon_url": "https://www.bing.com/favicon.ico"
+        },
+        {
+            "name": "Yahoo",
+            "keyword": "yahoo.com",
+            "search_url": "https://search.yahoo.com/search?p={searchTerms}",
+            "favicon_url": "https://www.yahoo.com/favicon.ico"
+        }
+    ]
+}
+SEARCH_POLICY
+    done
+
+    log_success "Chromium search engines configured (Google default + DuckDuckGo, Bing, Yahoo)"
 }
 
 # Open recommended browser extensions after install

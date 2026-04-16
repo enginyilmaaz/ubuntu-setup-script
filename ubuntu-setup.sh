@@ -16,7 +16,7 @@
 #===============================================================================
 
 SCRIPT_VERSION="2.5.0"
-SCRIPT_REVISION="81"
+SCRIPT_REVISION="82"
 SCRIPT_DATE="2026-03-27"
 
 # NOTE: We intentionally do NOT use set -e here.
@@ -1239,9 +1239,6 @@ run_installations() {
     # Firefox removal
     if $DO_REMOVE_FIREFOX; then remove_firefox || handle_error "Firefox removal failed"; fi
 
-    # Setup bash aliases and Nautilus right-click actions for AI CLI tools
-    setup_cli_shortcuts
-
     # Print summary
     print_summary
 }
@@ -1801,8 +1798,14 @@ install_chrome() {
 
     # Check if any browser already installed
     if command_exists google-chrome || command_exists google-chrome-stable || command_exists chromium-browser || command_exists chromium; then
-        log_warning "Browser already installed, skipping..."
+        log_warning "Browser already installed, skipping installation..."
         BROWSER_INSTALLED=true
+
+        # Still configure search engines for Chromium (in case they're missing)
+        if command_exists chromium-browser || command_exists chromium; then
+            configure_chromium_search_engines
+        fi
+
         # Still open extension pages for existing browser
         if command_exists google-chrome || command_exists google-chrome-stable; then
             open_browser_extensions "google-chrome"
@@ -2244,6 +2247,9 @@ install_gnome_extensions() {
 
     # Configure Dash to Dock settings
     configure_dash_to_dock
+
+    # Setup bash aliases and Nautilus right-click actions for AI CLI tools
+    setup_cli_shortcuts
 }
 
 #===============================================================================
@@ -2814,6 +2820,10 @@ setup_cli_shortcuts() {
         echo "alias cxskip='codex --sandbox danger-full-access -c model_reasoning_effort=\"xhigh\"'" >> "$bashrc"
         log_success "Aliases added: codex-skip, cxskip"
     fi
+
+    # Load aliases into current shell session immediately
+    source "$bashrc" 2>/dev/null || true
+    log_info "Aliases loaded into current session"
 
     # --- Nautilus Context Menu (python3-nautilus MenuProvider) ---
     # Clean up legacy script-based approach from previous revisions

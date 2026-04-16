@@ -16,7 +16,7 @@
 #===============================================================================
 
 SCRIPT_VERSION="2.5.0"
-SCRIPT_REVISION="78"
+SCRIPT_REVISION="79"
 SCRIPT_DATE="2026-03-27"
 
 # NOTE: We intentionally do NOT use set -e here.
@@ -413,6 +413,12 @@ detect_system_silent() {
     if [ -f /etc/nv_tegra_release ] || ([ -d /sys/devices/soc0 ] && grep -qi "nvidia" /sys/devices/soc0/family 2>/dev/null); then
         IS_JETSON=true
     fi
+
+    # Detect Armbian
+    IS_ARMBIAN=false
+    if [ -f /etc/armbian-release ]; then
+        IS_ARMBIAN=true
+    fi
 }
 
 # Show system info header
@@ -426,6 +432,8 @@ show_system_header() {
     echo -e "  Architecture: ${YELLOW}$ARCH${NC} ($DEB_ARCH)"
     if $IS_JETSON; then
         echo -e "  Device:       ${YELLOW}NVIDIA Jetson (ARM)${NC}"
+    elif $IS_ARMBIAN; then
+        echo -e "  Device:       ${YELLOW}Armbian (ARM)${NC}"
     elif [ "$DEB_ARCH" == "arm64" ] || [ "$DEB_ARCH" == "armhf" ]; then
         echo -e "  Device:       ${YELLOW}ARM Device${NC}"
     fi
@@ -466,8 +474,8 @@ show_interactive_install_menu() {
     APP_NAMES+=("Postman");     APP_DESCS+=("Postman (API Testing Tool)");             APP_VARS+=("INSTALL_POSTMAN")
     APP_NAMES+=("FileZilla");   APP_DESCS+=("FileZilla (FTP/SFTP Client)");            APP_VARS+=("INSTALL_FILEZILLA")
 
-    # ARM Fix on all ARM devices (snapd fix for browsers) - only show if snap is installed
-    if ([ "$DEB_ARCH" == "arm64" ] || [ "$DEB_ARCH" == "armhf" ]) && command_exists snap; then
+    # ARM Fix on ARM devices - only show if snap exists AND not Armbian (Armbian uses apt for Chromium)
+    if ([ "$DEB_ARCH" == "arm64" ] || [ "$DEB_ARCH" == "armhf" ]) && command_exists snap && ! $IS_ARMBIAN; then
         APP_NAMES+=("ARM Fix"); APP_DESCS+=("ARM Snapd Fix (Browser Fix)");           APP_VARS+=("APPLY_JETSON_FIX")
     fi
 
@@ -1285,6 +1293,13 @@ detect_system() {
         log_info "NVIDIA Jetson device detected"
     fi
 
+    # Detect Armbian
+    IS_ARMBIAN=false
+    if [ -f /etc/armbian-release ]; then
+        IS_ARMBIAN=true
+        log_info "Armbian detected"
+    fi
+
     # Check if Ubuntu
     if [[ "$ID" != "ubuntu" && "$ID_LIKE" != *"ubuntu"* ]]; then
         log_warning "This script is optimized for Ubuntu. Some features may not work correctly."
@@ -1840,20 +1855,23 @@ install_chrome() {
             fi
         fi
 
-        # Method 2: Try snap (standard Ubuntu)
+        # Method 2: Try xtradeb PPA (provides .deb Chromium for arm64/armhf without snap)
+        if ! $chromium_installed; then
+            log_info "Trying Chromium via xtradeb PPA..."
+            if sudo add-apt-repository -y ppa:xtradeb/apps 2>/dev/null; then
+                safe_apt_update
+                if sudo apt-get install -y chromium 2>/dev/null; then
+                    log_success "Chromium installed via xtradeb PPA (deb)"
+                    chromium_installed=true
+                fi
+            fi
+        fi
+
+        # Method 3: Try snap (standard Ubuntu)
         if ! $chromium_installed && command_exists snap; then
             log_info "Trying Chromium via snap..."
             if retry_snap_install chromium; then
                 log_success "Chromium installed via snap"
-                chromium_installed=true
-            fi
-        fi
-
-        # Method 3: Try flatpak as last resort
-        if ! $chromium_installed && command_exists flatpak; then
-            log_info "Trying Chromium via flatpak..."
-            if flatpak install -y flathub org.chromium.Chromium 2>/dev/null; then
-                log_success "Chromium installed via flatpak"
                 chromium_installed=true
             fi
         fi
@@ -1867,7 +1885,7 @@ install_chrome() {
                 open_browser_extensions "chromium"
             fi
         else
-            log_warning "Chromium installation failed (apt/snap/flatpak all failed)"
+            log_warning "Chromium installation failed (apt/xtradeb/snap all failed)"
             log_info "Firefox will be kept as the default browser"
         fi
     fi

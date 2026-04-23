@@ -16,7 +16,7 @@
 #===============================================================================
 
 SCRIPT_VERSION="2.5.0"
-SCRIPT_REVISION="83"
+SCRIPT_REVISION="84"
 SCRIPT_DATE="2026-03-27"
 
 # NOTE: We intentionally do NOT use set -e here.
@@ -2821,9 +2821,51 @@ setup_cli_shortcuts() {
         log_success "Aliases added: codex-skip, cxskip"
     fi
 
+    # --- npm/yarn/pnpm package.json scripts tab-completion ---
+    sed -i '/_node_package_scripts_complete/d' "$bashrc" 2>/dev/null
+    sed -i '/^complete -F _node_package_scripts_complete/d' "$bashrc" 2>/dev/null
+    sed -i '/^# Node package scripts tab-completion/d' "$bashrc" 2>/dev/null
+
+    # Install jq if missing (needed for tab-completion)
+    if ! command_exists jq; then
+        sudo apt-get install -y jq 2>/dev/null || true
+    fi
+
+    if command_exists jq; then
+        echo "" >> "$bashrc"
+        echo "# Node package scripts tab-completion (added by ubuntu-setup-script)" >> "$bashrc"
+        cat >> "$bashrc" << 'NODECOMP'
+_node_package_scripts_complete() {
+    local cur prev scripts
+    cur="${COMP_WORDS[COMP_CWORD]}"
+    prev="${COMP_WORDS[COMP_CWORD-1]}"
+    [ -f package.json ] || return 0
+    command -v jq >/dev/null 2>&1 || return 0
+    scripts="$(jq -r '.scripts // {} | keys | join(" ")' package.json 2>/dev/null)"
+    [ -z "$scripts" ] && return 0
+    case "${COMP_WORDS[0]}" in
+        yarn|pnpm)
+            if [ "$COMP_CWORD" -eq 1 ] || [ "$prev" = "run" ]; then
+                COMPREPLY=($(compgen -W "$scripts" -- "$cur"))
+            fi
+            ;;
+        npm)
+            if [ "$prev" = "run" ] || [ "$prev" = "run-script" ]; then
+                COMPREPLY=($(compgen -W "$scripts" -- "$cur"))
+            fi
+            ;;
+    esac
+}
+complete -F _node_package_scripts_complete yarn
+complete -F _node_package_scripts_complete npm
+complete -F _node_package_scripts_complete pnpm
+NODECOMP
+        log_success "Tab-completion added: npm/yarn/pnpm package.json scripts"
+    fi
+
     # Load aliases into current shell session immediately
     source "$bashrc" 2>/dev/null || true
-    log_info "Aliases loaded into current session"
+    log_info "Aliases and completions loaded into current session"
 
     # --- Nautilus Context Menu (python3-nautilus MenuProvider) ---
     # Clean up legacy script-based approach from previous revisions

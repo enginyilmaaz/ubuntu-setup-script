@@ -16,7 +16,7 @@
 #===============================================================================
 
 SCRIPT_VERSION="2.5.0"
-SCRIPT_REVISION="84"
+SCRIPT_REVISION="86"
 SCRIPT_DATE="2026-03-27"
 
 # NOTE: We intentionally do NOT use set -e here.
@@ -437,6 +437,15 @@ show_system_header() {
     elif [ "$DEB_ARCH" == "arm64" ] || [ "$DEB_ARCH" == "armhf" ]; then
         echo -e "  Device:       ${YELLOW}ARM Device${NC}"
     fi
+
+    # Wayland status
+    if [ -f /etc/gdm3/custom.conf ]; then
+        if grep -q "^WaylandEnable=false" /etc/gdm3/custom.conf 2>/dev/null; then
+            echo -e "  Wayland:      ${GREEN}Disabled${NC} (X11)"
+        else
+            echo -e "  Wayland:      ${YELLOW}Enabled${NC}"
+        fi
+    fi
     echo ""
 }
 
@@ -474,9 +483,9 @@ show_interactive_install_menu() {
     APP_NAMES+=("Postman");     APP_DESCS+=("Postman (API Testing Tool)");             APP_VARS+=("INSTALL_POSTMAN")
     APP_NAMES+=("FileZilla");   APP_DESCS+=("FileZilla (FTP/SFTP Client)");            APP_VARS+=("INSTALL_FILEZILLA")
 
-    # ARM Fix on ARM devices - only show if snap exists AND not Armbian (Armbian uses apt for Chromium)
-    if ([ "$DEB_ARCH" == "arm64" ] || [ "$DEB_ARCH" == "armhf" ]) && command_exists snap && ! $IS_ARMBIAN; then
-        APP_NAMES+=("ARM Fix"); APP_DESCS+=("ARM Snapd Fix (Browser Fix)");           APP_VARS+=("APPLY_JETSON_FIX")
+    # ARM Fix - only on Jetson devices (other ARM devices don't need snapd fix)
+    if $IS_JETSON && command_exists snap; then
+        APP_NAMES+=("ARM Fix"); APP_DESCS+=("Jetson Snapd Fix (Browser Fix)");        APP_VARS+=("APPLY_JETSON_FIX")
     fi
 
     local TOTAL_ITEMS=${#APP_NAMES[@]}
@@ -575,8 +584,8 @@ show_interactive_install_menu() {
                     SELECTED[$cursor]=0
                 else
                     SELECTED[$cursor]=1
-                    # Auto-select ARM Fix when VNC is selected on ARM devices (only if snap exists)
-                    if [ "${APP_VARS[$cursor]}" = "INSTALL_VNC" ] && command_exists snap; then
+                    # Auto-select ARM Fix when VNC is selected (only on Jetson)
+                    if [ "${APP_VARS[$cursor]}" = "INSTALL_VNC" ] && $IS_JETSON; then
                         for ((ai=0; ai<TOTAL_ITEMS; ai++)); do
                             if [ "${APP_VARS[$ai]}" = "APPLY_JETSON_FIX" ]; then
                                 SELECTED[$ai]=1
@@ -2802,24 +2811,18 @@ setup_cli_shortcuts() {
     sed -i '/^# Claude Code aliases/d' "$bashrc" 2>/dev/null
     sed -i '/^# Codex aliases/d' "$bashrc" 2>/dev/null
 
-    # Claude Code aliases
-    if command_exists claude; then
-        echo "" >> "$bashrc"
-        echo "# Claude Code aliases (added by ubuntu-setup-script)" >> "$bashrc"
-        echo "alias claude-skip='claude --dangerously-skip-permissions --effort max'" >> "$bashrc"
-        echo "alias ccskip='claude --dangerously-skip-permissions --effort max'" >> "$bashrc"
-        log_success "Aliases added: claude-skip, ccskip"
-        added=true
-    fi
+    # Claude Code aliases (always add - command may be installed later)
+    echo "" >> "$bashrc"
+    echo "# Claude Code aliases (added by ubuntu-setup-script)" >> "$bashrc"
+    echo "alias claude-skip='claude --dangerously-skip-permissions --effort max'" >> "$bashrc"
+    echo "alias ccskip='claude --dangerously-skip-permissions --effort max'" >> "$bashrc"
+    log_success "Aliases added: claude-skip, ccskip"
 
-    # Codex aliases
-    if command_exists codex; then
-        if ! $added; then echo "" >> "$bashrc"; fi
-        echo "# Codex aliases (added by ubuntu-setup-script)" >> "$bashrc"
-        echo "alias codex-skip='codex --sandbox danger-full-access -c model_reasoning_effort=\"xhigh\"'" >> "$bashrc"
-        echo "alias cxskip='codex --sandbox danger-full-access -c model_reasoning_effort=\"xhigh\"'" >> "$bashrc"
-        log_success "Aliases added: codex-skip, cxskip"
-    fi
+    # Codex aliases (always add - command may be installed later)
+    echo "# Codex aliases (added by ubuntu-setup-script)" >> "$bashrc"
+    echo "alias codex-skip='codex --sandbox danger-full-access -c model_reasoning_effort=\"xhigh\"'" >> "$bashrc"
+    echo "alias cxskip='codex --sandbox danger-full-access -c model_reasoning_effort=\"xhigh\"'" >> "$bashrc"
+    log_success "Aliases added: codex-skip, cxskip"
 
     # --- npm/yarn/pnpm package.json scripts tab-completion ---
     sed -i '/_node_package_scripts_complete/d' "$bashrc" 2>/dev/null

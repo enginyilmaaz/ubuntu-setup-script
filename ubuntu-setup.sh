@@ -16,7 +16,7 @@
 #===============================================================================
 
 SCRIPT_VERSION="2.5.0"
-SCRIPT_REVISION="84"
+SCRIPT_REVISION="85"
 SCRIPT_DATE="2026-03-27"
 
 # NOTE: We intentionally do NOT use set -e here.
@@ -2802,24 +2802,18 @@ setup_cli_shortcuts() {
     sed -i '/^# Claude Code aliases/d' "$bashrc" 2>/dev/null
     sed -i '/^# Codex aliases/d' "$bashrc" 2>/dev/null
 
-    # Claude Code aliases
-    if command_exists claude; then
-        echo "" >> "$bashrc"
-        echo "# Claude Code aliases (added by ubuntu-setup-script)" >> "$bashrc"
-        echo "alias claude-skip='claude --dangerously-skip-permissions --effort max'" >> "$bashrc"
-        echo "alias ccskip='claude --dangerously-skip-permissions --effort max'" >> "$bashrc"
-        log_success "Aliases added: claude-skip, ccskip"
-        added=true
-    fi
+    # Claude Code aliases (always add - command may be installed later)
+    echo "" >> "$bashrc"
+    echo "# Claude Code aliases (added by ubuntu-setup-script)" >> "$bashrc"
+    echo "alias claude-skip='claude --dangerously-skip-permissions --effort max'" >> "$bashrc"
+    echo "alias ccskip='claude --dangerously-skip-permissions --effort max'" >> "$bashrc"
+    log_success "Aliases added: claude-skip, ccskip"
 
-    # Codex aliases
-    if command_exists codex; then
-        if ! $added; then echo "" >> "$bashrc"; fi
-        echo "# Codex aliases (added by ubuntu-setup-script)" >> "$bashrc"
-        echo "alias codex-skip='codex --sandbox danger-full-access -c model_reasoning_effort=\"xhigh\"'" >> "$bashrc"
-        echo "alias cxskip='codex --sandbox danger-full-access -c model_reasoning_effort=\"xhigh\"'" >> "$bashrc"
-        log_success "Aliases added: codex-skip, cxskip"
-    fi
+    # Codex aliases (always add - command may be installed later)
+    echo "# Codex aliases (added by ubuntu-setup-script)" >> "$bashrc"
+    echo "alias codex-skip='codex --sandbox danger-full-access -c model_reasoning_effort=\"xhigh\"'" >> "$bashrc"
+    echo "alias cxskip='codex --sandbox danger-full-access -c model_reasoning_effort=\"xhigh\"'" >> "$bashrc"
+    log_success "Aliases added: codex-skip, cxskip"
 
     # --- npm/yarn/pnpm package.json scripts tab-completion ---
     sed -i '/_node_package_scripts_complete/d' "$bashrc" 2>/dev/null

@@ -16,7 +16,7 @@
 #===============================================================================
 
 SCRIPT_VERSION="2.5.0"
-SCRIPT_REVISION="86"
+SCRIPT_REVISION="87"
 SCRIPT_DATE="2026-03-27"
 
 # NOTE: We intentionally do NOT use set -e here.
@@ -2800,34 +2800,34 @@ setup_cli_shortcuts() {
     log_info "Setting up CLI shortcuts and Nautilus context menu actions..."
 
     local bashrc="$HOME/.bashrc"
-    local added=false
 
     # --- Bash Aliases ---
-    # Remove old aliases if they exist (to update to new versions)
+    # Remove old versions (both legacy single-line and marker-based)
     sed -i '/^alias claude-skip=/d' "$bashrc" 2>/dev/null
     sed -i '/^alias ccskip=/d' "$bashrc" 2>/dev/null
     sed -i '/^alias codex-skip=/d' "$bashrc" 2>/dev/null
     sed -i '/^alias cxskip=/d' "$bashrc" 2>/dev/null
     sed -i '/^# Claude Code aliases/d' "$bashrc" 2>/dev/null
     sed -i '/^# Codex aliases/d' "$bashrc" 2>/dev/null
+    sed -i '/^# BEGIN smai-aliases/,/^# END smai-aliases/d' "$bashrc" 2>/dev/null
 
-    # Claude Code aliases (always add - command may be installed later)
-    echo "" >> "$bashrc"
-    echo "# Claude Code aliases (added by ubuntu-setup-script)" >> "$bashrc"
-    echo "alias claude-skip='claude --dangerously-skip-permissions --effort max'" >> "$bashrc"
-    echo "alias ccskip='claude --dangerously-skip-permissions --effort max'" >> "$bashrc"
-    log_success "Aliases added: claude-skip, ccskip"
+    # Add aliases with markers (safe for repeated runs)
+    cat >> "$bashrc" << 'ALIASES'
 
-    # Codex aliases (always add - command may be installed later)
-    echo "# Codex aliases (added by ubuntu-setup-script)" >> "$bashrc"
-    echo "alias codex-skip='codex --sandbox danger-full-access -c model_reasoning_effort=\"xhigh\"'" >> "$bashrc"
-    echo "alias cxskip='codex --sandbox danger-full-access -c model_reasoning_effort=\"xhigh\"'" >> "$bashrc"
-    log_success "Aliases added: codex-skip, cxskip"
+# BEGIN smai-aliases
+alias claude-skip='claude --dangerously-skip-permissions --effort max'
+alias ccskip='claude --dangerously-skip-permissions --effort max'
+alias codex-skip='codex --sandbox danger-full-access -c model_reasoning_effort="xhigh"'
+alias cxskip='codex --sandbox danger-full-access -c model_reasoning_effort="xhigh"'
+# END smai-aliases
+ALIASES
+    log_success "Aliases added: claude-skip, ccskip, codex-skip, cxskip"
 
     # --- npm/yarn/pnpm package.json scripts tab-completion ---
-    sed -i '/_node_package_scripts_complete/d' "$bashrc" 2>/dev/null
-    sed -i '/^complete -F _node_package_scripts_complete/d' "$bashrc" 2>/dev/null
-    sed -i '/^# Node package scripts tab-completion/d' "$bashrc" 2>/dev/null
+    # Remove old version completely (between markers)
+    sed -i '/^# BEGIN node-scripts-completion/,/^# END node-scripts-completion/d' "$bashrc" 2>/dev/null
+    # Also clean up legacy (non-marker) version if present
+    sed -i '/^# Node package scripts tab-completion/,/^complete -F _node_package_scripts_complete pnpm$/d' "$bashrc" 2>/dev/null
 
     # Install jq if missing (needed for tab-completion)
     if ! command_exists jq; then
@@ -2835,9 +2835,9 @@ setup_cli_shortcuts() {
     fi
 
     if command_exists jq; then
-        echo "" >> "$bashrc"
-        echo "# Node package scripts tab-completion (added by ubuntu-setup-script)" >> "$bashrc"
         cat >> "$bashrc" << 'NODECOMP'
+
+# BEGIN node-scripts-completion
 _node_package_scripts_complete() {
     local cur prev scripts
     cur="${COMP_WORDS[COMP_CWORD]}"
@@ -2862,6 +2862,7 @@ _node_package_scripts_complete() {
 complete -F _node_package_scripts_complete yarn
 complete -F _node_package_scripts_complete npm
 complete -F _node_package_scripts_complete pnpm
+# END node-scripts-completion
 NODECOMP
         log_success "Tab-completion added: npm/yarn/pnpm package.json scripts"
     fi

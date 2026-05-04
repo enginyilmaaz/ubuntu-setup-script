@@ -16,7 +16,7 @@
 #===============================================================================
 
 SCRIPT_VERSION="2.5.0"
-SCRIPT_REVISION="87"
+SCRIPT_REVISION="88"
 SCRIPT_DATE="2026-03-27"
 
 # NOTE: We intentionally do NOT use set -e here.
@@ -3013,7 +3013,15 @@ install_realvnc() {
     if [ "$DEB_ARCH" == "amd64" ]; then
         # AMD64: Use deb package
         local temp_file="/tmp/realvnc-connect.deb"
-        local download_url="https://downloads.realvnc.com/download/file/realvnc-connect/RealVNC-Connect-8.2.2-Linux-x64.deb"
+        local download_url
+
+        # Ubuntu 22.04 (Jammy): Use RealVNC 7.13.1 (8.x is not compatible)
+        if [ "$OS_VERSION" = "22.04" ] || [ "$OS_CODENAME" = "jammy" ]; then
+            download_url="https://downloads.realvnc.com/download/file/vnc.files/VNC-Server-7.13.1-Linux-x64.deb"
+            log_info "Ubuntu 22.04 detected - installing RealVNC 7.13.1 (compatible version)..."
+        else
+            download_url="https://downloads.realvnc.com/download/file/realvnc-connect/RealVNC-Connect-8.2.2-Linux-x64.deb"
+        fi
 
         if ! retry_curl_download "$download_url" "$temp_file" "Downloading RealVNC Connect deb"; then
             log_warning "RealVNC installation skipped after 3 failed attempts. Install manually from https://www.realvnc.com/en/connect/download/vnc/"
@@ -3021,6 +3029,14 @@ install_realvnc() {
             log_info "Installing RealVNC Connect..."
             sudo DEBIAN_FRONTEND=noninteractive apt-get install -y "$temp_file"
             rm -f "$temp_file"
+
+            # Ubuntu 22.04: Hold version to prevent auto-upgrade to incompatible 8.x
+            if [ "$OS_VERSION" = "22.04" ] || [ "$OS_CODENAME" = "jammy" ]; then
+                sudo apt-mark hold realvnc-vnc-server 2>/dev/null || true
+                sudo apt-mark hold realvnc-connect 2>/dev/null || true
+                log_info "RealVNC version held (apt-mark hold) to prevent upgrade to 8.x"
+            fi
+
             log_success "RealVNC Connect installed successfully"
         fi
     else

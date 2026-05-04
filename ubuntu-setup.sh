@@ -16,7 +16,7 @@
 #===============================================================================
 
 SCRIPT_VERSION="2.5.0"
-SCRIPT_REVISION="88"
+SCRIPT_REVISION="89"
 SCRIPT_DATE="2026-03-27"
 
 # NOTE: We intentionally do NOT use set -e here.
@@ -2824,48 +2824,10 @@ ALIASES
     log_success "Aliases added: claude-skip, ccskip, codex-skip, cxskip"
 
     # --- npm/yarn/pnpm package.json scripts tab-completion ---
-    # Remove old version completely (between markers)
+    # Clean up any leftover node-scripts-completion from previous versions
     sed -i '/^# BEGIN node-scripts-completion/,/^# END node-scripts-completion/d' "$bashrc" 2>/dev/null
-    # Also clean up legacy (non-marker) version if present
     sed -i '/^# Node package scripts tab-completion/,/^complete -F _node_package_scripts_complete pnpm$/d' "$bashrc" 2>/dev/null
-
-    # Install jq if missing (needed for tab-completion)
-    if ! command_exists jq; then
-        sudo apt-get install -y jq 2>/dev/null || true
-    fi
-
-    if command_exists jq; then
-        cat >> "$bashrc" << 'NODECOMP'
-
-# BEGIN node-scripts-completion
-_node_package_scripts_complete() {
-    local cur prev scripts
-    cur="${COMP_WORDS[COMP_CWORD]}"
-    prev="${COMP_WORDS[COMP_CWORD-1]}"
-    [ -f package.json ] || return 0
-    command -v jq >/dev/null 2>&1 || return 0
-    scripts="$(jq -r '.scripts // {} | keys | join(" ")' package.json 2>/dev/null)"
-    [ -z "$scripts" ] && return 0
-    case "${COMP_WORDS[0]}" in
-        yarn|pnpm)
-            if [ "$COMP_CWORD" -eq 1 ] || [ "$prev" = "run" ]; then
-                COMPREPLY=($(compgen -W "$scripts" -- "$cur"))
-            fi
-            ;;
-        npm)
-            if [ "$prev" = "run" ] || [ "$prev" = "run-script" ]; then
-                COMPREPLY=($(compgen -W "$scripts" -- "$cur"))
-            fi
-            ;;
-    esac
-}
-complete -F _node_package_scripts_complete yarn
-complete -F _node_package_scripts_complete npm
-complete -F _node_package_scripts_complete pnpm
-# END node-scripts-completion
-NODECOMP
-        log_success "Tab-completion added: npm/yarn/pnpm package.json scripts"
-    fi
+    sed -i '/COMP_WORDS\|COMPREPLY\|compgen\|local cur prev scripts\|_node_package_scripts_complete/d' "$bashrc" 2>/dev/null
 
     # Load aliases into current shell session immediately
     source "$bashrc" 2>/dev/null || true

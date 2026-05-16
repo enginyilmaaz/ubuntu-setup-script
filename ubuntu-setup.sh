@@ -16,7 +16,7 @@
 #===============================================================================
 
 SCRIPT_VERSION="2.5.0"
-SCRIPT_REVISION="89"
+SCRIPT_REVISION="90"
 SCRIPT_DATE="2026-03-27"
 
 # NOTE: We intentionally do NOT use set -e here.
@@ -45,6 +45,7 @@ INSTALL_POSTMAN=false
 INSTALL_FILEZILLA=false
 DO_CLI_LOGIN=false
 DO_REMOVE_FIREFOX=false
+DO_DEBLOAT=false
 
 # Special commands
 SHOW_BACKUP_GNOME=false
@@ -109,6 +110,9 @@ for arg in "$@"; do
             ;;
         --remove-firefox)
             DO_REMOVE_FIREFOX=true
+            ;;
+        --debloat)
+            DO_DEBLOAT=true
             ;;
         --show-backup-gnome)
             SHOW_BACKUP_GNOME=true
@@ -482,6 +486,7 @@ show_interactive_install_menu() {
     APP_NAMES+=("Git & GitHub CLI"); APP_DESCS+=("Git + GitHub CLI (gh)");               APP_VARS+=("INSTALL_GH")
     APP_NAMES+=("Postman");     APP_DESCS+=("Postman (API Testing Tool)");             APP_VARS+=("INSTALL_POSTMAN")
     APP_NAMES+=("FileZilla");   APP_DESCS+=("FileZilla (FTP/SFTP Client)");            APP_VARS+=("INSTALL_FILEZILLA")
+    APP_NAMES+=("Debloat");     APP_DESCS+=("Remove Bloatware (LibreOffice, games, etc.)"); APP_VARS+=("DO_DEBLOAT")
 
     # ARM Fix - only on Jetson devices (other ARM devices don't need snapd fix)
     if $IS_JETSON && command_exists snap; then
@@ -1247,6 +1252,9 @@ run_installations() {
 
     # Firefox removal
     if $DO_REMOVE_FIREFOX; then remove_firefox || handle_error "Firefox removal failed"; fi
+
+    # Debloat (remove unwanted preinstalled apps)
+    if $DO_DEBLOAT; then debloat_system || handle_error "Debloat failed"; fi
 
     # Print summary
     print_summary
@@ -2989,15 +2997,23 @@ install_realvnc() {
             log_warning "RealVNC installation skipped after 3 failed attempts. Install manually from https://www.realvnc.com/en/connect/download/vnc/"
         else
             log_info "Installing RealVNC Connect..."
-            sudo DEBIAN_FRONTEND=noninteractive apt-get install -y "$temp_file"
-            rm -f "$temp_file"
 
-            # Ubuntu 22.04: Hold version to prevent auto-upgrade to incompatible 8.x
+            # Ubuntu 22.04: Use dpkg -i to install EXACTLY this version (avoid apt pulling newer)
             if [ "$OS_VERSION" = "22.04" ] || [ "$OS_CODENAME" = "jammy" ]; then
-                sudo apt-mark hold realvnc-vnc-server 2>/dev/null || true
-                sudo apt-mark hold realvnc-connect 2>/dev/null || true
+                # Install dependencies separately first
+                sudo apt-get install -y libxtst6 libxdamage1 policykit-1 2>/dev/null || true
+                # Force install exact version with dpkg
+                sudo DEBIAN_FRONTEND=noninteractive dpkg -i "$temp_file" 2>/dev/null || \
+                    sudo DEBIAN_FRONTEND=noninteractive apt-get install -f -y --no-upgrade
+                # Re-install if apt-get -f upgraded it
+                sudo DEBIAN_FRONTEND=noninteractive dpkg -i --force-downgrade "$temp_file" 2>/dev/null || true
+                # Hold IMMEDIATELY to prevent any future upgrade
+                sudo apt-mark hold realvnc-vnc-server realvnc-connect realvnc-vnc-viewer 2>/dev/null || true
                 log_info "RealVNC version held (apt-mark hold) to prevent upgrade to 8.x"
+            else
+                sudo DEBIAN_FRONTEND=noninteractive apt-get install -y "$temp_file"
             fi
+            rm -f "$temp_file"
 
             log_success "RealVNC Connect installed successfully"
         fi
@@ -3331,6 +3347,65 @@ run_cli_logins() {
 }
 
 #===============================================================================
+# Debloat - Remove unwanted preinstalled bloatware apps
+#===============================================================================
+debloat_system() {
+    log_step "Debloat - Removing Bloatware"
+
+    # List of bloatware packages to remove
+    local bloatware=(
+        # LibreOffice complete
+        "libreoffice-*"
+        # GNOME Games
+        "gnome-mahjongg"
+        "aisleriot"
+        "gnome-mines"
+        "gnome-sudoku"
+        # Terminal/email/remote
+        "xterm"
+        "thunderbird"
+        "thunderbird-*"
+        "remmina"
+        "remmina-*"
+        # Misc apps
+        "gnome-todo"
+        "transmission-gtk"
+        "transmission-common"
+        "shotwell"
+        "shotwell-common"
+        "simple-scan"
+        # Utilities
+        "gnome-font-viewer"
+        "gucharmap"
+        "gnome-calendar"
+        "gnome-characters"
+    )
+
+    log_info "Removing bloatware packages..."
+    local removed_count=0
+    local skipped_count=0
+
+    for pkg in "${bloatware[@]}"; do
+        # Check if any package matching the pattern is installed
+        if dpkg -l "$pkg" 2>/dev/null | grep -q "^ii"; then
+            log_info "Removing $pkg..."
+            if sudo apt-get purge -y "$pkg" 2>/dev/null; then
+                removed_count=$((removed_count + 1))
+            fi
+        else
+            skipped_count=$((skipped_count + 1))
+        fi
+    done
+
+    # Clean up orphaned dependencies
+    log_info "Cleaning up orphaned dependencies..."
+    sudo apt-get autoremove --purge -y 2>/dev/null || true
+    sudo apt-get autoclean 2>/dev/null || true
+
+    log_success "Debloat completed: $removed_count package patterns removed, $skipped_count not installed"
+}
+
+#===============================================================================
 # 14. Firefox Removal (detects snap, deb, flatpak)
 #===============================================================================
 remove_firefox() {
@@ -3567,6 +3642,11 @@ print_summary() {
     # FileZilla
     show_selected $INSTALL_FILEZILLA "FileZilla" "$(command_exists filezilla && echo true || echo false)"
 
+    # Debloat
+    if $DO_DEBLOAT; then
+        echo -e "  ${GREEN}✓${NC} Debloat (bloatware removed)"
+    fi
+
     # RustDesk
     show_selected $INSTALL_RUSTDESK "RustDesk" "$(command_exists rustdesk && echo true || echo false)"
 
@@ -3607,7 +3687,7 @@ main() {
        $INSTALL_VSCODE || $INSTALL_PYTHON || $INSTALL_GNOME || \
        $INSTALL_DBEAVER || $INSTALL_VLC || $INSTALL_CLOUDFLARED || $INSTALL_DOCKER || \
        $INSTALL_CLAUDE || $INSTALL_GH || $INSTALL_POSTMAN || $INSTALL_FILEZILLA || \
-       $INSTALL_RUSTDESK || $DO_CLI_LOGIN || $DO_REMOVE_FIREFOX || $APPLY_JETSON_FIX; then
+       $INSTALL_RUSTDESK || $DO_CLI_LOGIN || $DO_REMOVE_FIREFOX || $APPLY_JETSON_FIX || $DO_DEBLOAT; then
         has_install=true
     fi
 

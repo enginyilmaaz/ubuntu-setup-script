@@ -16,7 +16,7 @@
 #===============================================================================
 
 SCRIPT_VERSION="2.5.0"
-SCRIPT_REVISION="90"
+SCRIPT_REVISION="91"
 SCRIPT_DATE="2026-03-27"
 
 # NOTE: We intentionally do NOT use set -e here.
@@ -3352,57 +3352,199 @@ run_cli_logins() {
 debloat_system() {
     log_step "Debloat - Removing Bloatware"
 
-    # List of bloatware packages to remove
-    local bloatware=(
-        # LibreOffice complete
-        "libreoffice-*"
-        # GNOME Games
-        "gnome-mahjongg"
-        "aisleriot"
-        "gnome-mines"
-        "gnome-sudoku"
-        # Terminal/email/remote
-        "xterm"
-        "thunderbird"
-        "thunderbird-*"
-        "remmina"
-        "remmina-*"
-        # Misc apps
-        "gnome-todo"
-        "transmission-gtk"
-        "transmission-common"
-        "shotwell"
-        "shotwell-common"
-        "simple-scan"
-        # Utilities
-        "gnome-font-viewer"
-        "gucharmap"
-        "gnome-calendar"
-        "gnome-characters"
-    )
+    local -a BLOAT_NAMES=()
+    local -a BLOAT_DESCS=()
+    local -a BLOAT_PKGS=()
 
-    log_info "Removing bloatware packages..."
-    local removed_count=0
-    local skipped_count=0
+    # Check each bloatware group - only add if installed
+    if dpkg -l libreoffice-common 2>/dev/null | grep -q "^ii"; then
+        BLOAT_NAMES+=("LibreOffice");       BLOAT_DESCS+=("Office Suite (Writer, Calc, Impress, etc.)"); BLOAT_PKGS+=("libreoffice-*")
+    fi
+    if dpkg -l gnome-mahjongg 2>/dev/null | grep -q "^ii"; then
+        BLOAT_NAMES+=("Mahjongg");          BLOAT_DESCS+=("GNOME Mahjongg Game");                       BLOAT_PKGS+=("gnome-mahjongg")
+    fi
+    if dpkg -l aisleriot 2>/dev/null | grep -q "^ii"; then
+        BLOAT_NAMES+=("Solitaire");         BLOAT_DESCS+=("AisleRiot Solitaire");                       BLOAT_PKGS+=("aisleriot")
+    fi
+    if dpkg -l gnome-mines 2>/dev/null | grep -q "^ii"; then
+        BLOAT_NAMES+=("Mines");             BLOAT_DESCS+=("GNOME Mines Game");                          BLOAT_PKGS+=("gnome-mines")
+    fi
+    if dpkg -l gnome-sudoku 2>/dev/null | grep -q "^ii"; then
+        BLOAT_NAMES+=("Sudoku");            BLOAT_DESCS+=("GNOME Sudoku Game");                         BLOAT_PKGS+=("gnome-sudoku")
+    fi
+    if dpkg -l xterm 2>/dev/null | grep -q "^ii"; then
+        BLOAT_NAMES+=("XTerm");             BLOAT_DESCS+=("Legacy X Terminal Emulator");                BLOAT_PKGS+=("xterm")
+    fi
+    if dpkg -l thunderbird 2>/dev/null | grep -q "^ii"; then
+        BLOAT_NAMES+=("Thunderbird");       BLOAT_DESCS+=("Mozilla Thunderbird Email Client");          BLOAT_PKGS+=("thunderbird thunderbird-*")
+    fi
+    if dpkg -l remmina 2>/dev/null | grep -q "^ii"; then
+        BLOAT_NAMES+=("Remmina");           BLOAT_DESCS+=("Remmina Remote Desktop Client");             BLOAT_PKGS+=("remmina remmina-*")
+    fi
+    if dpkg -l gnome-todo 2>/dev/null | grep -q "^ii"; then
+        BLOAT_NAMES+=("GNOME To Do");       BLOAT_DESCS+=("GNOME To Do App");                           BLOAT_PKGS+=("gnome-todo")
+    fi
+    if dpkg -l transmission-gtk 2>/dev/null | grep -q "^ii"; then
+        BLOAT_NAMES+=("Transmission");      BLOAT_DESCS+=("Transmission BitTorrent Client");            BLOAT_PKGS+=("transmission-gtk transmission-common")
+    fi
+    if dpkg -l shotwell 2>/dev/null | grep -q "^ii"; then
+        BLOAT_NAMES+=("Shotwell");          BLOAT_DESCS+=("Shotwell Photo Manager");                    BLOAT_PKGS+=("shotwell shotwell-common")
+    fi
+    if dpkg -l simple-scan 2>/dev/null | grep -q "^ii"; then
+        BLOAT_NAMES+=("Document Scanner");  BLOAT_DESCS+=("Simple Scan Document Scanner");              BLOAT_PKGS+=("simple-scan")
+    fi
+    if dpkg -l gnome-font-viewer 2>/dev/null | grep -q "^ii"; then
+        BLOAT_NAMES+=("Fonts");             BLOAT_DESCS+=("GNOME Font Viewer");                         BLOAT_PKGS+=("gnome-font-viewer")
+    fi
+    if dpkg -l gucharmap 2>/dev/null | grep -q "^ii"; then
+        BLOAT_NAMES+=("Characters");        BLOAT_DESCS+=("Character Map (gucharmap)");                 BLOAT_PKGS+=("gucharmap")
+    fi
+    if dpkg -l gnome-characters 2>/dev/null | grep -q "^ii"; then
+        BLOAT_NAMES+=("GNOME Characters");  BLOAT_DESCS+=("GNOME Characters App");                      BLOAT_PKGS+=("gnome-characters")
+    fi
+    if dpkg -l gnome-calendar 2>/dev/null | grep -q "^ii"; then
+        BLOAT_NAMES+=("Calendar");          BLOAT_DESCS+=("GNOME Calendar");                            BLOAT_PKGS+=("gnome-calendar")
+    fi
 
-    for pkg in "${bloatware[@]}"; do
-        # Check if any package matching the pattern is installed
-        if dpkg -l "$pkg" 2>/dev/null | grep -q "^ii"; then
-            log_info "Removing $pkg..."
-            if sudo apt-get purge -y "$pkg" 2>/dev/null; then
-                removed_count=$((removed_count + 1))
-            fi
-        else
-            skipped_count=$((skipped_count + 1))
-        fi
+    local TOTAL_BLOAT=${#BLOAT_NAMES[@]}
+
+    if [ "$TOTAL_BLOAT" -eq 0 ]; then
+        log_success "No bloatware found - system is already clean!"
+        return 0
+    fi
+
+    local -a BSELECTED=()
+    for ((bi=0; bi<TOTAL_BLOAT; bi++)); do
+        BSELECTED+=(1)
     done
+    local bcursor=0
 
-    # Clean up orphaned dependencies
-    log_info "Cleaning up orphaned dependencies..."
-    sudo apt-get autoremove --purge -y 2>/dev/null || true
-    sudo apt-get autoclean 2>/dev/null || true
+    tput civis 2>/dev/null || true
 
-    log_success "Debloat completed: $removed_count package patterns removed, $skipped_count not installed"
+    while true; do
+        clear
+        echo -e "${CYAN}╔═══════════════════════════════════════════════════════════════════════════╗${NC}"
+        echo -e "${CYAN}║                    ${RED}Debloat - Remove Bloatware${CYAN}                             ║${NC}"
+        echo -e "${CYAN}╚═══════════════════════════════════════════════════════════════════════════╝${NC}"
+        echo ""
+        echo -e "${YELLOW}  Found ${TOTAL_BLOAT} bloatware package(s) installed. Deselect any you want to keep.${NC}"
+        echo ""
+        echo -e "${GREEN}═══════════════════════════════════════════════════════════════${NC}"
+        echo -e "${GREEN}     Use ↑↓ arrows to navigate, SPACE to toggle${NC}"
+        echo -e "${GREEN}═══════════════════════════════════════════════════════════════${NC}"
+        echo ""
+
+        local bi
+        for ((bi=0; bi<TOTAL_BLOAT; bi++)); do
+            local bname="${BLOAT_NAMES[$bi]}"
+            local bdesc="${BLOAT_DESCS[$bi]}"
+            local bnum=$(printf "%2d" $((bi + 1)))
+            local bcheck="[ ]"
+            local bline="   "
+
+            if [ "${BSELECTED[$bi]}" = "1" ]; then
+                bcheck="${RED}[✗]${NC}"
+            fi
+            if [ "$bcursor" = "$bi" ]; then
+                bline=" ${CYAN}▶${NC}"
+            fi
+            if [ "${BSELECTED[$bi]}" = "1" ]; then
+                echo -e "${bline} ${BLUE}[$bnum]${NC} $bcheck ${RED}$bname${NC} - $bdesc"
+            else
+                echo -e "${bline} ${BLUE}[$bnum]${NC} $bcheck $bname - $bdesc"
+            fi
+        done
+
+        echo ""
+        echo -e "${YELLOW}───────────────────────────────────────────────────────────────${NC}"
+
+        local bcount=0
+        local bsel_names=""
+        for ((bi=0; bi<TOTAL_BLOAT; bi++)); do
+            if [ "${BSELECTED[$bi]}" = "1" ]; then
+                bcount=$((bcount + 1))
+                bsel_names="${bsel_names}${BLOAT_NAMES[$bi]}, "
+            fi
+        done
+
+        if [ $bcount -gt 0 ]; then
+            bsel_names="${bsel_names%, }"
+            echo -e "  ${RED}Removing ($bcount):${NC} $bsel_names"
+        else
+            echo -e "  ${GREEN}Nothing selected for removal${NC}"
+        fi
+
+        echo -e "${YELLOW}───────────────────────────────────────────────────────────────${NC}"
+        echo ""
+        echo -e "  ${CYAN}CONTROLS:${NC}  ${YELLOW}↑↓${NC}=Move  ${YELLOW}SPACE${NC}=Toggle  ${YELLOW}a${NC}=All  ${YELLOW}n${NC}=None  ${GREEN}c${NC}=Remove  ${RED}q${NC}=Skip"
+        echo ""
+
+        IFS= read -rsn1 bkey < /dev/tty 2>/dev/null || bkey=""
+        if [ "$bkey" = $'\x1b' ]; then
+            read -rsn2 -t 0.1 brest < /dev/tty 2>/dev/null || brest=""
+            bkey="${bkey}${brest}"
+        fi
+
+        case "$bkey" in
+            $'\x1b[A'|'k')
+                if [ $bcursor -gt 0 ]; then bcursor=$((bcursor - 1)); fi
+                ;;
+            $'\x1b[B'|'j')
+                if [ $bcursor -lt $((TOTAL_BLOAT - 1)) ]; then bcursor=$((bcursor + 1)); fi
+                ;;
+            ' ')
+                if [ "${BSELECTED[$bcursor]}" = "1" ]; then
+                    BSELECTED[$bcursor]=0
+                else
+                    BSELECTED[$bcursor]=1
+                fi
+                ;;
+            'a'|'A')
+                for ((bi=0; bi<TOTAL_BLOAT; bi++)); do BSELECTED[$bi]=1; done
+                ;;
+            'n'|'N')
+                for ((bi=0; bi<TOTAL_BLOAT; bi++)); do BSELECTED[$bi]=0; done
+                ;;
+            'c'|'C'|'')
+                tput cnorm 2>/dev/null || true
+                if [ $bcount -eq 0 ]; then
+                    log_info "No packages selected for removal, skipping debloat."
+                    return 0
+                fi
+                echo ""
+                log_info "Removing $bcount selected bloatware package(s)..."
+                local removed_count=0
+                for ((bi=0; bi<TOTAL_BLOAT; bi++)); do
+                    if [ "${BSELECTED[$bi]}" = "1" ]; then
+                        log_info "Removing ${BLOAT_NAMES[$bi]}..."
+                        # shellcheck disable=SC2086
+                        sudo apt-get purge -y ${BLOAT_PKGS[$bi]} 2>/dev/null || true
+                        removed_count=$((removed_count + 1))
+                    fi
+                done
+                sudo apt-get autoremove --purge -y 2>/dev/null || true
+                sudo apt-get autoclean 2>/dev/null || true
+                log_success "Debloat completed: $removed_count package(s) removed"
+                return 0
+                ;;
+            'q'|'Q')
+                tput cnorm 2>/dev/null || true
+                log_info "Debloat skipped."
+                return 0
+                ;;
+            [1-9])
+                local bnum_key=$((bkey - 1))
+                if [ $bnum_key -lt $TOTAL_BLOAT ]; then
+                    if [ "${BSELECTED[$bnum_key]}" = "1" ]; then
+                        BSELECTED[$bnum_key]=0
+                    else
+                        BSELECTED[$bnum_key]=1
+                    fi
+                    bcursor=$bnum_key
+                fi
+                ;;
+        esac
+    done
 }
 
 #===============================================================================

@@ -16,7 +16,7 @@
 #===============================================================================
 
 SCRIPT_VERSION="2.5.0"
-SCRIPT_REVISION="91"
+SCRIPT_REVISION="92"
 SCRIPT_DATE="2026-03-27"
 
 # NOTE: We intentionally do NOT use set -e here.
@@ -2980,76 +2980,55 @@ install_realvnc() {
         fi
     fi
 
-    if [ "$DEB_ARCH" == "amd64" ]; then
-        # AMD64: Use deb package
-        local temp_file="/tmp/realvnc-connect.deb"
-        local download_url
+    local temp_file="/tmp/realvnc-connect.deb"
+    local download_url
 
-        # Ubuntu 22.04 (Jammy): Use RealVNC 7.13.1 (8.x is not compatible)
+    if [ "$DEB_ARCH" == "amd64" ]; then
         if [ "$OS_VERSION" = "22.04" ] || [ "$OS_CODENAME" = "jammy" ]; then
             download_url="https://downloads.realvnc.com/download/file/vnc.files/VNC-Server-7.13.1-Linux-x64.deb"
-            log_info "Ubuntu 22.04 detected - installing RealVNC 7.13.1 (compatible version)..."
+            log_info "Ubuntu 22.04 (x64) - installing RealVNC 7.13.1..."
         else
             download_url="https://downloads.realvnc.com/download/file/realvnc-connect/RealVNC-Connect-8.2.2-Linux-x64.deb"
         fi
-
-        if ! retry_curl_download "$download_url" "$temp_file" "Downloading RealVNC Connect deb"; then
-            log_warning "RealVNC installation skipped after 3 failed attempts. Install manually from https://www.realvnc.com/en/connect/download/vnc/"
+    elif [ "$DEB_ARCH" == "arm64" ]; then
+        if [ "$OS_VERSION" = "22.04" ] || [ "$OS_CODENAME" = "jammy" ]; then
+            download_url="https://downloads.realvnc.com/download/file/vnc.files/VNC-Server-7.13.1-Linux-ARM64.deb"
+            log_info "Ubuntu 22.04 (ARM64) - installing RealVNC 7.13.1..."
         else
-            log_info "Installing RealVNC Connect..."
-
-            # Ubuntu 22.04: Use dpkg -i to install EXACTLY this version (avoid apt pulling newer)
-            if [ "$OS_VERSION" = "22.04" ] || [ "$OS_CODENAME" = "jammy" ]; then
-                # Install dependencies separately first
-                sudo apt-get install -y libxtst6 libxdamage1 policykit-1 2>/dev/null || true
-                # Force install exact version with dpkg
-                sudo DEBIAN_FRONTEND=noninteractive dpkg -i "$temp_file" 2>/dev/null || \
-                    sudo DEBIAN_FRONTEND=noninteractive apt-get install -f -y --no-upgrade
-                # Re-install if apt-get -f upgraded it
-                sudo DEBIAN_FRONTEND=noninteractive dpkg -i --force-downgrade "$temp_file" 2>/dev/null || true
-                # Hold IMMEDIATELY to prevent any future upgrade
-                sudo apt-mark hold realvnc-vnc-server realvnc-connect realvnc-vnc-viewer 2>/dev/null || true
-                log_info "RealVNC version held (apt-mark hold) to prevent upgrade to 8.x"
-            else
-                sudo DEBIAN_FRONTEND=noninteractive apt-get install -y "$temp_file"
-            fi
-            rm -f "$temp_file"
-
-            log_success "RealVNC Connect installed successfully"
+            download_url="https://downloads.realvnc.com/download/file/vnc.files/VNC-Server-7.17.0-Linux-ARM64.deb"
+            log_info "ARM64 - installing RealVNC 7.17.0..."
         fi
+    elif [ "$DEB_ARCH" == "armhf" ]; then
+        download_url="https://downloads.realvnc.com/download/file/vnc.files/VNC-Server-7.17.0-Linux-ARM.deb"
+        log_info "ARM (armhf) - installing RealVNC 7.17.0..."
     else
-        # ARM64: Use tar.gz installer
-        local temp_file="/tmp/realvnc-connect.tar.gz"
-        local temp_dir="/tmp/realvnc-installer"
-        local download_url="https://downloads.realvnc.com/download/file/vnc.files/VNC-Connect-Installer-2.3.0-Linux-ARM64.tar.gz"
+        log_warning "Unsupported architecture ($DEB_ARCH) for RealVNC. Install manually from https://www.realvnc.com/en/connect/download/vnc/"
+        return 1
+    fi
 
-        if ! retry_curl_download "$download_url" "$temp_file" "Downloading RealVNC Connect tar.gz"; then
-            log_warning "RealVNC installation skipped after 3 failed attempts. Install manually from https://www.realvnc.com/en/connect/download/vnc/"
+    if ! retry_curl_download "$download_url" "$temp_file" "Downloading RealVNC Connect deb"; then
+        log_warning "RealVNC installation skipped after 3 failed attempts. Install manually from https://www.realvnc.com/en/connect/download/vnc/"
+    else
+        log_info "Installing RealVNC Connect..."
+
+        if [ "$OS_VERSION" = "22.04" ] || [ "$OS_CODENAME" = "jammy" ]; then
+            sudo apt-get install -y libxtst6 libxdamage1 policykit-1 2>/dev/null || true
+            sudo DEBIAN_FRONTEND=noninteractive dpkg -i "$temp_file" 2>/dev/null || \
+                sudo DEBIAN_FRONTEND=noninteractive apt-get install -f -y --no-upgrade
+            sudo DEBIAN_FRONTEND=noninteractive dpkg -i --force-downgrade "$temp_file" 2>/dev/null || true
+            sudo apt-mark hold realvnc-vnc-server realvnc-connect realvnc-vnc-viewer 2>/dev/null || true
+            log_info "RealVNC version held (apt-mark hold) to prevent upgrade"
         else
-            log_info "Extracting and installing RealVNC Connect..."
-            mkdir -p "$temp_dir"
-            tar -xzf "$temp_file" -C "$temp_dir"
-
-            # Run installer
-            cd "$temp_dir"
-            if [ -f "vncinstall" ]; then
-                sudo ./vncinstall
-            elif [ -f "VNC-Connect-Installer"* ]; then
-                sudo ./VNC-Connect-Installer*
-            else
-                # Find and run any installer script
-                local installer=$(find . -maxdepth 1 -type f -executable | head -1)
-                if [ -n "$installer" ]; then
-                    sudo "$installer"
-                else
-                    log_warning "Could not find RealVNC installer"
-                fi
-            fi
-            cd - > /dev/null
-
-            rm -rf "$temp_file" "$temp_dir"
-            log_success "RealVNC Connect installed successfully"
+            sudo DEBIAN_FRONTEND=noninteractive dpkg -i "$temp_file" 2>/dev/null || \
+                sudo DEBIAN_FRONTEND=noninteractive apt-get install -f -y
         fi
+        rm -f "$temp_file"
+
+        # Enable and start VNC service
+        sudo systemctl enable vncserver-x11-serviced.service 2>/dev/null || true
+        sudo systemctl start vncserver-x11-serviced.service 2>/dev/null || true
+
+        log_success "RealVNC Connect installed successfully"
     fi
 
     # Disable Wayland for VNC compatibility

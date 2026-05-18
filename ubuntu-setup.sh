@@ -16,7 +16,7 @@
 #===============================================================================
 
 SCRIPT_VERSION="2.5.0"
-SCRIPT_REVISION="95"
+SCRIPT_REVISION="96"
 SCRIPT_DATE="2026-03-27"
 
 # NOTE: We intentionally do NOT use set -e here.
@@ -2206,67 +2206,308 @@ install_gnome_extensions() {
         return
     fi
 
-    log_info "Installing GNOME Shell Extensions packages..."
+    # Interactive sub-menu for GNOME tweaks
+    local -a TWEAK_NAMES=()
+    local -a TWEAK_DESCS=()
+    local -a TWEAK_KEYS=()
 
-    # Install Extension Manager (modern way to manage extensions)
-    if package_installed gnome-shell-extension-manager; then
-        log_warning "Extension Manager already installed, skipping..."
-    else
-        sudo apt-get install -y gnome-shell-extension-manager 2>/dev/null || \
-        log_warning "Extension Manager not available in repositories"
+    TWEAK_NAMES+=("Extensions");        TWEAK_DESCS+=("Extension Manager + Shell Extensions + AppIndicator");  TWEAK_KEYS+=("DO_GNOME_EXTENSIONS")
+    TWEAK_NAMES+=("GNOME Tweaks");      TWEAK_DESCS+=("GNOME Tweaks App + Browser Connector");                 TWEAK_KEYS+=("DO_GNOME_TWEAKS_APP")
+    TWEAK_NAMES+=("Dash to Dock");      TWEAK_DESCS+=("Dock settings, single workspace, performance mode");    TWEAK_KEYS+=("DO_GNOME_DOCK")
+    TWEAK_NAMES+=("Script Launcher");   TWEAK_DESCS+=("Right-click context menu (Claude, Codex, VS Code)");    TWEAK_KEYS+=("DO_GNOME_SCRIPT")
+    TWEAK_NAMES+=("Disable Wayland");   TWEAK_DESCS+=("Switch to X11 (VNC/RDP compatibility)");                TWEAK_KEYS+=("DO_GNOME_WAYLAND")
+    TWEAK_NAMES+=("OpenSSH Server");    TWEAK_DESCS+=("Install + auto-start SSH server (port 22)");            TWEAK_KEYS+=("DO_GNOME_SSH")
+    TWEAK_NAMES+=("RDP Server");        TWEAK_DESCS+=("Install + auto-start xrdp (port 3389)");                TWEAK_KEYS+=("DO_GNOME_RDP")
+    TWEAK_NAMES+=("CLI Aliases");       TWEAK_DESCS+=("Bash aliases (claude-skip, codex-skip, etc.)");         TWEAK_KEYS+=("DO_GNOME_ALIASES")
+    TWEAK_NAMES+=("English Language");  TWEAK_DESCS+=("Set system language to English (US)");                   TWEAK_KEYS+=("DO_GNOME_ENGLISH")
+    TWEAK_NAMES+=("Screen Off: Never"); TWEAK_DESCS+=("Disable screen timeout + auto suspend");                TWEAK_KEYS+=("DO_GNOME_SCREEN")
+    TWEAK_NAMES+=("Show Hidden Files"); TWEAK_DESCS+=("Show hidden files in file manager");                    TWEAK_KEYS+=("DO_GNOME_HIDDEN")
+    TWEAK_NAMES+=("Keyboard: Turkish Q"); TWEAK_DESCS+=("Add Turkish Q keyboard layout");                      TWEAK_KEYS+=("DO_GNOME_KB_TR")
+    TWEAK_NAMES+=("Keyboard: English Q"); TWEAK_DESCS+=("Add English (US) keyboard layout");                   TWEAK_KEYS+=("DO_GNOME_KB_EN")
+
+    local TOTAL_TWEAKS=${#TWEAK_NAMES[@]}
+    local -a TSELECTED=()
+    for ((ti=0; ti<TOTAL_TWEAKS; ti++)); do
+        TSELECTED+=(1)
+    done
+    local tcursor=0
+
+    tput civis 2>/dev/null || true
+
+    while true; do
+        clear
+        echo -e "${CYAN}╔═══════════════════════════════════════════════════════════════════════════╗${NC}"
+        echo -e "${CYAN}║                    ${GREEN}GNOME Tweaks - Select Options${CYAN}                          ║${NC}"
+        echo -e "${CYAN}╚═══════════════════════════════════════════════════════════════════════════╝${NC}"
+        echo ""
+        echo -e "${GREEN}═══════════════════════════════════════════════════════════════${NC}"
+        echo -e "${GREEN}     Use ↑↓ arrows to navigate, SPACE to toggle${NC}"
+        echo -e "${GREEN}═══════════════════════════════════════════════════════════════${NC}"
+        echo ""
+
+        local ti
+        for ((ti=0; ti<TOTAL_TWEAKS; ti++)); do
+            local tname="${TWEAK_NAMES[$ti]}"
+            local tdesc="${TWEAK_DESCS[$ti]}"
+            local tnum=$(printf "%2d" $((ti + 1)))
+            local tcheck="[ ]"
+            local tline="   "
+
+            if [ "${TSELECTED[$ti]}" = "1" ]; then
+                tcheck="${GREEN}[✓]${NC}"
+            fi
+            if [ "$tcursor" = "$ti" ]; then
+                tline=" ${CYAN}▶${NC}"
+            fi
+            if [ "${TSELECTED[$ti]}" = "1" ]; then
+                echo -e "${tline} ${BLUE}[$tnum]${NC} $tcheck ${GREEN}$tname${NC} - $tdesc"
+            else
+                echo -e "${tline} ${BLUE}[$tnum]${NC} $tcheck $tname - $tdesc"
+            fi
+        done
+
+        echo ""
+        echo -e "${YELLOW}───────────────────────────────────────────────────────────────${NC}"
+
+        local tcount=0
+        local tsel_names=""
+        for ((ti=0; ti<TOTAL_TWEAKS; ti++)); do
+            if [ "${TSELECTED[$ti]}" = "1" ]; then
+                tcount=$((tcount + 1))
+                tsel_names="${tsel_names}${TWEAK_NAMES[$ti]}, "
+            fi
+        done
+
+        if [ $tcount -gt 0 ]; then
+            tsel_names="${tsel_names%, }"
+            echo -e "  ${GREEN}Selected ($tcount):${NC} $tsel_names"
+        else
+            echo -e "  ${YELLOW}Selected: None${NC}"
+        fi
+
+        echo -e "${YELLOW}───────────────────────────────────────────────────────────────${NC}"
+        echo ""
+        echo -e "  ${CYAN}CONTROLS:${NC}  ${YELLOW}↑↓${NC}=Move  ${YELLOW}SPACE${NC}=Toggle  ${YELLOW}a${NC}=All  ${YELLOW}n${NC}=None  ${GREEN}c${NC}=Confirm  ${RED}q${NC}=Skip"
+        echo ""
+
+        IFS= read -rsn1 tkey < /dev/tty 2>/dev/null || tkey=""
+        if [ "$tkey" = $'\x1b' ]; then
+            read -rsn2 -t 0.1 trest < /dev/tty 2>/dev/null || trest=""
+            tkey="${tkey}${trest}"
+        fi
+
+        case "$tkey" in
+            $'\x1b[A'|'k')
+                if [ $tcursor -gt 0 ]; then tcursor=$((tcursor - 1)); fi
+                ;;
+            $'\x1b[B'|'j')
+                if [ $tcursor -lt $((TOTAL_TWEAKS - 1)) ]; then tcursor=$((tcursor + 1)); fi
+                ;;
+            ' ')
+                if [ "${TSELECTED[$tcursor]}" = "1" ]; then
+                    TSELECTED[$tcursor]=0
+                else
+                    TSELECTED[$tcursor]=1
+                fi
+                ;;
+            'a'|'A')
+                for ((ti=0; ti<TOTAL_TWEAKS; ti++)); do TSELECTED[$ti]=1; done
+                ;;
+            'n'|'N')
+                for ((ti=0; ti<TOTAL_TWEAKS; ti++)); do TSELECTED[$ti]=0; done
+                ;;
+            'c'|'C'|'')
+                tput cnorm 2>/dev/null || true
+                if [ $tcount -eq 0 ]; then
+                    log_info "No tweaks selected, skipping GNOME setup."
+                    return 0
+                fi
+                break
+                ;;
+            'q'|'Q')
+                tput cnorm 2>/dev/null || true
+                log_info "GNOME Tweaks skipped."
+                return 0
+                ;;
+            [1-9])
+                local tnum_key=$((tkey - 1))
+                if [ $tnum_key -lt $TOTAL_TWEAKS ]; then
+                    if [ "${TSELECTED[$tnum_key]}" = "1" ]; then
+                        TSELECTED[$tnum_key]=0
+                    else
+                        TSELECTED[$tnum_key]=1
+                    fi
+                    tcursor=$tnum_key
+                fi
+                ;;
+        esac
+    done
+
+    # Map selections to flags
+    local DO_GNOME_EXTENSIONS=false DO_GNOME_TWEAKS_APP=false DO_GNOME_DOCK=false
+    local DO_GNOME_SCRIPT=false DO_GNOME_WAYLAND=false DO_GNOME_SSH=false
+    local DO_GNOME_RDP=false DO_GNOME_ALIASES=false DO_GNOME_ENGLISH=false
+    local DO_GNOME_SCREEN=false DO_GNOME_HIDDEN=false DO_GNOME_KB_TR=false DO_GNOME_KB_EN=false
+
+    for ((ti=0; ti<TOTAL_TWEAKS; ti++)); do
+        if [ "${TSELECTED[$ti]}" = "1" ]; then
+            eval "${TWEAK_KEYS[$ti]}=true"
+        fi
+    done
+
+    # 1. Extensions (Extension Manager + Shell Extensions + AppIndicator)
+    if $DO_GNOME_EXTENSIONS; then
+        log_info "Installing GNOME Shell Extensions packages..."
+
+        if package_installed gnome-shell-extension-manager; then
+            log_warning "Extension Manager already installed, skipping..."
+        else
+            sudo apt-get install -y gnome-shell-extension-manager 2>/dev/null || \
+            log_warning "Extension Manager not available in repositories"
+        fi
+
+        if package_installed gnome-shell-extensions; then
+            log_warning "GNOME Shell Extensions already installed, skipping..."
+        else
+            sudo apt-get install -y gnome-shell-extensions
+            log_success "GNOME Shell Extensions installed"
+        fi
+
+        if package_installed gnome-browser-connector; then
+            log_warning "GNOME Browser Connector already installed, skipping..."
+        else
+            sudo apt-get install -y gnome-browser-connector 2>/dev/null || \
+            sudo apt-get install -y chrome-gnome-shell 2>/dev/null || \
+            log_warning "Browser connector not available"
+        fi
+
+        log_info "Installing AppIndicator extension (system tray)..."
+        if ! package_installed gnome-shell-extension-appindicator; then
+            sudo apt-get install -y gnome-shell-extension-appindicator 2>/dev/null || \
+            log_warning "AppIndicator package not available"
+        fi
+        force_enable_extension "appindicatorsupport@rgcjonas.gmail.com"
+        force_enable_extension "ubuntu-appindicators@ubuntu.com"
+        log_success "AppIndicator (system tray) enabled"
     fi
 
-    # Install GNOME Shell Extensions package (includes common extensions)
-    if package_installed gnome-shell-extensions; then
-        log_warning "GNOME Shell Extensions already installed, skipping..."
-    else
-        sudo apt-get install -y gnome-shell-extensions
-        log_success "GNOME Shell Extensions installed"
+    # 2. GNOME Tweaks app
+    if $DO_GNOME_TWEAKS_APP; then
+        if package_installed gnome-tweaks; then
+            log_warning "GNOME Tweaks already installed, skipping..."
+        else
+            sudo apt-get install -y gnome-tweaks
+            log_success "GNOME Tweaks installed"
+        fi
     fi
 
-    # Install browser connector for extensions.gnome.org
-    if package_installed gnome-browser-connector; then
-        log_warning "GNOME Browser Connector already installed, skipping..."
-    else
-        sudo apt-get install -y gnome-browser-connector 2>/dev/null || \
-        sudo apt-get install -y chrome-gnome-shell 2>/dev/null || \
-        log_warning "Browser connector not available"
+    # 3. Dash to Dock + workspace + power + settings
+    if $DO_GNOME_DOCK; then
+        configure_dash_to_dock
     fi
 
-    # Install gnome-tweaks for additional customization
-    if package_installed gnome-tweaks; then
-        log_warning "GNOME Tweaks already installed, skipping..."
-    else
-        sudo apt-get install -y gnome-tweaks
-        log_success "GNOME Tweaks installed"
+    # 4. Script Launcher (Nautilus right-click)
+    if $DO_GNOME_SCRIPT; then
+        install_gnome_script_launcher
     fi
 
-    # Install AppIndicator extension (system tray support)
-    log_info "Installing AppIndicator extension (system tray)..."
-    if package_installed gnome-shell-extension-appindicator; then
-        log_warning "AppIndicator already installed"
-    else
-        sudo apt-get install -y gnome-shell-extension-appindicator 2>/dev/null || \
-        log_warning "AppIndicator package not available"
+    # 5. Screen timeout
+    if $DO_GNOME_SCREEN; then
+        log_info "Disabling screen timeout (set to never)..."
+        gsettings set org.gnome.desktop.session idle-delay 0
+        gsettings set org.gnome.desktop.screensaver lock-enabled false
+        gsettings set org.gnome.desktop.screensaver idle-activation-enabled false
+        gsettings set org.gnome.settings-daemon.plugins.power sleep-inactive-ac-type 'nothing'
+        gsettings set org.gnome.settings-daemon.plugins.power sleep-inactive-battery-type 'nothing'
+        log_success "Screen timeout disabled (never turns off)"
     fi
-    force_enable_extension "appindicatorsupport@rgcjonas.gmail.com"
-    force_enable_extension "ubuntu-appindicators@ubuntu.com"
-    log_success "AppIndicator (system tray) enabled"
 
-    # Install Script Launcher GNOME extension (custom fork)
-    install_gnome_script_launcher
+    # 6. Show hidden files
+    if $DO_GNOME_HIDDEN; then
+        log_info "Enabling show hidden files in file manager..."
+        gsettings set org.gtk.Settings.FileChooser show-hidden true 2>/dev/null
+        gsettings set org.gtk.gtk4.Settings.FileChooser show-hidden true 2>/dev/null
+        dconf write /org/gtk/settings/file-chooser/show-hidden true 2>/dev/null
+        dconf write /org/gtk/gtk4/settings/file-chooser/show-hidden true 2>/dev/null
+        gsettings set org.gnome.nautilus.preferences show-hidden-files true 2>/dev/null
+        log_success "Show hidden files enabled"
+    fi
 
-    log_success "GNOME Shell Extensions setup completed"
-    log_info "You can manage extensions via:"
-    echo "  - Extension Manager app"
-    echo "  - https://extensions.gnome.org (with browser)"
-    echo "  - gnome-tweaks"
+    # 7. English language
+    if $DO_GNOME_ENGLISH; then
+        log_info "Setting system language to English (US)..."
+        sudo apt-get install -y language-pack-en language-pack-en-base language-pack-gnome-en language-pack-gnome-en-base 2>/dev/null || true
+        sudo locale-gen en_US.UTF-8 2>/dev/null || true
+        sudo update-locale \
+            LANG=en_US.UTF-8 LANGUAGE=en_US:en LC_ALL=en_US.UTF-8 \
+            LC_CTYPE=en_US.UTF-8 LC_NUMERIC=en_US.UTF-8 LC_TIME=en_US.UTF-8 \
+            LC_COLLATE=en_US.UTF-8 LC_MONETARY=en_US.UTF-8 LC_MESSAGES=en_US.UTF-8 \
+            LC_PAPER=en_US.UTF-8 LC_NAME=en_US.UTF-8 LC_ADDRESS=en_US.UTF-8 \
+            LC_TELEPHONE=en_US.UTF-8 LC_MEASUREMENT=en_US.UTF-8 LC_IDENTIFICATION=en_US.UTF-8 2>/dev/null || true
+        sudo localectl set-locale LANG=en_US.UTF-8 LANGUAGE=en_US:en 2>/dev/null || true
+        dconf write /system/locale/region "'en_US.UTF-8'" 2>/dev/null || true
+        gsettings set org.gnome.system.locale region 'en_US.UTF-8' 2>/dev/null || true
+        local current_user
+        current_user=$(whoami)
+        local accounts_file="/var/lib/AccountsService/users/$current_user"
+        if [ -f "$accounts_file" ]; then
+            if sudo grep -q "^Language=" "$accounts_file" 2>/dev/null; then
+                sudo sed -i 's/^Language=.*/Language=en_US.UTF-8/' "$accounts_file"
+            else
+                sudo sed -i '/^\[User\]/a Language=en_US.UTF-8' "$accounts_file"
+            fi
+        else
+            sudo bash -c "cat > $accounts_file" << ACCOUNTSEOF 2>/dev/null || true
+[User]
+Language=en_US.UTF-8
+XSession=
+ACCOUNTSEOF
+        fi
+        export LANG=en_US.UTF-8
+        export LANGUAGE=en_US:en
+        export LC_ALL=en_US.UTF-8
+        log_success "System language set to English (US)"
+    fi
 
-    # Configure Dash to Dock settings
-    configure_dash_to_dock
+    # 8. Keyboard layouts
+    if $DO_GNOME_KB_TR && $DO_GNOME_KB_EN; then
+        log_info "Setting keyboard layouts: Turkish Q + English (US)..."
+        gsettings set org.gnome.desktop.input-sources sources "[('xkb', 'tr'), ('xkb', 'us')]" 2>/dev/null || true
+        sudo localectl set-x11-keymap tr,us pc105 "" "" 2>/dev/null || true
+        log_success "Keyboard layouts set: Turkish Q + English (US)"
+    elif $DO_GNOME_KB_TR; then
+        log_info "Setting keyboard layout: Turkish Q..."
+        gsettings set org.gnome.desktop.input-sources sources "[('xkb', 'tr')]" 2>/dev/null || true
+        sudo localectl set-x11-keymap tr pc105 "" "" 2>/dev/null || true
+        log_success "Keyboard layout set: Turkish Q"
+    elif $DO_GNOME_KB_EN; then
+        log_info "Setting keyboard layout: English (US)..."
+        gsettings set org.gnome.desktop.input-sources sources "[('xkb', 'us')]" 2>/dev/null || true
+        sudo localectl set-x11-keymap us pc105 "" "" 2>/dev/null || true
+        log_success "Keyboard layout set: English (US)"
+    fi
 
-    # Setup bash aliases and Nautilus right-click actions for AI CLI tools
-    setup_cli_shortcuts
+    # 9. Disable Wayland
+    if $DO_GNOME_WAYLAND; then
+        disable_wayland
+    fi
+
+    # 10. OpenSSH Server
+    if $DO_GNOME_SSH; then
+        enable_ssh_server
+    fi
+
+    # 11. RDP Server
+    if $DO_GNOME_RDP; then
+        enable_rdp_server
+    fi
+
+    # 12. CLI Aliases
+    if $DO_GNOME_ALIASES; then
+        setup_cli_shortcuts
+    fi
+
+    log_success "GNOME Tweaks setup completed"
 }
 
 #===============================================================================
@@ -2633,101 +2874,8 @@ DOCKCONF
         powerprofilesctl set performance
         log_success "Power profile set to Performance"
     else
-        log_warning "powerprofilesctl not found, trying via dconf..."
+        log_warning "powerprofilesctl not found, skipping..."
     fi
-
-    # Disable screen blank / screen off (set to never)
-    log_info "Disabling screen timeout (set to never)..."
-    gsettings set org.gnome.desktop.session idle-delay 0
-    gsettings set org.gnome.desktop.screensaver lock-enabled false
-    gsettings set org.gnome.desktop.screensaver idle-activation-enabled false
-    # Disable automatic suspend
-    gsettings set org.gnome.settings-daemon.plugins.power sleep-inactive-ac-type 'nothing'
-    gsettings set org.gnome.settings-daemon.plugins.power sleep-inactive-battery-type 'nothing'
-    log_success "Screen timeout disabled (never turns off)"
-
-    # Show hidden files in file manager
-    log_info "Enabling show hidden files in file manager..."
-    gsettings set org.gtk.Settings.FileChooser show-hidden true 2>/dev/null
-    gsettings set org.gtk.gtk4.Settings.FileChooser show-hidden true 2>/dev/null
-    dconf write /org/gtk/settings/file-chooser/show-hidden true 2>/dev/null
-    dconf write /org/gtk/gtk4/settings/file-chooser/show-hidden true 2>/dev/null
-    # Nautilus (Files app)
-    gsettings set org.gnome.nautilus.preferences show-hidden-files true 2>/dev/null
-    log_success "Show hidden files enabled"
-
-    # Set EVERYTHING to English (US) - language, region, formats, menus
-    log_info "Setting system language to English (US)..."
-
-    # Install English language packs, remove Turkish display language
-    sudo apt-get install -y language-pack-en language-pack-en-base language-pack-gnome-en language-pack-gnome-en-base 2>/dev/null || true
-
-    # Generate English locale
-    sudo locale-gen en_US.UTF-8 2>/dev/null || true
-
-    # System-wide locale - set ALL locale variables to English
-    sudo update-locale \
-        LANG=en_US.UTF-8 \
-        LANGUAGE=en_US:en \
-        LC_ALL=en_US.UTF-8 \
-        LC_CTYPE=en_US.UTF-8 \
-        LC_NUMERIC=en_US.UTF-8 \
-        LC_TIME=en_US.UTF-8 \
-        LC_COLLATE=en_US.UTF-8 \
-        LC_MONETARY=en_US.UTF-8 \
-        LC_MESSAGES=en_US.UTF-8 \
-        LC_PAPER=en_US.UTF-8 \
-        LC_NAME=en_US.UTF-8 \
-        LC_ADDRESS=en_US.UTF-8 \
-        LC_TELEPHONE=en_US.UTF-8 \
-        LC_MEASUREMENT=en_US.UTF-8 \
-        LC_IDENTIFICATION=en_US.UTF-8 2>/dev/null || true
-
-    sudo localectl set-locale LANG=en_US.UTF-8 LANGUAGE=en_US:en 2>/dev/null || true
-
-    # GNOME display language + region
-    dconf write /system/locale/region "'en_US.UTF-8'" 2>/dev/null || true
-    gsettings set org.gnome.system.locale region 'en_US.UTF-8' 2>/dev/null || true
-
-    # Set AccountsService language (controls login screen + GNOME session language)
-    local current_user
-    current_user=$(whoami)
-    local accounts_file="/var/lib/AccountsService/users/$current_user"
-    if [ -f "$accounts_file" ]; then
-        # Update existing file - replace or add Language line
-        if sudo grep -q "^Language=" "$accounts_file" 2>/dev/null; then
-            sudo sed -i 's/^Language=.*/Language=en_US.UTF-8/' "$accounts_file"
-        else
-            sudo sed -i '/^\[User\]/a Language=en_US.UTF-8' "$accounts_file"
-        fi
-    else
-        sudo bash -c "cat > $accounts_file" << ACCOUNTSEOF 2>/dev/null || true
-[User]
-Language=en_US.UTF-8
-XSession=
-ACCOUNTSEOF
-    fi
-
-    # Export for current session
-    export LANG=en_US.UTF-8
-    export LANGUAGE=en_US:en
-    export LC_ALL=en_US.UTF-8
-    log_success "System language set to English (US) - ALL menus, formats, regions"
-
-    # Set keyboard layout to Turkish Q (ONLY keyboard, not language)
-    log_info "Setting keyboard layout to Turkish Q..."
-    gsettings set org.gnome.desktop.input-sources sources "[('xkb', 'tr')]" 2>/dev/null || true
-    sudo localectl set-x11-keymap tr pc105 "" "" 2>/dev/null || true
-    log_success "Keyboard layout set to Turkish Q"
-
-    # Disable Wayland (X11 is more compatible with VNC and remote desktop)
-    disable_wayland
-
-    # Enable OpenSSH server (auto-start on boot + start now)
-    enable_ssh_server
-
-    # Enable RDP server (xrdp, auto-start on boot + start now)
-    enable_rdp_server
 }
 
 #===============================================================================

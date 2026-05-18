@@ -16,7 +16,7 @@
 #===============================================================================
 
 SCRIPT_VERSION="2.5.0"
-SCRIPT_REVISION="92"
+SCRIPT_REVISION="93"
 SCRIPT_DATE="2026-03-27"
 
 # NOTE: We intentionally do NOT use set -e here.
@@ -3501,7 +3501,10 @@ debloat_system() {
                         removed_count=$((removed_count + 1))
                     fi
                 done
-                sudo apt-get autoremove --purge -y 2>/dev/null || true
+                # Protect critical packages before autoremove
+                sudo apt-mark manual openssh-server openssh-client networkmanager network-manager \
+                    systemd-sysv dbus sudo bash coreutils 2>/dev/null || true
+                sudo apt-get autoremove -y 2>/dev/null || true
                 sudo apt-get autoclean 2>/dev/null || true
                 log_success "Debloat completed: $removed_count package(s) removed"
                 return 0

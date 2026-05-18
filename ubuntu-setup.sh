@@ -16,7 +16,7 @@
 #===============================================================================
 
 SCRIPT_VERSION="2.5.0"
-SCRIPT_REVISION="98"
+SCRIPT_REVISION="99"
 SCRIPT_DATE="2026-03-27"
 
 # NOTE: We intentionally do NOT use set -e here.
@@ -973,27 +973,30 @@ show_interactive_install_menu() {
                     continue
                 fi
 
-                # Show sub-menus for items that have them BEFORE confirming
-                local submenu_cancelled=false
+                tput cnorm 2>/dev/null || true
+                clear
 
+                # Show summary of what will be installed
+                echo -e "${CYAN}╔═══════════════════════════════════════════════════════════════════════════╗${NC}"
+                echo -e "${CYAN}║                    ${GREEN}Installation Summary${CYAN}                                  ║${NC}"
+                echo -e "${CYAN}╚═══════════════════════════════════════════════════════════════════════════╝${NC}"
+                echo ""
+                echo -e "${GREEN}The following will be installed/configured:${NC}"
+                echo ""
                 for ((i=0; i<TOTAL_ITEMS; i++)); do
                     if [ "${SELECTED[$i]}" = "1" ]; then
-                        if [ "${APP_VARS[$i]}" = "INSTALL_GNOME" ]; then
-                            if ! show_gnome_submenu; then
-                                submenu_cancelled=true
-                                break
-                            fi
-                        elif [ "${APP_VARS[$i]}" = "DO_DEBLOAT" ]; then
-                            if ! show_debloat_submenu; then
-                                submenu_cancelled=true
-                                break
-                            fi
-                        fi
+                        echo -e "  ${GREEN}✓${NC} ${APP_NAMES[$i]} - ${APP_DESCS[$i]}"
                     fi
                 done
+                echo ""
+                echo -e "${YELLOW}───────────────────────────────────────────────────────────────${NC}"
+                echo ""
 
-                # If a sub-menu was cancelled, go back to main selection
-                if $submenu_cancelled; then
+                read -p "Proceed with installation? (y/n): " confirm_choice < /dev/tty
+                if [[ ! "$confirm_choice" =~ ^[Yy]$ ]]; then
+                    echo -e "${YELLOW}Cancelled, returning to menu...${NC}"
+                    sleep 1
+                    tput civis 2>/dev/null || true
                     continue
                 fi
 
@@ -1003,7 +1006,6 @@ show_interactive_install_menu() {
                         eval "${APP_VARS[$i]}=true"
                     fi
                 done
-                tput cnorm 2>/dev/null || true
                 return 0
                 ;;
             'q'|'Q') # Quit

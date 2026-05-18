@@ -16,7 +16,7 @@
 #===============================================================================
 
 SCRIPT_VERSION="2.5.0"
-SCRIPT_REVISION="101"
+SCRIPT_REVISION="102"
 SCRIPT_DATE="2026-03-27"
 
 # NOTE: We intentionally do NOT use set -e here.
@@ -458,7 +458,7 @@ GNOME_SUB_EXTENSIONS=true; GNOME_SUB_TWEAKS_APP=true; GNOME_SUB_DOCK=true
 GNOME_SUB_SCRIPT=true; GNOME_SUB_WAYLAND=true; GNOME_SUB_SSH=true
 GNOME_SUB_RDP=true; GNOME_SUB_ALIASES=true; GNOME_SUB_ENGLISH=true
 GNOME_SUB_SCREEN=true; GNOME_SUB_HIDDEN=true; GNOME_SUB_KB_TR=true; GNOME_SUB_KB_EN=true
-GNOME_SUB_VSCREEN=true
+GNOME_SUB_VSCREEN=true; GNOME_SUB_AUTOLOGIN=true
 
 # Debloat sub-menu selections (global so debloat_system can read them)
 declare -a DEBLOAT_SELECTED_PKGS=()
@@ -484,6 +484,7 @@ show_gnome_submenu() {
     TWEAK_NAMES+=("Keyboard: Turkish Q"); TWEAK_DESCS+=("Add Turkish Q keyboard layout");                      TWEAK_KEYS+=("GNOME_SUB_KB_TR")
     TWEAK_NAMES+=("Keyboard: English Q"); TWEAK_DESCS+=("Add English (US) keyboard layout");                   TWEAK_KEYS+=("GNOME_SUB_KB_EN")
     TWEAK_NAMES+=("Virtual Screen 1080p"); TWEAK_DESCS+=("Create virtual 1920x1080 display (for VNC/RDP/headless)"); TWEAK_KEYS+=("GNOME_SUB_VSCREEN")
+    TWEAK_NAMES+=("GDM Auto-Login");       TWEAK_DESCS+=("Auto-login to GUI on boot (needed for VNC tray icon)");   TWEAK_KEYS+=("GNOME_SUB_AUTOLOGIN")
 
     local TOTAL_TWEAKS=${#TWEAK_NAMES[@]}
     local -a TSELECTED=()
@@ -667,6 +668,10 @@ show_debloat_submenu() {
     # Virtual Screen config (not a package, special marker)
     if virtual_screen_installed; then
         BLOAT_NAMES+=("Virtual Screen 1080p"); BLOAT_DESCS+=("Remove virtual 1920x1080 display config");  BLOAT_PKGS+=("__VSCREEN__")
+    fi
+    # GDM Auto-Login (not a package, special marker)
+    if autologin_enabled; then
+        BLOAT_NAMES+=("GDM Auto-Login");       BLOAT_DESCS+=("Disable GDM auto-login (require login screen)"); BLOAT_PKGS+=("__AUTOLOGIN__")
     fi
 
     local TOTAL_BLOAT=${#BLOAT_NAMES[@]}
@@ -2753,6 +2758,11 @@ ACCOUNTSEOF
         setup_virtual_screen
     fi
 
+    # 14. GDM Auto-Login
+    if $GNOME_SUB_AUTOLOGIN; then
+        enable_autologin
+    fi
+
     log_success "GNOME Tweaks setup completed"
 }
 
@@ -3197,6 +3207,77 @@ enable_rdp_server() {
 }
 
 #===============================================================================
+# GDM Auto-Login - Required for VNC tray icon to appear on headless systems
+#===============================================================================
+enable_autologin() {
+    log_info "Enabling GDM auto-login (required for VNC notification tray icon)..."
+
+    local target_user="${SUDO_USER:-$USER}"
+    if [ -z "$target_user" ] || [ "$target_user" = "root" ]; then
+        target_user=$(logname 2>/dev/null || whoami)
+    fi
+    if [ -z "$target_user" ] || [ "$target_user" = "root" ]; then
+        log_warning "Could not determine target user for auto-login, skipping..."
+        return
+    fi
+
+    local gdm_config="/etc/gdm3/custom.conf"
+    if [ ! -f "$gdm_config" ]; then
+        log_warning "GDM config not found ($gdm_config), skipping auto-login setup"
+        return
+    fi
+
+    # Backup once
+    if [ ! -f "${gdm_config}.before-autologin.bak" ]; then
+        sudo cp "$gdm_config" "${gdm_config}.before-autologin.bak" 2>/dev/null || true
+    fi
+
+    # Use python for safe ini editing
+    sudo python3 << PYEOF
+import configparser
+config = configparser.ConfigParser()
+config.optionxform = str  # preserve case
+config.read('$gdm_config')
+if 'daemon' not in config:
+    config['daemon'] = {}
+config['daemon']['AutomaticLoginEnable'] = 'true'
+config['daemon']['AutomaticLogin'] = '$target_user'
+with open('$gdm_config', 'w') as f:
+    config.write(f, space_around_delimiters=False)
+PYEOF
+
+    log_success "GDM auto-login enabled for user: $target_user (GUI starts on boot → VNC tray icon appears)"
+}
+
+disable_autologin() {
+    log_info "Disabling GDM auto-login..."
+
+    local gdm_config="/etc/gdm3/custom.conf"
+    if [ ! -f "$gdm_config" ]; then
+        log_info "GDM config not found, nothing to disable"
+        return
+    fi
+
+    sudo python3 << PYEOF
+import configparser
+config = configparser.ConfigParser()
+config.optionxform = str
+config.read('$gdm_config')
+if 'daemon' in config:
+    config['daemon'].pop('AutomaticLoginEnable', None)
+    config['daemon'].pop('AutomaticLogin', None)
+with open('$gdm_config', 'w') as f:
+    config.write(f, space_around_delimiters=False)
+PYEOF
+
+    log_success "GDM auto-login disabled"
+}
+
+autologin_enabled() {
+    grep -q "^AutomaticLoginEnable[[:space:]]*=[[:space:]]*true" /etc/gdm3/custom.conf 2>/dev/null
+}
+
+#===============================================================================
 # Virtual Screen Setup (1920x1080) - For headless / VNC / RDP usage
 #===============================================================================
 setup_virtual_screen() {
@@ -3594,6 +3675,12 @@ install_realvnc() {
         log_info "Setting up virtual screen 1920x1080 for VNC headless usage..."
         setup_virtual_screen
     fi
+
+    # Auto-enable GDM auto-login so GUI session starts at boot
+    # (REQUIRED for the RealVNC tray notification icon to appear)
+    if ! autologin_enabled; then
+        enable_autologin
+    fi
 }
 
 disable_wayland() {
@@ -3904,12 +3991,18 @@ debloat_system() {
     for ((bi=0; bi<total_pkgs; bi++)); do
         log_info "Removing ${DEBLOAT_SELECTED_NAMES[$bi]}..."
         # Special markers handled separately (not real apt packages)
-        if [ "${DEBLOAT_SELECTED_PKGS[$bi]}" = "__VSCREEN__" ]; then
-            remove_virtual_screen
-        else
-            # shellcheck disable=SC2086
-            sudo apt-get remove -y ${DEBLOAT_SELECTED_PKGS[$bi]} 2>/dev/null || true
-        fi
+        case "${DEBLOAT_SELECTED_PKGS[$bi]}" in
+            "__VSCREEN__")
+                remove_virtual_screen
+                ;;
+            "__AUTOLOGIN__")
+                disable_autologin
+                ;;
+            *)
+                # shellcheck disable=SC2086
+                sudo apt-get remove -y ${DEBLOAT_SELECTED_PKGS[$bi]} 2>/dev/null || true
+                ;;
+        esac
         removed_count=$((removed_count + 1))
     done
     sudo apt-get autoclean 2>/dev/null || true

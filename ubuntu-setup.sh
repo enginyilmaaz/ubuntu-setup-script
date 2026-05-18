@@ -16,7 +16,7 @@
 #===============================================================================
 
 SCRIPT_VERSION="2.5.0"
-SCRIPT_REVISION="102"
+SCRIPT_REVISION="103"
 SCRIPT_DATE="2026-03-27"
 
 # NOTE: We intentionally do NOT use set -e here.
@@ -2635,6 +2635,11 @@ install_gnome_extensions() {
         force_enable_extension "appindicatorsupport@rgcjonas.gmail.com"
         force_enable_extension "ubuntu-appindicators@ubuntu.com"
         log_success "AppIndicator (system tray) enabled"
+
+        # Tray Icons: Reloaded - for LEGACY XEmbed tray icons (RealVNC, etc.)
+        # AppIndicator only handles modern StatusNotifier protocol; legacy apps
+        # like RealVNC use XEmbed which needs this separate extension.
+        install_tray_icons_reloaded
     fi
 
     # 2. GNOME Tweaks app
@@ -2905,6 +2910,69 @@ restore_gnome_settings() {
     echo ""
     echo -e "${GREEN}GNOME settings restored successfully!${NC}"
     echo -e "${YELLOW}Note: You may need to restart GNOME Shell (Alt+F2, then 'r') for changes to take effect.${NC}"
+}
+
+#===============================================================================
+# Tray Icons: Reloaded - Legacy XEmbed tray icon support (RealVNC, etc.)
+#===============================================================================
+install_tray_icons_reloaded() {
+    log_info "Installing Tray Icons: Reloaded extension (for RealVNC legacy tray)..."
+
+    local ext_uuid="trayIconsReloaded@selfmade.pl"
+    local ext_dir="$HOME/.local/share/gnome-shell/extensions/$ext_uuid"
+
+    if [ -d "$ext_dir" ]; then
+        log_info "Tray Icons: Reloaded already installed"
+        force_enable_extension "$ext_uuid"
+        return 0
+    fi
+
+    local gnome_ver
+    gnome_ver=$(gnome-shell --version 2>/dev/null | awk '{print $3}' | cut -d. -f1)
+
+    # Query extensions.gnome.org API for compatible version
+    local ext_info
+    ext_info=$(curl -fsSL "https://extensions.gnome.org/extension-info/?uuid=${ext_uuid}&shell_version=${gnome_ver}" 2>/dev/null)
+
+    if [ -z "$ext_info" ]; then
+        log_warning "Could not query extensions.gnome.org for Tray Icons: Reloaded"
+        return 1
+    fi
+
+    # Extract version pk (download URL is built from pk for trayIconsReloaded)
+    local version_pk
+    version_pk=$(echo "$ext_info" | python3 -c "
+import sys, json
+data = json.load(sys.stdin)
+for ver, info in data.get('shell_version_map', {}).items():
+    print(info.get('pk', ''))
+    break
+" 2>/dev/null)
+
+    if [ -z "$version_pk" ]; then
+        log_warning "No compatible Tray Icons: Reloaded version for GNOME $gnome_ver"
+        return 1
+    fi
+
+    local download_url="https://extensions.gnome.org/download-extension/${ext_uuid}.shell-extension.zip?version_tag=${version_pk}"
+    local zip_file="/tmp/tray-icons-reloaded.zip"
+    if ! curl -fsSL -o "$zip_file" "$download_url" 2>/dev/null; then
+        log_warning "Failed to download Tray Icons: Reloaded"
+        return 1
+    fi
+
+    # Manual extract (gnome-extensions install requires running shell with matching DBus)
+    mkdir -p "$ext_dir"
+    unzip -o "$zip_file" -d "$ext_dir" > /dev/null 2>&1
+    chmod -R u+rwX,g+rX,o+rX "$ext_dir"
+    if [ -d "$ext_dir/schemas" ] && command_exists glib-compile-schemas; then
+        glib-compile-schemas "$ext_dir/schemas/" 2>/dev/null
+    fi
+    rm -f "$zip_file"
+
+    log_success "Tray Icons: Reloaded installed"
+    force_enable_extension "$ext_uuid"
+    log_info "Tray Icons: Reloaded enabled (RealVNC notification icon appears after logout/login)"
 }
 
 #===============================================================================

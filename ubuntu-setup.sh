@@ -16,7 +16,7 @@
 #===============================================================================
 
 SCRIPT_VERSION="2.5.0"
-SCRIPT_REVISION="104"
+SCRIPT_REVISION="105"
 SCRIPT_DATE="2026-03-27"
 
 # NOTE: We intentionally do NOT use set -e here.
@@ -1748,63 +1748,6 @@ fix_jetson_snapd() {
     rm -rf "$temp_dir"
 
     log_success "ARM snapd fix applied successfully"
-
-    # On NVIDIA Jetson devices, RealVNC Pi Edition (free) refuses to work
-    # because /sys/firmware/devicetree/base/model says "NVIDIA Jetson..." not "Raspberry Pi".
-    # Bind-mount a fake model file to make RealVNC use the free Pi Edition license.
-    if $IS_JETSON && (package_installed realvnc-vnc-server || command_exists vncserver-x11); then
-        apply_fake_pi_model
-    fi
-}
-
-#===============================================================================
-# Jetson + RealVNC: Fake Raspberry Pi model so Pi Edition (free) license works
-#===============================================================================
-apply_fake_pi_model() {
-    log_info "Applying fake Raspberry Pi model for RealVNC Pi Edition license..."
-
-    # Don't apply on actual Pi
-    if grep -qi "raspberry" /sys/firmware/devicetree/base/model 2>/dev/null; then
-        log_info "Already running on Raspberry Pi (or fake model active), skipping..."
-        return 0
-    fi
-
-    # Create fake model file
-    echo "Raspberry Pi 4 Model B Rev 1.4" | sudo tee /etc/fake-pi-model > /dev/null
-
-    # Systemd service to bind-mount on boot
-    sudo tee /etc/systemd/system/fake-pi-model.service > /dev/null << 'SVCEOF'
-[Unit]
-Description=Bind-mount fake Pi model for RealVNC Pi Edition
-DefaultDependencies=no
-Before=basic.target vncserver-x11-serviced.service
-After=local-fs.target
-Conflicts=shutdown.target
-
-[Service]
-Type=oneshot
-RemainAfterExit=yes
-ExecStart=/bin/mount --bind /etc/fake-pi-model /sys/firmware/devicetree/base/model
-ExecStop=/bin/umount /sys/firmware/devicetree/base/model
-
-[Install]
-WantedBy=basic.target
-SVCEOF
-
-    sudo systemctl daemon-reload
-    sudo systemctl enable --now fake-pi-model.service 2>&1 | tail -1
-
-    # Restart VNC to pick up the new model
-    if systemctl is-active vncserver-x11-serviced &>/dev/null; then
-        sudo systemctl restart vncserver-x11-serviced
-    fi
-
-    # Verify
-    if grep -qi "raspberry" /sys/firmware/devicetree/base/model 2>/dev/null; then
-        log_success "Fake Pi model active - RealVNC will use free Pi Edition license"
-    else
-        log_warning "Fake Pi model bind-mount failed, check 'systemctl status fake-pi-model'"
-    fi
 }
 
 #===============================================================================
@@ -3807,11 +3750,6 @@ install_realvnc() {
         enable_autologin
     fi
 
-    # On Jetson, apply fake Pi model so RealVNC uses free Pi Edition license
-    # (otherwise it asks for offline license or cloud sign-in that doesn't work on ARM)
-    if $IS_JETSON; then
-        apply_fake_pi_model
-    fi
 }
 
 disable_wayland() {

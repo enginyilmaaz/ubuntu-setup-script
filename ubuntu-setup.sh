@@ -16,7 +16,7 @@
 #===============================================================================
 
 SCRIPT_VERSION="2.5.0"
-SCRIPT_REVISION="105"
+SCRIPT_REVISION="106"
 SCRIPT_DATE="2026-03-27"
 
 # NOTE: We intentionally do NOT use set -e here.
@@ -672,6 +672,14 @@ show_debloat_submenu() {
     # GDM Auto-Login (not a package, special marker)
     if autologin_enabled; then
         BLOAT_NAMES+=("GDM Auto-Login");       BLOAT_DESCS+=("Disable GDM auto-login (require login screen)"); BLOAT_PKGS+=("__AUTOLOGIN__")
+    fi
+    # xrdp RDP Server
+    if dpkg -l xrdp 2>/dev/null | grep -q "^ii"; then
+        BLOAT_NAMES+=("RDP Server (xrdp)");    BLOAT_DESCS+=("Remove xrdp (port 3389 RDP server)");          BLOAT_PKGS+=("__XRDP__")
+    fi
+    # OpenSSH Server
+    if dpkg -l openssh-server 2>/dev/null | grep -q "^ii"; then
+        BLOAT_NAMES+=("OpenSSH Server");       BLOAT_DESCS+=("Remove openssh-server (port 22 SSH server)");  BLOAT_PKGS+=("__SSHD__")
     fi
 
     local TOTAL_BLOAT=${#BLOAT_NAMES[@]}
@@ -4066,6 +4074,18 @@ debloat_system() {
                 ;;
             "__AUTOLOGIN__")
                 disable_autologin
+                ;;
+            "__XRDP__")
+                sudo systemctl stop xrdp xrdp-sesman 2>/dev/null || true
+                sudo systemctl disable xrdp xrdp-sesman 2>/dev/null || true
+                sudo apt-get remove -y xrdp 2>/dev/null || true
+                log_info "xrdp (RDP server) removed"
+                ;;
+            "__SSHD__")
+                sudo systemctl stop ssh sshd 2>/dev/null || true
+                sudo systemctl disable ssh sshd 2>/dev/null || true
+                sudo apt-get remove -y openssh-server 2>/dev/null || true
+                log_info "openssh-server removed"
                 ;;
             *)
                 # shellcheck disable=SC2086

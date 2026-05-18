@@ -16,7 +16,7 @@
 #===============================================================================
 
 SCRIPT_VERSION="2.5.0"
-SCRIPT_REVISION="93"
+SCRIPT_REVISION="94"
 SCRIPT_DATE="2026-03-27"
 
 # NOTE: We intentionally do NOT use set -e here.
@@ -3497,14 +3497,10 @@ debloat_system() {
                     if [ "${BSELECTED[$bi]}" = "1" ]; then
                         log_info "Removing ${BLOAT_NAMES[$bi]}..."
                         # shellcheck disable=SC2086
-                        sudo apt-get purge -y ${BLOAT_PKGS[$bi]} 2>/dev/null || true
+                        sudo apt-get remove -y ${BLOAT_PKGS[$bi]} 2>/dev/null || true
                         removed_count=$((removed_count + 1))
                     fi
                 done
-                # Protect critical packages before autoremove
-                sudo apt-mark manual openssh-server openssh-client networkmanager network-manager \
-                    systemd-sysv dbus sudo bash coreutils 2>/dev/null || true
-                sudo apt-get autoremove -y 2>/dev/null || true
                 sudo apt-get autoclean 2>/dev/null || true
                 log_success "Debloat completed: $removed_count package(s) removed"
                 return 0

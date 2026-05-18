@@ -16,7 +16,7 @@
 #===============================================================================
 
 SCRIPT_VERSION="2.5.0"
-SCRIPT_REVISION="99"
+SCRIPT_REVISION="100"
 SCRIPT_DATE="2026-03-27"
 
 # NOTE: We intentionally do NOT use set -e here.
@@ -3103,13 +3103,14 @@ DOCKCONF
     dconf write /org/gnome/desktop/wm/preferences/num-workspaces 1
     log_success "Virtual desktops disabled (1 static workspace)"
 
-    # Set power profile to Performance
+    # Set power profile (performance if available, otherwise balanced)
     if command_exists powerprofilesctl; then
-        log_info "Setting power profile to Performance..."
-        powerprofilesctl set performance
-        log_success "Power profile set to Performance"
-    else
-        log_warning "powerprofilesctl not found, skipping..."
+        if powerprofilesctl set performance 2>/dev/null; then
+            log_success "Power profile set to Performance"
+        else
+            powerprofilesctl set balanced 2>/dev/null || true
+            log_success "Power profile set to Balanced (performance not available)"
+        fi
     fi
 }
 

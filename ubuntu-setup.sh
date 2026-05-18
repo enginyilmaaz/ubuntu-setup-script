@@ -16,7 +16,7 @@
 #===============================================================================
 
 SCRIPT_VERSION="2.5.0"
-SCRIPT_REVISION="96"
+SCRIPT_REVISION="97"
 SCRIPT_DATE="2026-03-27"
 
 # NOTE: We intentionally do NOT use set -e here.
@@ -453,6 +453,353 @@ show_system_header() {
     echo ""
 }
 
+# GNOME Tweaks sub-menu selections (global so install_gnome_extensions can read them)
+GNOME_SUB_EXTENSIONS=true; GNOME_SUB_TWEAKS_APP=true; GNOME_SUB_DOCK=true
+GNOME_SUB_SCRIPT=true; GNOME_SUB_WAYLAND=true; GNOME_SUB_SSH=true
+GNOME_SUB_RDP=true; GNOME_SUB_ALIASES=true; GNOME_SUB_ENGLISH=true
+GNOME_SUB_SCREEN=true; GNOME_SUB_HIDDEN=true; GNOME_SUB_KB_TR=true; GNOME_SUB_KB_EN=true
+
+# Debloat sub-menu selections (global so debloat_system can read them)
+declare -a DEBLOAT_SELECTED_PKGS=()
+declare -a DEBLOAT_SELECTED_NAMES=()
+
+# GNOME Tweaks sub-menu - returns 0 on confirm, 1 on cancel
+show_gnome_submenu() {
+    local -a TWEAK_NAMES=()
+    local -a TWEAK_DESCS=()
+    local -a TWEAK_KEYS=()
+
+    TWEAK_NAMES+=("Extensions");        TWEAK_DESCS+=("Extension Manager + Shell Extensions + AppIndicator");  TWEAK_KEYS+=("GNOME_SUB_EXTENSIONS")
+    TWEAK_NAMES+=("GNOME Tweaks");      TWEAK_DESCS+=("GNOME Tweaks App + Browser Connector");                 TWEAK_KEYS+=("GNOME_SUB_TWEAKS_APP")
+    TWEAK_NAMES+=("Dash to Dock");      TWEAK_DESCS+=("Dock settings, single workspace, performance mode");    TWEAK_KEYS+=("GNOME_SUB_DOCK")
+    TWEAK_NAMES+=("Script Launcher");   TWEAK_DESCS+=("Right-click context menu (Claude, Codex, VS Code)");    TWEAK_KEYS+=("GNOME_SUB_SCRIPT")
+    TWEAK_NAMES+=("Disable Wayland");   TWEAK_DESCS+=("Switch to X11 (VNC/RDP compatibility)");                TWEAK_KEYS+=("GNOME_SUB_WAYLAND")
+    TWEAK_NAMES+=("OpenSSH Server");    TWEAK_DESCS+=("Install + auto-start SSH server (port 22)");            TWEAK_KEYS+=("GNOME_SUB_SSH")
+    TWEAK_NAMES+=("RDP Server");        TWEAK_DESCS+=("Install + auto-start xrdp (port 3389)");                TWEAK_KEYS+=("GNOME_SUB_RDP")
+    TWEAK_NAMES+=("CLI Aliases");       TWEAK_DESCS+=("Bash aliases (claude-skip, codex-skip, etc.)");         TWEAK_KEYS+=("GNOME_SUB_ALIASES")
+    TWEAK_NAMES+=("English Language");  TWEAK_DESCS+=("Set system language to English (US)");                   TWEAK_KEYS+=("GNOME_SUB_ENGLISH")
+    TWEAK_NAMES+=("Screen Off: Never"); TWEAK_DESCS+=("Disable screen timeout + auto suspend");                TWEAK_KEYS+=("GNOME_SUB_SCREEN")
+    TWEAK_NAMES+=("Show Hidden Files"); TWEAK_DESCS+=("Show hidden files in file manager");                    TWEAK_KEYS+=("GNOME_SUB_HIDDEN")
+    TWEAK_NAMES+=("Keyboard: Turkish Q"); TWEAK_DESCS+=("Add Turkish Q keyboard layout");                      TWEAK_KEYS+=("GNOME_SUB_KB_TR")
+    TWEAK_NAMES+=("Keyboard: English Q"); TWEAK_DESCS+=("Add English (US) keyboard layout");                   TWEAK_KEYS+=("GNOME_SUB_KB_EN")
+
+    local TOTAL_TWEAKS=${#TWEAK_NAMES[@]}
+    local -a TSELECTED=()
+    for ((ti=0; ti<TOTAL_TWEAKS; ti++)); do
+        TSELECTED+=(1)
+    done
+    local tcursor=0
+
+    tput civis 2>/dev/null || true
+
+    while true; do
+        clear
+        echo -e "${CYAN}╔═══════════════════════════════════════════════════════════════════════════╗${NC}"
+        echo -e "${CYAN}║                    ${GREEN}GNOME Tweaks - Select Options${CYAN}                          ║${NC}"
+        echo -e "${CYAN}╚═══════════════════════════════════════════════════════════════════════════╝${NC}"
+        echo ""
+        echo -e "${GREEN}═══════════════════════════════════════════════════════════════${NC}"
+        echo -e "${GREEN}     Use ↑↓ arrows to navigate, SPACE to toggle${NC}"
+        echo -e "${GREEN}═══════════════════════════════════════════════════════════════${NC}"
+        echo ""
+
+        local ti
+        for ((ti=0; ti<TOTAL_TWEAKS; ti++)); do
+            local tname="${TWEAK_NAMES[$ti]}"
+            local tdesc="${TWEAK_DESCS[$ti]}"
+            local tnum=$(printf "%2d" $((ti + 1)))
+            local tcheck="[ ]"
+            local tline="   "
+
+            if [ "${TSELECTED[$ti]}" = "1" ]; then
+                tcheck="${GREEN}[✓]${NC}"
+            fi
+            if [ "$tcursor" = "$ti" ]; then
+                tline=" ${CYAN}▶${NC}"
+            fi
+            if [ "${TSELECTED[$ti]}" = "1" ]; then
+                echo -e "${tline} ${BLUE}[$tnum]${NC} $tcheck ${GREEN}$tname${NC} - $tdesc"
+            else
+                echo -e "${tline} ${BLUE}[$tnum]${NC} $tcheck $tname - $tdesc"
+            fi
+        done
+
+        echo ""
+        echo -e "${YELLOW}───────────────────────────────────────────────────────────────${NC}"
+
+        local tcount=0
+        local tsel_names=""
+        for ((ti=0; ti<TOTAL_TWEAKS; ti++)); do
+            if [ "${TSELECTED[$ti]}" = "1" ]; then
+                tcount=$((tcount + 1))
+                tsel_names="${tsel_names}${TWEAK_NAMES[$ti]}, "
+            fi
+        done
+
+        if [ $tcount -gt 0 ]; then
+            tsel_names="${tsel_names%, }"
+            echo -e "  ${GREEN}Selected ($tcount):${NC} $tsel_names"
+        else
+            echo -e "  ${YELLOW}Selected: None${NC}"
+        fi
+
+        echo -e "${YELLOW}───────────────────────────────────────────────────────────────${NC}"
+        echo ""
+        echo -e "  ${CYAN}CONTROLS:${NC}  ${YELLOW}↑↓${NC}=Move  ${YELLOW}SPACE${NC}=Toggle  ${YELLOW}a${NC}=All  ${YELLOW}n${NC}=None  ${GREEN}c${NC}=Confirm  ${RED}q/ESC${NC}=Back"
+        echo ""
+
+        IFS= read -rsn1 tkey < /dev/tty 2>/dev/null || tkey=""
+        if [ "$tkey" = $'\x1b' ]; then
+            read -rsn2 -t 0.1 trest < /dev/tty 2>/dev/null || trest=""
+            tkey="${tkey}${trest}"
+            if [ "$tkey" = $'\x1b' ]; then
+                tput cnorm 2>/dev/null || true
+                return 1
+            fi
+        fi
+
+        case "$tkey" in
+            $'\x1b[A'|'k')
+                if [ $tcursor -gt 0 ]; then tcursor=$((tcursor - 1)); fi
+                ;;
+            $'\x1b[B'|'j')
+                if [ $tcursor -lt $((TOTAL_TWEAKS - 1)) ]; then tcursor=$((tcursor + 1)); fi
+                ;;
+            ' ')
+                if [ "${TSELECTED[$tcursor]}" = "1" ]; then
+                    TSELECTED[$tcursor]=0
+                else
+                    TSELECTED[$tcursor]=1
+                fi
+                ;;
+            'a'|'A')
+                for ((ti=0; ti<TOTAL_TWEAKS; ti++)); do TSELECTED[$ti]=1; done
+                ;;
+            'n'|'N')
+                for ((ti=0; ti<TOTAL_TWEAKS; ti++)); do TSELECTED[$ti]=0; done
+                ;;
+            'c'|'C'|'')
+                tput cnorm 2>/dev/null || true
+                for ((ti=0; ti<TOTAL_TWEAKS; ti++)); do
+                    if [ "${TSELECTED[$ti]}" = "1" ]; then
+                        eval "${TWEAK_KEYS[$ti]}=true"
+                    else
+                        eval "${TWEAK_KEYS[$ti]}=false"
+                    fi
+                done
+                return 0
+                ;;
+            'q'|'Q')
+                tput cnorm 2>/dev/null || true
+                return 1
+                ;;
+            [1-9])
+                local tnum_key=$((tkey - 1))
+                if [ $tnum_key -lt $TOTAL_TWEAKS ]; then
+                    if [ "${TSELECTED[$tnum_key]}" = "1" ]; then
+                        TSELECTED[$tnum_key]=0
+                    else
+                        TSELECTED[$tnum_key]=1
+                    fi
+                    tcursor=$tnum_key
+                fi
+                ;;
+        esac
+    done
+}
+
+# Debloat sub-menu - returns 0 on confirm, 1 on cancel
+show_debloat_submenu() {
+    local -a BLOAT_NAMES=()
+    local -a BLOAT_DESCS=()
+    local -a BLOAT_PKGS=()
+
+    if dpkg -l libreoffice-common 2>/dev/null | grep -q "^ii"; then
+        BLOAT_NAMES+=("LibreOffice");       BLOAT_DESCS+=("Office Suite (Writer, Calc, Impress, etc.)"); BLOAT_PKGS+=("libreoffice-*")
+    fi
+    if dpkg -l gnome-mahjongg 2>/dev/null | grep -q "^ii"; then
+        BLOAT_NAMES+=("Mahjongg");          BLOAT_DESCS+=("GNOME Mahjongg Game");                       BLOAT_PKGS+=("gnome-mahjongg")
+    fi
+    if dpkg -l aisleriot 2>/dev/null | grep -q "^ii"; then
+        BLOAT_NAMES+=("Solitaire");         BLOAT_DESCS+=("AisleRiot Solitaire");                       BLOAT_PKGS+=("aisleriot")
+    fi
+    if dpkg -l gnome-mines 2>/dev/null | grep -q "^ii"; then
+        BLOAT_NAMES+=("Mines");             BLOAT_DESCS+=("GNOME Mines Game");                          BLOAT_PKGS+=("gnome-mines")
+    fi
+    if dpkg -l gnome-sudoku 2>/dev/null | grep -q "^ii"; then
+        BLOAT_NAMES+=("Sudoku");            BLOAT_DESCS+=("GNOME Sudoku Game");                         BLOAT_PKGS+=("gnome-sudoku")
+    fi
+    if dpkg -l xterm 2>/dev/null | grep -q "^ii"; then
+        BLOAT_NAMES+=("XTerm");             BLOAT_DESCS+=("Legacy X Terminal Emulator");                BLOAT_PKGS+=("xterm")
+    fi
+    if dpkg -l thunderbird 2>/dev/null | grep -q "^ii"; then
+        BLOAT_NAMES+=("Thunderbird");       BLOAT_DESCS+=("Mozilla Thunderbird Email Client");          BLOAT_PKGS+=("thunderbird thunderbird-*")
+    fi
+    if dpkg -l remmina 2>/dev/null | grep -q "^ii"; then
+        BLOAT_NAMES+=("Remmina");           BLOAT_DESCS+=("Remmina Remote Desktop Client");             BLOAT_PKGS+=("remmina remmina-*")
+    fi
+    if dpkg -l gnome-todo 2>/dev/null | grep -q "^ii"; then
+        BLOAT_NAMES+=("GNOME To Do");       BLOAT_DESCS+=("GNOME To Do App");                           BLOAT_PKGS+=("gnome-todo")
+    fi
+    if dpkg -l transmission-gtk 2>/dev/null | grep -q "^ii"; then
+        BLOAT_NAMES+=("Transmission");      BLOAT_DESCS+=("Transmission BitTorrent Client");            BLOAT_PKGS+=("transmission-gtk transmission-common")
+    fi
+    if dpkg -l shotwell 2>/dev/null | grep -q "^ii"; then
+        BLOAT_NAMES+=("Shotwell");          BLOAT_DESCS+=("Shotwell Photo Manager");                    BLOAT_PKGS+=("shotwell shotwell-common")
+    fi
+    if dpkg -l simple-scan 2>/dev/null | grep -q "^ii"; then
+        BLOAT_NAMES+=("Document Scanner");  BLOAT_DESCS+=("Simple Scan Document Scanner");              BLOAT_PKGS+=("simple-scan")
+    fi
+    if dpkg -l gnome-font-viewer 2>/dev/null | grep -q "^ii"; then
+        BLOAT_NAMES+=("Fonts");             BLOAT_DESCS+=("GNOME Font Viewer");                         BLOAT_PKGS+=("gnome-font-viewer")
+    fi
+    if dpkg -l gucharmap 2>/dev/null | grep -q "^ii"; then
+        BLOAT_NAMES+=("Characters");        BLOAT_DESCS+=("Character Map (gucharmap)");                 BLOAT_PKGS+=("gucharmap")
+    fi
+    if dpkg -l gnome-characters 2>/dev/null | grep -q "^ii"; then
+        BLOAT_NAMES+=("GNOME Characters");  BLOAT_DESCS+=("GNOME Characters App");                      BLOAT_PKGS+=("gnome-characters")
+    fi
+    if dpkg -l gnome-calendar 2>/dev/null | grep -q "^ii"; then
+        BLOAT_NAMES+=("Calendar");          BLOAT_DESCS+=("GNOME Calendar");                            BLOAT_PKGS+=("gnome-calendar")
+    fi
+
+    local TOTAL_BLOAT=${#BLOAT_NAMES[@]}
+
+    if [ "$TOTAL_BLOAT" -eq 0 ]; then
+        echo -e "${GREEN}No bloatware found - system is already clean!${NC}"
+        sleep 2
+        DEBLOAT_SELECTED_PKGS=()
+        DEBLOAT_SELECTED_NAMES=()
+        return 0
+    fi
+
+    local -a BSELECTED=()
+    for ((bi=0; bi<TOTAL_BLOAT; bi++)); do
+        BSELECTED+=(1)
+    done
+    local bcursor=0
+
+    tput civis 2>/dev/null || true
+
+    while true; do
+        clear
+        echo -e "${CYAN}╔═══════════════════════════════════════════════════════════════════════════╗${NC}"
+        echo -e "${CYAN}║                    ${RED}Debloat - Remove Bloatware${CYAN}                             ║${NC}"
+        echo -e "${CYAN}╚═══════════════════════════════════════════════════════════════════════════╝${NC}"
+        echo ""
+        echo -e "${YELLOW}  Found ${TOTAL_BLOAT} bloatware package(s) installed. Deselect any you want to keep.${NC}"
+        echo ""
+        echo -e "${GREEN}═══════════════════════════════════════════════════════════════${NC}"
+        echo -e "${GREEN}     Use ↑↓ arrows to navigate, SPACE to toggle${NC}"
+        echo -e "${GREEN}═══════════════════════════════════════════════════════════════${NC}"
+        echo ""
+
+        local bi
+        for ((bi=0; bi<TOTAL_BLOAT; bi++)); do
+            local bname="${BLOAT_NAMES[$bi]}"
+            local bdesc="${BLOAT_DESCS[$bi]}"
+            local bnum=$(printf "%2d" $((bi + 1)))
+            local bcheck="[ ]"
+            local bline="   "
+
+            if [ "${BSELECTED[$bi]}" = "1" ]; then
+                bcheck="${RED}[✗]${NC}"
+            fi
+            if [ "$bcursor" = "$bi" ]; then
+                bline=" ${CYAN}▶${NC}"
+            fi
+            if [ "${BSELECTED[$bi]}" = "1" ]; then
+                echo -e "${bline} ${BLUE}[$bnum]${NC} $bcheck ${RED}$bname${NC} - $bdesc"
+            else
+                echo -e "${bline} ${BLUE}[$bnum]${NC} $bcheck $bname - $bdesc"
+            fi
+        done
+
+        echo ""
+        echo -e "${YELLOW}───────────────────────────────────────────────────────────────${NC}"
+
+        local bcount=0
+        local bsel_names=""
+        for ((bi=0; bi<TOTAL_BLOAT; bi++)); do
+            if [ "${BSELECTED[$bi]}" = "1" ]; then
+                bcount=$((bcount + 1))
+                bsel_names="${bsel_names}${BLOAT_NAMES[$bi]}, "
+            fi
+        done
+
+        if [ $bcount -gt 0 ]; then
+            bsel_names="${bsel_names%, }"
+            echo -e "  ${RED}Removing ($bcount):${NC} $bsel_names"
+        else
+            echo -e "  ${GREEN}Nothing selected for removal${NC}"
+        fi
+
+        echo -e "${YELLOW}───────────────────────────────────────────────────────────────${NC}"
+        echo ""
+        echo -e "  ${CYAN}CONTROLS:${NC}  ${YELLOW}↑↓${NC}=Move  ${YELLOW}SPACE${NC}=Toggle  ${YELLOW}a${NC}=All  ${YELLOW}n${NC}=None  ${GREEN}c${NC}=Confirm  ${RED}q/ESC${NC}=Back"
+        echo ""
+
+        IFS= read -rsn1 bkey < /dev/tty 2>/dev/null || bkey=""
+        if [ "$bkey" = $'\x1b' ]; then
+            read -rsn2 -t 0.1 brest < /dev/tty 2>/dev/null || brest=""
+            bkey="${bkey}${brest}"
+            if [ "$bkey" = $'\x1b' ]; then
+                tput cnorm 2>/dev/null || true
+                return 1
+            fi
+        fi
+
+        case "$bkey" in
+            $'\x1b[A'|'k')
+                if [ $bcursor -gt 0 ]; then bcursor=$((bcursor - 1)); fi
+                ;;
+            $'\x1b[B'|'j')
+                if [ $bcursor -lt $((TOTAL_BLOAT - 1)) ]; then bcursor=$((bcursor + 1)); fi
+                ;;
+            ' ')
+                if [ "${BSELECTED[$bcursor]}" = "1" ]; then
+                    BSELECTED[$bcursor]=0
+                else
+                    BSELECTED[$bcursor]=1
+                fi
+                ;;
+            'a'|'A')
+                for ((bi=0; bi<TOTAL_BLOAT; bi++)); do BSELECTED[$bi]=1; done
+                ;;
+            'n'|'N')
+                for ((bi=0; bi<TOTAL_BLOAT; bi++)); do BSELECTED[$bi]=0; done
+                ;;
+            'c'|'C'|'')
+                tput cnorm 2>/dev/null || true
+                DEBLOAT_SELECTED_PKGS=()
+                DEBLOAT_SELECTED_NAMES=()
+                for ((bi=0; bi<TOTAL_BLOAT; bi++)); do
+                    if [ "${BSELECTED[$bi]}" = "1" ]; then
+                        DEBLOAT_SELECTED_PKGS+=("${BLOAT_PKGS[$bi]}")
+                        DEBLOAT_SELECTED_NAMES+=("${BLOAT_NAMES[$bi]}")
+                    fi
+                done
+                return 0
+                ;;
+            'q'|'Q')
+                tput cnorm 2>/dev/null || true
+                return 1
+                ;;
+            [1-9])
+                local bnum_key=$((bkey - 1))
+                if [ $bnum_key -lt $TOTAL_BLOAT ]; then
+                    if [ "${BSELECTED[$bnum_key]}" = "1" ]; then
+                        BSELECTED[$bnum_key]=0
+                    else
+                        BSELECTED[$bnum_key]=1
+                    fi
+                    bcursor=$bnum_key
+                fi
+                ;;
+        esac
+    done
+}
+
 # Interactive app selection menu with arrow key navigation
 show_interactive_install_menu() {
     detect_system_silent
@@ -616,6 +963,31 @@ show_interactive_install_menu() {
                     sleep 1
                     continue
                 fi
+
+                # Show sub-menus for items that have them BEFORE confirming
+                local submenu_cancelled=false
+
+                for ((i=0; i<TOTAL_ITEMS; i++)); do
+                    if [ "${SELECTED[$i]}" = "1" ]; then
+                        if [ "${APP_VARS[$i]}" = "INSTALL_GNOME" ]; then
+                            if ! show_gnome_submenu; then
+                                submenu_cancelled=true
+                                break
+                            fi
+                        elif [ "${APP_VARS[$i]}" = "DO_DEBLOAT" ]; then
+                            if ! show_debloat_submenu; then
+                                submenu_cancelled=true
+                                break
+                            fi
+                        fi
+                    fi
+                done
+
+                # If a sub-menu was cancelled, go back to main selection
+                if $submenu_cancelled; then
+                    continue
+                fi
+
                 # Set flags
                 for ((i=0; i<TOTAL_ITEMS; i++)); do
                     if [ "${SELECTED[$i]}" = "1" ]; then
@@ -2200,163 +2572,15 @@ force_enable_extension() {
 install_gnome_extensions() {
     log_step "8. Ubuntu (GNOME) Tweaks"
 
-    # Check if GNOME is installed
     if ! command_exists gnome-shell; then
         log_warning "GNOME Shell not detected, skipping extensions installation..."
         return
     fi
 
-    # Interactive sub-menu for GNOME tweaks
-    local -a TWEAK_NAMES=()
-    local -a TWEAK_DESCS=()
-    local -a TWEAK_KEYS=()
-
-    TWEAK_NAMES+=("Extensions");        TWEAK_DESCS+=("Extension Manager + Shell Extensions + AppIndicator");  TWEAK_KEYS+=("DO_GNOME_EXTENSIONS")
-    TWEAK_NAMES+=("GNOME Tweaks");      TWEAK_DESCS+=("GNOME Tweaks App + Browser Connector");                 TWEAK_KEYS+=("DO_GNOME_TWEAKS_APP")
-    TWEAK_NAMES+=("Dash to Dock");      TWEAK_DESCS+=("Dock settings, single workspace, performance mode");    TWEAK_KEYS+=("DO_GNOME_DOCK")
-    TWEAK_NAMES+=("Script Launcher");   TWEAK_DESCS+=("Right-click context menu (Claude, Codex, VS Code)");    TWEAK_KEYS+=("DO_GNOME_SCRIPT")
-    TWEAK_NAMES+=("Disable Wayland");   TWEAK_DESCS+=("Switch to X11 (VNC/RDP compatibility)");                TWEAK_KEYS+=("DO_GNOME_WAYLAND")
-    TWEAK_NAMES+=("OpenSSH Server");    TWEAK_DESCS+=("Install + auto-start SSH server (port 22)");            TWEAK_KEYS+=("DO_GNOME_SSH")
-    TWEAK_NAMES+=("RDP Server");        TWEAK_DESCS+=("Install + auto-start xrdp (port 3389)");                TWEAK_KEYS+=("DO_GNOME_RDP")
-    TWEAK_NAMES+=("CLI Aliases");       TWEAK_DESCS+=("Bash aliases (claude-skip, codex-skip, etc.)");         TWEAK_KEYS+=("DO_GNOME_ALIASES")
-    TWEAK_NAMES+=("English Language");  TWEAK_DESCS+=("Set system language to English (US)");                   TWEAK_KEYS+=("DO_GNOME_ENGLISH")
-    TWEAK_NAMES+=("Screen Off: Never"); TWEAK_DESCS+=("Disable screen timeout + auto suspend");                TWEAK_KEYS+=("DO_GNOME_SCREEN")
-    TWEAK_NAMES+=("Show Hidden Files"); TWEAK_DESCS+=("Show hidden files in file manager");                    TWEAK_KEYS+=("DO_GNOME_HIDDEN")
-    TWEAK_NAMES+=("Keyboard: Turkish Q"); TWEAK_DESCS+=("Add Turkish Q keyboard layout");                      TWEAK_KEYS+=("DO_GNOME_KB_TR")
-    TWEAK_NAMES+=("Keyboard: English Q"); TWEAK_DESCS+=("Add English (US) keyboard layout");                   TWEAK_KEYS+=("DO_GNOME_KB_EN")
-
-    local TOTAL_TWEAKS=${#TWEAK_NAMES[@]}
-    local -a TSELECTED=()
-    for ((ti=0; ti<TOTAL_TWEAKS; ti++)); do
-        TSELECTED+=(1)
-    done
-    local tcursor=0
-
-    tput civis 2>/dev/null || true
-
-    while true; do
-        clear
-        echo -e "${CYAN}╔═══════════════════════════════════════════════════════════════════════════╗${NC}"
-        echo -e "${CYAN}║                    ${GREEN}GNOME Tweaks - Select Options${CYAN}                          ║${NC}"
-        echo -e "${CYAN}╚═══════════════════════════════════════════════════════════════════════════╝${NC}"
-        echo ""
-        echo -e "${GREEN}═══════════════════════════════════════════════════════════════${NC}"
-        echo -e "${GREEN}     Use ↑↓ arrows to navigate, SPACE to toggle${NC}"
-        echo -e "${GREEN}═══════════════════════════════════════════════════════════════${NC}"
-        echo ""
-
-        local ti
-        for ((ti=0; ti<TOTAL_TWEAKS; ti++)); do
-            local tname="${TWEAK_NAMES[$ti]}"
-            local tdesc="${TWEAK_DESCS[$ti]}"
-            local tnum=$(printf "%2d" $((ti + 1)))
-            local tcheck="[ ]"
-            local tline="   "
-
-            if [ "${TSELECTED[$ti]}" = "1" ]; then
-                tcheck="${GREEN}[✓]${NC}"
-            fi
-            if [ "$tcursor" = "$ti" ]; then
-                tline=" ${CYAN}▶${NC}"
-            fi
-            if [ "${TSELECTED[$ti]}" = "1" ]; then
-                echo -e "${tline} ${BLUE}[$tnum]${NC} $tcheck ${GREEN}$tname${NC} - $tdesc"
-            else
-                echo -e "${tline} ${BLUE}[$tnum]${NC} $tcheck $tname - $tdesc"
-            fi
-        done
-
-        echo ""
-        echo -e "${YELLOW}───────────────────────────────────────────────────────────────${NC}"
-
-        local tcount=0
-        local tsel_names=""
-        for ((ti=0; ti<TOTAL_TWEAKS; ti++)); do
-            if [ "${TSELECTED[$ti]}" = "1" ]; then
-                tcount=$((tcount + 1))
-                tsel_names="${tsel_names}${TWEAK_NAMES[$ti]}, "
-            fi
-        done
-
-        if [ $tcount -gt 0 ]; then
-            tsel_names="${tsel_names%, }"
-            echo -e "  ${GREEN}Selected ($tcount):${NC} $tsel_names"
-        else
-            echo -e "  ${YELLOW}Selected: None${NC}"
-        fi
-
-        echo -e "${YELLOW}───────────────────────────────────────────────────────────────${NC}"
-        echo ""
-        echo -e "  ${CYAN}CONTROLS:${NC}  ${YELLOW}↑↓${NC}=Move  ${YELLOW}SPACE${NC}=Toggle  ${YELLOW}a${NC}=All  ${YELLOW}n${NC}=None  ${GREEN}c${NC}=Confirm  ${RED}q${NC}=Skip"
-        echo ""
-
-        IFS= read -rsn1 tkey < /dev/tty 2>/dev/null || tkey=""
-        if [ "$tkey" = $'\x1b' ]; then
-            read -rsn2 -t 0.1 trest < /dev/tty 2>/dev/null || trest=""
-            tkey="${tkey}${trest}"
-        fi
-
-        case "$tkey" in
-            $'\x1b[A'|'k')
-                if [ $tcursor -gt 0 ]; then tcursor=$((tcursor - 1)); fi
-                ;;
-            $'\x1b[B'|'j')
-                if [ $tcursor -lt $((TOTAL_TWEAKS - 1)) ]; then tcursor=$((tcursor + 1)); fi
-                ;;
-            ' ')
-                if [ "${TSELECTED[$tcursor]}" = "1" ]; then
-                    TSELECTED[$tcursor]=0
-                else
-                    TSELECTED[$tcursor]=1
-                fi
-                ;;
-            'a'|'A')
-                for ((ti=0; ti<TOTAL_TWEAKS; ti++)); do TSELECTED[$ti]=1; done
-                ;;
-            'n'|'N')
-                for ((ti=0; ti<TOTAL_TWEAKS; ti++)); do TSELECTED[$ti]=0; done
-                ;;
-            'c'|'C'|'')
-                tput cnorm 2>/dev/null || true
-                if [ $tcount -eq 0 ]; then
-                    log_info "No tweaks selected, skipping GNOME setup."
-                    return 0
-                fi
-                break
-                ;;
-            'q'|'Q')
-                tput cnorm 2>/dev/null || true
-                log_info "GNOME Tweaks skipped."
-                return 0
-                ;;
-            [1-9])
-                local tnum_key=$((tkey - 1))
-                if [ $tnum_key -lt $TOTAL_TWEAKS ]; then
-                    if [ "${TSELECTED[$tnum_key]}" = "1" ]; then
-                        TSELECTED[$tnum_key]=0
-                    else
-                        TSELECTED[$tnum_key]=1
-                    fi
-                    tcursor=$tnum_key
-                fi
-                ;;
-        esac
-    done
-
-    # Map selections to flags
-    local DO_GNOME_EXTENSIONS=false DO_GNOME_TWEAKS_APP=false DO_GNOME_DOCK=false
-    local DO_GNOME_SCRIPT=false DO_GNOME_WAYLAND=false DO_GNOME_SSH=false
-    local DO_GNOME_RDP=false DO_GNOME_ALIASES=false DO_GNOME_ENGLISH=false
-    local DO_GNOME_SCREEN=false DO_GNOME_HIDDEN=false DO_GNOME_KB_TR=false DO_GNOME_KB_EN=false
-
-    for ((ti=0; ti<TOTAL_TWEAKS; ti++)); do
-        if [ "${TSELECTED[$ti]}" = "1" ]; then
-            eval "${TWEAK_KEYS[$ti]}=true"
-        fi
-    done
+    # Selections already made in show_gnome_submenu(), read from globals
 
     # 1. Extensions (Extension Manager + Shell Extensions + AppIndicator)
-    if $DO_GNOME_EXTENSIONS; then
+    if $GNOME_SUB_EXTENSIONS; then
         log_info "Installing GNOME Shell Extensions packages..."
 
         if package_installed gnome-shell-extension-manager; then
@@ -2392,7 +2616,7 @@ install_gnome_extensions() {
     fi
 
     # 2. GNOME Tweaks app
-    if $DO_GNOME_TWEAKS_APP; then
+    if $GNOME_SUB_TWEAKS_APP; then
         if package_installed gnome-tweaks; then
             log_warning "GNOME Tweaks already installed, skipping..."
         else
@@ -2402,17 +2626,17 @@ install_gnome_extensions() {
     fi
 
     # 3. Dash to Dock + workspace + power + settings
-    if $DO_GNOME_DOCK; then
+    if $GNOME_SUB_DOCK; then
         configure_dash_to_dock
     fi
 
     # 4. Script Launcher (Nautilus right-click)
-    if $DO_GNOME_SCRIPT; then
+    if $GNOME_SUB_SCRIPT; then
         install_gnome_script_launcher
     fi
 
     # 5. Screen timeout
-    if $DO_GNOME_SCREEN; then
+    if $GNOME_SUB_SCREEN; then
         log_info "Disabling screen timeout (set to never)..."
         gsettings set org.gnome.desktop.session idle-delay 0
         gsettings set org.gnome.desktop.screensaver lock-enabled false
@@ -2423,7 +2647,7 @@ install_gnome_extensions() {
     fi
 
     # 6. Show hidden files
-    if $DO_GNOME_HIDDEN; then
+    if $GNOME_SUB_HIDDEN; then
         log_info "Enabling show hidden files in file manager..."
         gsettings set org.gtk.Settings.FileChooser show-hidden true 2>/dev/null
         gsettings set org.gtk.gtk4.Settings.FileChooser show-hidden true 2>/dev/null
@@ -2434,7 +2658,7 @@ install_gnome_extensions() {
     fi
 
     # 7. English language
-    if $DO_GNOME_ENGLISH; then
+    if $GNOME_SUB_ENGLISH; then
         log_info "Setting system language to English (US)..."
         sudo apt-get install -y language-pack-en language-pack-en-base language-pack-gnome-en language-pack-gnome-en-base 2>/dev/null || true
         sudo locale-gen en_US.UTF-8 2>/dev/null || true
@@ -2470,17 +2694,17 @@ ACCOUNTSEOF
     fi
 
     # 8. Keyboard layouts
-    if $DO_GNOME_KB_TR && $DO_GNOME_KB_EN; then
+    if $GNOME_SUB_KB_TR && $GNOME_SUB_KB_EN; then
         log_info "Setting keyboard layouts: Turkish Q + English (US)..."
         gsettings set org.gnome.desktop.input-sources sources "[('xkb', 'tr'), ('xkb', 'us')]" 2>/dev/null || true
         sudo localectl set-x11-keymap tr,us pc105 "" "" 2>/dev/null || true
         log_success "Keyboard layouts set: Turkish Q + English (US)"
-    elif $DO_GNOME_KB_TR; then
+    elif $GNOME_SUB_KB_TR; then
         log_info "Setting keyboard layout: Turkish Q..."
         gsettings set org.gnome.desktop.input-sources sources "[('xkb', 'tr')]" 2>/dev/null || true
         sudo localectl set-x11-keymap tr pc105 "" "" 2>/dev/null || true
         log_success "Keyboard layout set: Turkish Q"
-    elif $DO_GNOME_KB_EN; then
+    elif $GNOME_SUB_KB_EN; then
         log_info "Setting keyboard layout: English (US)..."
         gsettings set org.gnome.desktop.input-sources sources "[('xkb', 'us')]" 2>/dev/null || true
         sudo localectl set-x11-keymap us pc105 "" "" 2>/dev/null || true
@@ -2488,22 +2712,22 @@ ACCOUNTSEOF
     fi
 
     # 9. Disable Wayland
-    if $DO_GNOME_WAYLAND; then
+    if $GNOME_SUB_WAYLAND; then
         disable_wayland
     fi
 
     # 10. OpenSSH Server
-    if $DO_GNOME_SSH; then
+    if $GNOME_SUB_SSH; then
         enable_ssh_server
     fi
 
     # 11. RDP Server
-    if $DO_GNOME_RDP; then
+    if $GNOME_SUB_RDP; then
         enable_rdp_server
     fi
 
     # 12. CLI Aliases
-    if $DO_GNOME_ALIASES; then
+    if $GNOME_SUB_ALIASES; then
         setup_cli_shortcuts
     fi
 
@@ -3478,198 +3702,23 @@ run_cli_logins() {
 debloat_system() {
     log_step "Debloat - Removing Bloatware"
 
-    local -a BLOAT_NAMES=()
-    local -a BLOAT_DESCS=()
-    local -a BLOAT_PKGS=()
-
-    # Check each bloatware group - only add if installed
-    if dpkg -l libreoffice-common 2>/dev/null | grep -q "^ii"; then
-        BLOAT_NAMES+=("LibreOffice");       BLOAT_DESCS+=("Office Suite (Writer, Calc, Impress, etc.)"); BLOAT_PKGS+=("libreoffice-*")
-    fi
-    if dpkg -l gnome-mahjongg 2>/dev/null | grep -q "^ii"; then
-        BLOAT_NAMES+=("Mahjongg");          BLOAT_DESCS+=("GNOME Mahjongg Game");                       BLOAT_PKGS+=("gnome-mahjongg")
-    fi
-    if dpkg -l aisleriot 2>/dev/null | grep -q "^ii"; then
-        BLOAT_NAMES+=("Solitaire");         BLOAT_DESCS+=("AisleRiot Solitaire");                       BLOAT_PKGS+=("aisleriot")
-    fi
-    if dpkg -l gnome-mines 2>/dev/null | grep -q "^ii"; then
-        BLOAT_NAMES+=("Mines");             BLOAT_DESCS+=("GNOME Mines Game");                          BLOAT_PKGS+=("gnome-mines")
-    fi
-    if dpkg -l gnome-sudoku 2>/dev/null | grep -q "^ii"; then
-        BLOAT_NAMES+=("Sudoku");            BLOAT_DESCS+=("GNOME Sudoku Game");                         BLOAT_PKGS+=("gnome-sudoku")
-    fi
-    if dpkg -l xterm 2>/dev/null | grep -q "^ii"; then
-        BLOAT_NAMES+=("XTerm");             BLOAT_DESCS+=("Legacy X Terminal Emulator");                BLOAT_PKGS+=("xterm")
-    fi
-    if dpkg -l thunderbird 2>/dev/null | grep -q "^ii"; then
-        BLOAT_NAMES+=("Thunderbird");       BLOAT_DESCS+=("Mozilla Thunderbird Email Client");          BLOAT_PKGS+=("thunderbird thunderbird-*")
-    fi
-    if dpkg -l remmina 2>/dev/null | grep -q "^ii"; then
-        BLOAT_NAMES+=("Remmina");           BLOAT_DESCS+=("Remmina Remote Desktop Client");             BLOAT_PKGS+=("remmina remmina-*")
-    fi
-    if dpkg -l gnome-todo 2>/dev/null | grep -q "^ii"; then
-        BLOAT_NAMES+=("GNOME To Do");       BLOAT_DESCS+=("GNOME To Do App");                           BLOAT_PKGS+=("gnome-todo")
-    fi
-    if dpkg -l transmission-gtk 2>/dev/null | grep -q "^ii"; then
-        BLOAT_NAMES+=("Transmission");      BLOAT_DESCS+=("Transmission BitTorrent Client");            BLOAT_PKGS+=("transmission-gtk transmission-common")
-    fi
-    if dpkg -l shotwell 2>/dev/null | grep -q "^ii"; then
-        BLOAT_NAMES+=("Shotwell");          BLOAT_DESCS+=("Shotwell Photo Manager");                    BLOAT_PKGS+=("shotwell shotwell-common")
-    fi
-    if dpkg -l simple-scan 2>/dev/null | grep -q "^ii"; then
-        BLOAT_NAMES+=("Document Scanner");  BLOAT_DESCS+=("Simple Scan Document Scanner");              BLOAT_PKGS+=("simple-scan")
-    fi
-    if dpkg -l gnome-font-viewer 2>/dev/null | grep -q "^ii"; then
-        BLOAT_NAMES+=("Fonts");             BLOAT_DESCS+=("GNOME Font Viewer");                         BLOAT_PKGS+=("gnome-font-viewer")
-    fi
-    if dpkg -l gucharmap 2>/dev/null | grep -q "^ii"; then
-        BLOAT_NAMES+=("Characters");        BLOAT_DESCS+=("Character Map (gucharmap)");                 BLOAT_PKGS+=("gucharmap")
-    fi
-    if dpkg -l gnome-characters 2>/dev/null | grep -q "^ii"; then
-        BLOAT_NAMES+=("GNOME Characters");  BLOAT_DESCS+=("GNOME Characters App");                      BLOAT_PKGS+=("gnome-characters")
-    fi
-    if dpkg -l gnome-calendar 2>/dev/null | grep -q "^ii"; then
-        BLOAT_NAMES+=("Calendar");          BLOAT_DESCS+=("GNOME Calendar");                            BLOAT_PKGS+=("gnome-calendar")
-    fi
-
-    local TOTAL_BLOAT=${#BLOAT_NAMES[@]}
-
-    if [ "$TOTAL_BLOAT" -eq 0 ]; then
-        log_success "No bloatware found - system is already clean!"
+    local total_pkgs=${#DEBLOAT_SELECTED_PKGS[@]}
+    if [ "$total_pkgs" -eq 0 ]; then
+        log_info "No packages selected for removal, skipping debloat."
         return 0
     fi
 
-    local -a BSELECTED=()
-    for ((bi=0; bi<TOTAL_BLOAT; bi++)); do
-        BSELECTED+=(1)
+    log_info "Removing $total_pkgs selected bloatware package(s)..."
+    local removed_count=0
+    local bi
+    for ((bi=0; bi<total_pkgs; bi++)); do
+        log_info "Removing ${DEBLOAT_SELECTED_NAMES[$bi]}..."
+        # shellcheck disable=SC2086
+        sudo apt-get remove -y ${DEBLOAT_SELECTED_PKGS[$bi]} 2>/dev/null || true
+        removed_count=$((removed_count + 1))
     done
-    local bcursor=0
-
-    tput civis 2>/dev/null || true
-
-    while true; do
-        clear
-        echo -e "${CYAN}╔═══════════════════════════════════════════════════════════════════════════╗${NC}"
-        echo -e "${CYAN}║                    ${RED}Debloat - Remove Bloatware${CYAN}                             ║${NC}"
-        echo -e "${CYAN}╚═══════════════════════════════════════════════════════════════════════════╝${NC}"
-        echo ""
-        echo -e "${YELLOW}  Found ${TOTAL_BLOAT} bloatware package(s) installed. Deselect any you want to keep.${NC}"
-        echo ""
-        echo -e "${GREEN}═══════════════════════════════════════════════════════════════${NC}"
-        echo -e "${GREEN}     Use ↑↓ arrows to navigate, SPACE to toggle${NC}"
-        echo -e "${GREEN}═══════════════════════════════════════════════════════════════${NC}"
-        echo ""
-
-        local bi
-        for ((bi=0; bi<TOTAL_BLOAT; bi++)); do
-            local bname="${BLOAT_NAMES[$bi]}"
-            local bdesc="${BLOAT_DESCS[$bi]}"
-            local bnum=$(printf "%2d" $((bi + 1)))
-            local bcheck="[ ]"
-            local bline="   "
-
-            if [ "${BSELECTED[$bi]}" = "1" ]; then
-                bcheck="${RED}[✗]${NC}"
-            fi
-            if [ "$bcursor" = "$bi" ]; then
-                bline=" ${CYAN}▶${NC}"
-            fi
-            if [ "${BSELECTED[$bi]}" = "1" ]; then
-                echo -e "${bline} ${BLUE}[$bnum]${NC} $bcheck ${RED}$bname${NC} - $bdesc"
-            else
-                echo -e "${bline} ${BLUE}[$bnum]${NC} $bcheck $bname - $bdesc"
-            fi
-        done
-
-        echo ""
-        echo -e "${YELLOW}───────────────────────────────────────────────────────────────${NC}"
-
-        local bcount=0
-        local bsel_names=""
-        for ((bi=0; bi<TOTAL_BLOAT; bi++)); do
-            if [ "${BSELECTED[$bi]}" = "1" ]; then
-                bcount=$((bcount + 1))
-                bsel_names="${bsel_names}${BLOAT_NAMES[$bi]}, "
-            fi
-        done
-
-        if [ $bcount -gt 0 ]; then
-            bsel_names="${bsel_names%, }"
-            echo -e "  ${RED}Removing ($bcount):${NC} $bsel_names"
-        else
-            echo -e "  ${GREEN}Nothing selected for removal${NC}"
-        fi
-
-        echo -e "${YELLOW}───────────────────────────────────────────────────────────────${NC}"
-        echo ""
-        echo -e "  ${CYAN}CONTROLS:${NC}  ${YELLOW}↑↓${NC}=Move  ${YELLOW}SPACE${NC}=Toggle  ${YELLOW}a${NC}=All  ${YELLOW}n${NC}=None  ${GREEN}c${NC}=Remove  ${RED}q${NC}=Skip"
-        echo ""
-
-        IFS= read -rsn1 bkey < /dev/tty 2>/dev/null || bkey=""
-        if [ "$bkey" = $'\x1b' ]; then
-            read -rsn2 -t 0.1 brest < /dev/tty 2>/dev/null || brest=""
-            bkey="${bkey}${brest}"
-        fi
-
-        case "$bkey" in
-            $'\x1b[A'|'k')
-                if [ $bcursor -gt 0 ]; then bcursor=$((bcursor - 1)); fi
-                ;;
-            $'\x1b[B'|'j')
-                if [ $bcursor -lt $((TOTAL_BLOAT - 1)) ]; then bcursor=$((bcursor + 1)); fi
-                ;;
-            ' ')
-                if [ "${BSELECTED[$bcursor]}" = "1" ]; then
-                    BSELECTED[$bcursor]=0
-                else
-                    BSELECTED[$bcursor]=1
-                fi
-                ;;
-            'a'|'A')
-                for ((bi=0; bi<TOTAL_BLOAT; bi++)); do BSELECTED[$bi]=1; done
-                ;;
-            'n'|'N')
-                for ((bi=0; bi<TOTAL_BLOAT; bi++)); do BSELECTED[$bi]=0; done
-                ;;
-            'c'|'C'|'')
-                tput cnorm 2>/dev/null || true
-                if [ $bcount -eq 0 ]; then
-                    log_info "No packages selected for removal, skipping debloat."
-                    return 0
-                fi
-                echo ""
-                log_info "Removing $bcount selected bloatware package(s)..."
-                local removed_count=0
-                for ((bi=0; bi<TOTAL_BLOAT; bi++)); do
-                    if [ "${BSELECTED[$bi]}" = "1" ]; then
-                        log_info "Removing ${BLOAT_NAMES[$bi]}..."
-                        # shellcheck disable=SC2086
-                        sudo apt-get remove -y ${BLOAT_PKGS[$bi]} 2>/dev/null || true
-                        removed_count=$((removed_count + 1))
-                    fi
-                done
-                sudo apt-get autoclean 2>/dev/null || true
-                log_success "Debloat completed: $removed_count package(s) removed"
-                return 0
-                ;;
-            'q'|'Q')
-                tput cnorm 2>/dev/null || true
-                log_info "Debloat skipped."
-                return 0
-                ;;
-            [1-9])
-                local bnum_key=$((bkey - 1))
-                if [ $bnum_key -lt $TOTAL_BLOAT ]; then
-                    if [ "${BSELECTED[$bnum_key]}" = "1" ]; then
-                        BSELECTED[$bnum_key]=0
-                    else
-                        BSELECTED[$bnum_key]=1
-                    fi
-                    bcursor=$bnum_key
-                fi
-                ;;
-        esac
-    done
+    sudo apt-get autoclean 2>/dev/null || true
+    log_success "Debloat completed: $removed_count package(s) removed"
 }
 
 #===============================================================================

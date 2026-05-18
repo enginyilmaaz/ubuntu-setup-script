@@ -16,7 +16,7 @@
 #===============================================================================
 
 SCRIPT_VERSION="2.5.0"
-SCRIPT_REVISION="100"
+SCRIPT_REVISION="101"
 SCRIPT_DATE="2026-03-27"
 
 # NOTE: We intentionally do NOT use set -e here.
@@ -458,6 +458,7 @@ GNOME_SUB_EXTENSIONS=true; GNOME_SUB_TWEAKS_APP=true; GNOME_SUB_DOCK=true
 GNOME_SUB_SCRIPT=true; GNOME_SUB_WAYLAND=true; GNOME_SUB_SSH=true
 GNOME_SUB_RDP=true; GNOME_SUB_ALIASES=true; GNOME_SUB_ENGLISH=true
 GNOME_SUB_SCREEN=true; GNOME_SUB_HIDDEN=true; GNOME_SUB_KB_TR=true; GNOME_SUB_KB_EN=true
+GNOME_SUB_VSCREEN=true
 
 # Debloat sub-menu selections (global so debloat_system can read them)
 declare -a DEBLOAT_SELECTED_PKGS=()
@@ -482,6 +483,7 @@ show_gnome_submenu() {
     TWEAK_NAMES+=("Show Hidden Files"); TWEAK_DESCS+=("Show hidden files in file manager");                    TWEAK_KEYS+=("GNOME_SUB_HIDDEN")
     TWEAK_NAMES+=("Keyboard: Turkish Q"); TWEAK_DESCS+=("Add Turkish Q keyboard layout");                      TWEAK_KEYS+=("GNOME_SUB_KB_TR")
     TWEAK_NAMES+=("Keyboard: English Q"); TWEAK_DESCS+=("Add English (US) keyboard layout");                   TWEAK_KEYS+=("GNOME_SUB_KB_EN")
+    TWEAK_NAMES+=("Virtual Screen 1080p"); TWEAK_DESCS+=("Create virtual 1920x1080 display (for VNC/RDP/headless)"); TWEAK_KEYS+=("GNOME_SUB_VSCREEN")
 
     local TOTAL_TWEAKS=${#TWEAK_NAMES[@]}
     local -a TSELECTED=()
@@ -661,6 +663,10 @@ show_debloat_submenu() {
     fi
     if dpkg -l gnome-calendar 2>/dev/null | grep -q "^ii"; then
         BLOAT_NAMES+=("Calendar");          BLOAT_DESCS+=("GNOME Calendar");                            BLOAT_PKGS+=("gnome-calendar")
+    fi
+    # Virtual Screen config (not a package, special marker)
+    if virtual_screen_installed; then
+        BLOAT_NAMES+=("Virtual Screen 1080p"); BLOAT_DESCS+=("Remove virtual 1920x1080 display config");  BLOAT_PKGS+=("__VSCREEN__")
     fi
 
     local TOTAL_BLOAT=${#BLOAT_NAMES[@]}
@@ -2742,6 +2748,11 @@ ACCOUNTSEOF
         setup_cli_shortcuts
     fi
 
+    # 13. Virtual Screen 1080p
+    if $GNOME_SUB_VSCREEN; then
+        setup_virtual_screen
+    fi
+
     log_success "GNOME Tweaks setup completed"
 }
 
@@ -3186,6 +3197,166 @@ enable_rdp_server() {
 }
 
 #===============================================================================
+# Virtual Screen Setup (1920x1080) - For headless / VNC / RDP usage
+#===============================================================================
+setup_virtual_screen() {
+    log_info "Setting up virtual screen 1920x1080..."
+
+    local backup_date
+    backup_date=$(date +%Y%m%d_%H%M%S)
+
+    if $IS_JETSON; then
+        # Jetson NVIDIA Tegra method: use xorg.conf with virtual screen
+        log_info "Detected Jetson - using NVIDIA Tegra xorg.conf method"
+
+        # Backup existing xorg.conf
+        if [ -f /etc/X11/xorg.conf ] && ! grep -q "Virtual1080p" /etc/X11/xorg.conf 2>/dev/null; then
+            sudo cp /etc/X11/xorg.conf "/etc/X11/xorg.conf.before-virtual1080p.${backup_date}" 2>/dev/null || true
+        fi
+
+        sudo tee /etc/X11/xorg.conf > /dev/null << 'XORGEOF'
+# 1920x1080 virtual display for headless Jetson (NVIDIA Tegra)
+
+Section "ServerLayout"
+    Identifier "Layout0"
+    Screen 0 "Screen0"
+EndSection
+
+Section "Module"
+    Disable     "dri"
+    SubSection  "extmod"
+        Option  "omit xfree86-dga"
+    EndSubSection
+EndSection
+
+Section "Monitor"
+    Identifier "Monitor0"
+    VendorName "Unknown"
+    ModelName  "Virtual1080p"
+    HorizSync 28.0 - 80.0
+    VertRefresh 48.0 - 75.0
+    Modeline "1920x1080" 148.50  1920 2008 2052 2200  1080 1084 1089 1125 +hsync +vsync
+    Option "DPMS"
+EndSection
+
+Section "Device"
+    Identifier  "Tegra0"
+    Driver      "nvidia"
+    Option      "AllowEmptyInitialConfiguration" "true"
+    Option      "ConnectedMonitor" "DP-0"
+    Option      "ModeValidation" "DP-0: AllowNonEdidModes, NoEdidModes, NoVesaModes"
+    Option      "UseEDID" "false"
+EndSection
+
+Section "Screen"
+    Identifier "Screen0"
+    Device     "Tegra0"
+    Monitor    "Monitor0"
+    DefaultDepth 24
+    SubSection "Display"
+        Depth 24
+        Modes "1920x1080"
+        Virtual 1920 1080
+    EndSubSection
+EndSection
+XORGEOF
+
+        # Autostart script to force resolution after login
+        sudo tee /etc/xdg/autostart/jetson-1080p.desktop > /dev/null << 'AUTOEOF'
+[Desktop Entry]
+Type=Application
+Name=Jetson 1080p Resolution
+Exec=sh -c "xrandr --output DP-0 --mode 1920x1080 2>/dev/null || xrandr --output HDMI-0 --mode 1920x1080 2>/dev/null || true"
+NoDisplay=true
+X-GNOME-Autostart-enabled=true
+AUTOEOF
+
+        log_success "Jetson virtual screen 1920x1080 configured (restart GDM or reboot to apply)"
+
+    else
+        # x64 and non-Jetson ARM: use xrandr autostart method
+        log_info "Using xrandr autostart method (universal)"
+
+        sudo tee /etc/xdg/autostart/virtual-1080p.desktop > /dev/null << 'AUTOEOF'
+[Desktop Entry]
+Type=Application
+Name=Virtual 1080p Resolution
+Exec=sh -c "PRIMARY=$(xrandr | awk '/ connected/ {print $1; exit}'); if [ -n \"$PRIMARY\" ]; then if ! xrandr | grep -q '1920x1080'; then MODELINE=$(cvt 1920 1080 60 | grep Modeline | sed 's/Modeline //; s/\"1920x1080_60.00\"/1920x1080/'); xrandr --newmode $MODELINE 2>/dev/null; xrandr --addmode \"$PRIMARY\" 1920x1080 2>/dev/null; fi; xrandr --output \"$PRIMARY\" --mode 1920x1080 2>/dev/null || true; fi"
+NoDisplay=true
+X-GNOME-Autostart-enabled=true
+AUTOEOF
+
+        log_success "Virtual screen 1920x1080 configured via xrandr autostart"
+    fi
+}
+
+remove_virtual_screen() {
+    log_info "Removing virtual screen configuration..."
+
+    local restored=false
+
+    # Restore NVIDIA Tegra default xorg.conf if our virtual config exists
+    if [ -f /etc/X11/xorg.conf ] && grep -q "Virtual1080p" /etc/X11/xorg.conf 2>/dev/null; then
+        local backup_date
+        backup_date=$(date +%Y%m%d)
+        sudo cp /etc/X11/xorg.conf "/etc/X11/xorg.conf.virtual1080p.bak.${backup_date}" 2>/dev/null || true
+
+        # Restore from .orig if exists, otherwise write NVIDIA default minimal config
+        if [ -f /etc/X11/xorg.conf.orig ]; then
+            sudo cp /etc/X11/xorg.conf.orig /etc/X11/xorg.conf
+            log_info "Restored /etc/X11/xorg.conf from .orig"
+        else
+            sudo tee /etc/X11/xorg.conf > /dev/null << 'XORGORIG'
+# NVIDIA Tegra minimal configuration
+
+Section "Module"
+    Disable     "dri"
+    SubSection  "extmod"
+        Option  "omit xfree86-dga"
+    EndSubSection
+EndSection
+
+Section "Device"
+    Identifier  "Tegra0"
+    Driver      "nvidia"
+    Option      "AllowEmptyInitialConfiguration" "true"
+EndSection
+XORGORIG
+            log_info "Restored /etc/X11/xorg.conf to NVIDIA minimal default"
+        fi
+        restored=true
+    fi
+
+    # Remove autostart entries
+    if [ -f /etc/xdg/autostart/jetson-1080p.desktop ]; then
+        sudo rm -f /etc/xdg/autostart/jetson-1080p.desktop
+        log_info "Removed /etc/xdg/autostart/jetson-1080p.desktop"
+        restored=true
+    fi
+    if [ -f /etc/xdg/autostart/virtual-1080p.desktop ]; then
+        sudo rm -f /etc/xdg/autostart/virtual-1080p.desktop
+        log_info "Removed /etc/xdg/autostart/virtual-1080p.desktop"
+        restored=true
+    fi
+
+    if $restored; then
+        log_success "Virtual screen configuration removed (restart GDM or reboot to apply)"
+    else
+        log_info "No virtual screen configuration found, nothing to remove"
+    fi
+}
+
+virtual_screen_installed() {
+    if [ -f /etc/X11/xorg.conf ] && grep -q "Virtual1080p" /etc/X11/xorg.conf 2>/dev/null; then
+        return 0
+    fi
+    if [ -f /etc/xdg/autostart/jetson-1080p.desktop ] || [ -f /etc/xdg/autostart/virtual-1080p.desktop ]; then
+        return 0
+    fi
+    return 1
+}
+
+#===============================================================================
 # CLI Shortcuts: Bash Aliases + Nautilus Right-Click Actions
 #===============================================================================
 setup_cli_shortcuts() {
@@ -3416,6 +3587,13 @@ install_realvnc() {
 
     # Disable Wayland for VNC compatibility
     disable_wayland
+
+    # Auto-setup virtual screen for headless VNC usage
+    # (essential for Jetson/headless systems where no monitor is connected)
+    if ! virtual_screen_installed; then
+        log_info "Setting up virtual screen 1920x1080 for VNC headless usage..."
+        setup_virtual_screen
+    fi
 }
 
 disable_wayland() {
@@ -3725,12 +3903,17 @@ debloat_system() {
     local bi
     for ((bi=0; bi<total_pkgs; bi++)); do
         log_info "Removing ${DEBLOAT_SELECTED_NAMES[$bi]}..."
-        # shellcheck disable=SC2086
-        sudo apt-get remove -y ${DEBLOAT_SELECTED_PKGS[$bi]} 2>/dev/null || true
+        # Special markers handled separately (not real apt packages)
+        if [ "${DEBLOAT_SELECTED_PKGS[$bi]}" = "__VSCREEN__" ]; then
+            remove_virtual_screen
+        else
+            # shellcheck disable=SC2086
+            sudo apt-get remove -y ${DEBLOAT_SELECTED_PKGS[$bi]} 2>/dev/null || true
+        fi
         removed_count=$((removed_count + 1))
     done
     sudo apt-get autoclean 2>/dev/null || true
-    log_success "Debloat completed: $removed_count package(s) removed"
+    log_success "Debloat completed: $removed_count item(s) removed"
 }
 
 #===============================================================================

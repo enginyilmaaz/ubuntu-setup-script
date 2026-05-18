@@ -16,7 +16,7 @@
 #===============================================================================
 
 SCRIPT_VERSION="2.5.0"
-SCRIPT_REVISION="94"
+SCRIPT_REVISION="95"
 SCRIPT_DATE="2026-03-27"
 
 # NOTE: We intentionally do NOT use set -e here.
@@ -2967,11 +2967,10 @@ install_realvnc() {
         read -p "Reinstall from scratch? (y/n): " reinstall_choice < /dev/tty
         if [[ "$reinstall_choice" =~ ^[Yy]$ ]]; then
             log_info "Removing existing RealVNC installation..."
-            sudo apt-get purge -y realvnc-connect realvnc-vnc-server 2>/dev/null
+            sudo apt-get remove -y realvnc-connect realvnc-vnc-server 2>/dev/null
             sudo rm -f /etc/apt/sources.list.d/*realvnc* /etc/apt/sources.list.d/*vnc*
             sudo rm -f /usr/share/keyrings/*realvnc* /etc/apt/trusted.gpg.d/*realvnc*
             sudo rm -rf /usr/share/vnc /usr/bin/vncserver-x11 /usr/bin/vncserver
-            sudo apt-get autoremove -y 2>/dev/null
             log_success "Old RealVNC removed, reinstalling..."
         else
             log_info "Keeping existing installation, skipping..."
@@ -3593,8 +3592,6 @@ remove_firefox() {
         if $firefox_deb; then
             log_info "  Removing Firefox deb..."
             sudo apt-get remove -y firefox
-            sudo apt-get purge -y firefox
-            sudo apt-get autoremove -y
         fi
 
         # Remove flatpak version

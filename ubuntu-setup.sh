@@ -16,7 +16,7 @@
 #===============================================================================
 
 SCRIPT_VERSION="2.5.0"
-SCRIPT_REVISION="97"
+SCRIPT_REVISION="98"
 SCRIPT_DATE="2026-03-27"
 
 # NOTE: We intentionally do NOT use set -e here.
@@ -907,7 +907,7 @@ show_interactive_install_menu() {
 
         echo -e "${YELLOW}───────────────────────────────────────────────────────────────${NC}"
         echo ""
-        echo -e "  ${CYAN}CONTROLS:${NC}  ${YELLOW}↑↓${NC}=Move  ${YELLOW}SPACE${NC}=Toggle  ${YELLOW}a${NC}=All  ${YELLOW}n${NC}=None  ${GREEN}c${NC}=Confirm  ${RED}q${NC}=Quit"
+        echo -e "  ${CYAN}CONTROLS:${NC}  ${YELLOW}↑↓${NC}=Move  ${YELLOW}SPACE${NC}=Toggle  ${YELLOW}ENTER${NC}=Sub-menu  ${YELLOW}a${NC}=All  ${YELLOW}n${NC}=None  ${GREEN}c${NC}=Confirm  ${RED}q${NC}=Quit"
         echo ""
 
         # Read key
@@ -957,7 +957,16 @@ show_interactive_install_menu() {
                     SELECTED[$i]=0
                 done
                 ;;
-            'c'|'C'|'') # Confirm or Enter
+            '') # Enter - open sub-menu for current item (if it has one)
+                if [ "${APP_VARS[$cursor]}" = "INSTALL_GNOME" ]; then
+                    SELECTED[$cursor]=1
+                    show_gnome_submenu || true
+                elif [ "${APP_VARS[$cursor]}" = "DO_DEBLOAT" ]; then
+                    SELECTED[$cursor]=1
+                    show_debloat_submenu || true
+                fi
+                ;;
+            'c'|'C') # Confirm and start installation
                 if [ $count -eq 0 ]; then
                     echo -e "${RED}Please select at least one application!${NC}"
                     sleep 1

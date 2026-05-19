@@ -16,7 +16,7 @@
 #===============================================================================
 
 SCRIPT_VERSION="2.5.0"
-SCRIPT_REVISION="136"
+SCRIPT_REVISION="137"
 SCRIPT_DATE="2026-03-27"
 
 # NOTE: We intentionally do NOT use set -e here.
@@ -711,6 +711,19 @@ show_debloat_submenu() {
     # Ubuntu Videos (Totem)
     if dpkg -l totem 2>/dev/null | grep -q "^ii"; then
         BLOAT_NAMES+=("Ubuntu Videos");     BLOAT_DESCS+=("Remove Totem video player (GNOME Videos)");   BLOAT_PKGS+=("totem totem-common totem-plugins")
+    fi
+    # === GNOME tweak rollbacks / removals ===
+    # Dash to Dock - restore from backup (only if backup file exists)
+    if [ -f "$BACKUP_DIR/gnome-backup/dash-to-dock.dconf" ]; then
+        BLOAT_NAMES+=("Restore Dash to Dock"); BLOAT_DESCS+=("Roll back Dash to Dock settings from backup"); BLOAT_PKGS+=("__DTD_RESTORE__")
+    fi
+    # Script Launcher GNOME extension (only if installed)
+    if [ -d "$HOME/.local/share/gnome-shell/extensions/script-launcher@enginyilmaaz" ]; then
+        BLOAT_NAMES+=("Script Launcher");      BLOAT_DESCS+=("Remove Script Launcher GNOME extension");     BLOAT_PKGS+=("__SCRIPT_LAUNCHER__")
+    fi
+    # Extensions stack (Tweaks → Extensions: Extension Manager + Shell Extensions + AppIndicator + Tray Icons)
+    if package_installed gnome-shell-extension-manager || package_installed gnome-shell-extensions; then
+        BLOAT_NAMES+=("Extensions Stack");     BLOAT_DESCS+=("Remove Extension Manager + Shell Extensions + AppIndicator + Tray Icons"); BLOAT_PKGS+=("__EXTENSIONS_STACK__")
     fi
     # === Language packs (dynamic — list each installed lang pack so user can pick) ===
     local _lang_pkg _lang_code _lang_name
@@ -4591,6 +4604,48 @@ debloat_system() {
                 sudo systemctl disable jtop 2>/dev/null || true
                 sudo -H pip3 uninstall -y jetson-stats 2>/dev/null || true
                 log_info "jtop / jetson-stats removed"
+                ;;
+            "__DTD_RESTORE__")
+                if [ -f "$BACKUP_DIR/gnome-backup/dash-to-dock.dconf" ]; then
+                    log_info "Restoring Dash to Dock settings from backup..."
+                    dconf load /org/gnome/shell/extensions/dash-to-dock/ < "$BACKUP_DIR/gnome-backup/dash-to-dock.dconf"
+                    log_success "Dash to Dock restored. Log out / shell restart for full effect."
+                else
+                    log_warning "No backup found at $BACKUP_DIR/gnome-backup/dash-to-dock.dconf"
+                fi
+                ;;
+            "__SCRIPT_LAUNCHER__")
+                local _sl_uuid="script-launcher@enginyilmaaz"
+                gnome-extensions disable "$_sl_uuid" 2>/dev/null || true
+                rm -rf "$HOME/.local/share/gnome-shell/extensions/$_sl_uuid"
+                # Remove from enabled-extensions list
+                local _en
+                _en=$(gsettings get org.gnome.shell enabled-extensions 2>/dev/null)
+                if [ -n "$_en" ] && [ "$_en" != "@as []" ]; then
+                    local _new
+                    _new=$(echo "$_en" | sed "s/, *'$_sl_uuid'//g; s/'$_sl_uuid', *//g; s/'$_sl_uuid'//g; s/\[ *,/[/; s/, *\]/]/")
+                    gsettings set org.gnome.shell enabled-extensions "$_new" 2>/dev/null || true
+                fi
+                log_info "Script Launcher GNOME extension removed"
+                ;;
+            "__EXTENSIONS_STACK__")
+                # 1) Remove the apt packages
+                sudo apt-get remove -y gnome-shell-extension-manager gnome-shell-extensions \
+                    gnome-shell-extension-appindicator gnome-browser-connector 2>/dev/null || true
+                # 2) Remove Tray Icons: Reloaded (third-party extension)
+                rm -rf "$HOME/.local/share/gnome-shell/extensions/trayIconsReloaded@selfmade.pl"
+                # 3) Clean the enabled-extensions list of related UUIDs
+                local _uuids="appindicatorsupport@rgcjonas.gmail.com ubuntu-appindicators@ubuntu.com trayIconsReloaded@selfmade.pl"
+                local _en _new
+                _en=$(gsettings get org.gnome.shell enabled-extensions 2>/dev/null)
+                if [ -n "$_en" ] && [ "$_en" != "@as []" ]; then
+                    _new="$_en"
+                    for _u in $_uuids; do
+                        _new=$(echo "$_new" | sed "s/, *'$_u'//g; s/'$_u', *//g; s/'$_u'//g; s/\[ *,/[/; s/, *\]/]/")
+                    done
+                    gsettings set org.gnome.shell enabled-extensions "$_new" 2>/dev/null || true
+                fi
+                log_info "Extensions stack removed (Manager / Shell Extensions / AppIndicator / Tray Icons)"
                 ;;
             "__XKB_DROP__:"*)
                 local _drop_code="${DEBLOAT_SELECTED_PKGS[$bi]#__XKB_DROP__:}"

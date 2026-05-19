@@ -16,7 +16,7 @@
 #===============================================================================
 
 SCRIPT_VERSION="2.5.0"
-SCRIPT_REVISION="132"
+SCRIPT_REVISION="133"
 SCRIPT_DATE="2026-03-27"
 
 # NOTE: We intentionally do NOT use set -e here.
@@ -1175,6 +1175,29 @@ show_interactive_install_menu() {
                     echo -e "${RED}Please select at least one application!${NC}"
                     sleep 1
                     continue
+                fi
+
+                # Detect conflicting picks: Apport selected in Tweaks (Activate)
+                # AND Debloat (Remove) — they'd cancel out. Same for Snap install
+                # markers vs Debloat snap removal. Warn the user.
+                local _conflicts=""
+                if $GNOME_SUB_APPORT; then
+                    for _dn in "${DEBLOAT_SELECTED_NAMES[@]}"; do
+                        [ "$_dn" = "Apport" ] && _conflicts+="Apport (Tweaks Activate vs Debloat Remove)\n"
+                    done
+                fi
+                if [ -n "$_conflicts" ]; then
+                    tput cnorm 2>/dev/null || true
+                    echo ""
+                    echo -e "${YELLOW}⚠  You picked the same item in both Tweaks and Debloat:${NC}"
+                    echo -e "${YELLOW}$_conflicts${NC}"
+                    echo -e "${YELLOW}They cancel each other out — net effect: nothing changes.${NC}"
+                    echo ""
+                    read -p "Continue anyway? (y/n): " _conf_ok < /dev/tty
+                    if [[ ! "$_conf_ok" =~ ^[Yy]$ ]]; then
+                        tput civis 2>/dev/null || true
+                        continue
+                    fi
                 fi
 
                 tput cnorm 2>/dev/null || true
@@ -3123,12 +3146,15 @@ ACCOUNTSEOF
     fi
 
     # 17. Restore Ubuntu Desktop meta-packages
+    # CRITICAL: --no-install-recommends so the meta doesn't drag back
+    # all the bloatware (remmina, shotwell, libreoffice, rhythmbox, ...)
+    # that ubuntu-desktop Recommends.
     if $GNOME_SUB_DESKTOP_META; then
-        log_info "Reinstalling ubuntu-desktop meta-packages..."
+        log_info "Reinstalling ubuntu-desktop meta-packages (without Recommends)..."
         _pause_update_notifier
-        sudo apt-get install -y ubuntu-desktop ubuntu-desktop-minimal 2>&1 | tail -3
+        sudo apt-get install -y --no-install-recommends ubuntu-desktop ubuntu-desktop-minimal 2>&1 | tail -3
         _resume_update_notifier
-        log_success "ubuntu-desktop / ubuntu-desktop-minimal restored"
+        log_success "ubuntu-desktop / ubuntu-desktop-minimal restored (no bloatware re-pulled)"
     fi
 
     log_success "GNOME Tweaks setup completed"
@@ -5053,11 +5079,13 @@ check_critical_packages() {
     if [[ "$crit_choice" =~ ^[Yy]$ ]]; then
         _pause_update_notifier
         sudo apt-get update -qq
-        sudo apt-get install -y "${missing_critical[@]}" 2>&1 | tail -5
+        # --no-install-recommends so we don't accidentally drag back bloatware
+        # via any transitive Recommends chains.
+        sudo apt-get install -y --no-install-recommends "${missing_critical[@]}" 2>&1 | tail -5
         _resume_update_notifier
         log_success "Reinstalled: ${missing_critical[*]}"
     else
-        log_warning "Skipped — to fix later: sudo apt install ${missing_critical[*]}"
+        log_warning "Skipped — to fix later: sudo apt install --no-install-recommends ${missing_critical[*]}"
     fi
 }
 

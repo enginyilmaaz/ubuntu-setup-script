@@ -16,7 +16,7 @@
 #===============================================================================
 
 SCRIPT_VERSION="2.5.0"
-SCRIPT_REVISION="109"
+SCRIPT_REVISION="110"
 SCRIPT_DATE="2026-03-27"
 
 # NOTE: We intentionally do NOT use set -e here.
@@ -704,6 +704,62 @@ show_debloat_submenu() {
     if dpkg -l xrdp 2>/dev/null | grep -q "^ii"; then
         BLOAT_NAMES+=("RDP Server (xrdp)");    BLOAT_DESCS+=("Remove xrdp (port 3389 RDP server)");          BLOAT_PKGS+=("__XRDP__")
     fi
+    # === Other apps the script installs (only listed if currently installed) ===
+    # RealVNC
+    if dpkg -l realvnc-vnc-server 2>/dev/null | grep -q "^ii" || command_exists vncserver-x11; then
+        BLOAT_NAMES+=("RealVNC");              BLOAT_DESCS+=("Remove RealVNC Connect (Remote Desktop)");        BLOAT_PKGS+=("__REALVNC__")
+    fi
+    # RustDesk
+    if dpkg -l rustdesk 2>/dev/null | grep -q "^ii" || command_exists rustdesk; then
+        BLOAT_NAMES+=("RustDesk");             BLOAT_DESCS+=("Remove RustDesk (Open Source Remote Desktop)");   BLOAT_PKGS+=("rustdesk")
+    fi
+    # NodeJS (NVM)
+    if [ -d "$HOME/.nvm" ] || command_exists node; then
+        BLOAT_NAMES+=("Node.js (NVM)");        BLOAT_DESCS+=("Remove NVM + Node.js (rm -rf ~/.nvm)");           BLOAT_PKGS+=("__NVM__")
+    fi
+    # Google Chrome
+    if dpkg -l google-chrome-stable 2>/dev/null | grep -q "^ii"; then
+        BLOAT_NAMES+=("Google Chrome");        BLOAT_DESCS+=("Remove Google Chrome browser");                   BLOAT_PKGS+=("google-chrome-stable")
+    fi
+    # Chromium
+    if dpkg -l chromium 2>/dev/null | grep -q "^ii"; then
+        BLOAT_NAMES+=("Chromium");             BLOAT_DESCS+=("Remove Chromium browser");                        BLOAT_PKGS+=("chromium")
+    fi
+    if snap list chromium &>/dev/null; then
+        BLOAT_NAMES+=("Chromium (snap)");      BLOAT_DESCS+=("Remove Chromium snap");                           BLOAT_PKGS+=("__CHROMIUM_SNAP__")
+    fi
+    # Python
+    if dpkg -l python3-pip 2>/dev/null | grep -q "^ii"; then
+        BLOAT_NAMES+=("Python 3 pip");         BLOAT_DESCS+=("Remove python3-pip + python3-venv");              BLOAT_PKGS+=("python3-pip python3-venv")
+    fi
+    # DBeaver
+    if dpkg -l dbeaver-ce 2>/dev/null | grep -q "^ii"; then
+        BLOAT_NAMES+=("DBeaver CE");           BLOAT_DESCS+=("Remove DBeaver CE (database tool)");              BLOAT_PKGS+=("dbeaver-ce")
+    fi
+    # VLC
+    if dpkg -l vlc 2>/dev/null | grep -q "^ii"; then
+        BLOAT_NAMES+=("VLC");                  BLOAT_DESCS+=("Remove VLC media player");                        BLOAT_PKGS+=("vlc")
+    fi
+    # Cloudflared
+    if dpkg -l cloudflared 2>/dev/null | grep -q "^ii"; then
+        BLOAT_NAMES+=("Cloudflared");          BLOAT_DESCS+=("Remove Cloudflare Tunnel client");                BLOAT_PKGS+=("cloudflared")
+    fi
+    # Docker
+    if dpkg -l docker-ce 2>/dev/null | grep -q "^ii"; then
+        BLOAT_NAMES+=("Docker Engine");        BLOAT_DESCS+=("Remove Docker Engine + Compose plugin");          BLOAT_PKGS+=("docker-ce docker-ce-cli containerd.io docker-compose-plugin docker-buildx-plugin")
+    fi
+    # GitHub CLI
+    if dpkg -l gh 2>/dev/null | grep -q "^ii"; then
+        BLOAT_NAMES+=("GitHub CLI (gh)");      BLOAT_DESCS+=("Remove GitHub CLI (gh)");                         BLOAT_PKGS+=("gh")
+    fi
+    # Postman (snap)
+    if snap list postman &>/dev/null; then
+        BLOAT_NAMES+=("Postman");              BLOAT_DESCS+=("Remove Postman (snap remove)");                   BLOAT_PKGS+=("__POSTMAN_SNAP__")
+    fi
+    # FileZilla
+    if dpkg -l filezilla 2>/dev/null | grep -q "^ii"; then
+        BLOAT_NAMES+=("FileZilla");            BLOAT_DESCS+=("Remove FileZilla (FTP/SFTP client)");             BLOAT_PKGS+=("filezilla")
+    fi
     # NOTE: OpenSSH Server is NOT listed here on purpose — removing it could
     # cut remote access for the user. Use 'sudo apt purge openssh-server' manually
     # only if you have physical/console access.
@@ -720,7 +776,7 @@ show_debloat_submenu() {
 
     local -a BSELECTED=()
     for ((bi=0; bi<TOTAL_BLOAT; bi++)); do
-        BSELECTED+=(1)
+        BSELECTED+=(0)
     done
     local bcursor=0
 
@@ -732,7 +788,7 @@ show_debloat_submenu() {
         echo -e "${CYAN}║                    ${RED}Debloat - Remove Bloatware${CYAN}                             ║${NC}"
         echo -e "${CYAN}╚═══════════════════════════════════════════════════════════════════════════╝${NC}"
         echo ""
-        echo -e "${YELLOW}  Found ${TOTAL_BLOAT} bloatware package(s) installed. Deselect any you want to keep.${NC}"
+        echo -e "${YELLOW}  Found ${TOTAL_BLOAT} removable item(s). Select what you want to remove (nothing selected by default).${NC}"
         echo ""
         echo -e "${GREEN}═══════════════════════════════════════════════════════════════${NC}"
         echo -e "${GREEN}     Use ↑↓ arrows to navigate, SPACE to toggle${NC}"
@@ -4192,6 +4248,28 @@ debloat_system() {
             "__CODEX__")
                 command_exists npm && npm uninstall -g @openai/codex 2>/dev/null || true
                 log_info "Codex CLI removed"
+                ;;
+            "__REALVNC__")
+                sudo systemctl stop vncserver-x11-serviced 2>/dev/null || true
+                sudo systemctl disable vncserver-x11-serviced 2>/dev/null || true
+                sudo apt-mark unhold realvnc-vnc-server realvnc-connect realvnc-vnc-viewer 2>/dev/null || true
+                sudo apt-get remove -y realvnc-vnc-server realvnc-connect realvnc-vnc-viewer 2>/dev/null || true
+                log_info "RealVNC removed"
+                ;;
+            "__NVM__")
+                rm -rf "$HOME/.nvm" 2>/dev/null
+                for rcfile in "$HOME/.bashrc" "$HOME/.zshrc" "$HOME/.profile"; do
+                    [ -f "$rcfile" ] && sed -i '/NVM_DIR/d; /nvm.sh/d; /bash_completion/d' "$rcfile" 2>/dev/null
+                done
+                log_info "NVM + Node.js removed (~/.nvm deleted)"
+                ;;
+            "__CHROMIUM_SNAP__")
+                sudo snap remove --purge chromium 2>/dev/null || true
+                log_info "Chromium snap removed"
+                ;;
+            "__POSTMAN_SNAP__")
+                sudo snap remove --purge postman 2>/dev/null || true
+                log_info "Postman snap removed"
                 ;;
             *)
                 # shellcheck disable=SC2086

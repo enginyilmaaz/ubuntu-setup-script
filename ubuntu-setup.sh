@@ -16,7 +16,7 @@
 #===============================================================================
 
 SCRIPT_VERSION="2.5.0"
-SCRIPT_REVISION="125"
+SCRIPT_REVISION="126"
 SCRIPT_DATE="2026-03-27"
 
 # NOTE: We intentionally do NOT use set -e here.
@@ -4885,11 +4885,15 @@ check_critical_packages() {
     # Only check on Ubuntu desktop systems (skip headless servers)
     command_exists gnome-shell || return 0
 
+    # Only check things that actually break the user experience:
+    #   - gnome-control-center → the Settings app binary
+    #   - gnome-terminal       → the Terminal app binary
+    # Meta-packages like ubuntu-desktop / ubuntu-desktop-minimal aren't
+    # checked because they hold no actual files, so their absence is
+    # cosmetic and the user might have removed them on purpose.
     local -a missing=()
-    # gnome-control-center = "Settings" app
     package_installed gnome-control-center || missing+=("gnome-control-center")
-    # Core meta-packages that hold the desktop together
-    package_installed ubuntu-desktop-minimal || missing+=("ubuntu-desktop-minimal")
+    package_installed gnome-terminal       || missing+=("gnome-terminal")
 
     if [ "${#missing[@]}" -eq 0 ]; then
         return 0
@@ -4897,24 +4901,25 @@ check_critical_packages() {
 
     echo ""
     echo -e "${RED}╔═══════════════════════════════════════════════════════════════════════════╗${NC}"
-    echo -e "${RED}║  CRITICAL DESKTOP PACKAGES ARE MISSING                                       ║${NC}"
+    echo -e "${RED}║  Core desktop app(s) missing                                                  ║${NC}"
     echo -e "${RED}╚═══════════════════════════════════════════════════════════════════════════╝${NC}"
     echo ""
-    echo -e "${YELLOW}The following core desktop packages are NOT installed:${NC}"
+    echo -e "${YELLOW}These core apps are NOT installed (probably a cascading apt-purge in a previous run):${NC}"
     for p in "${missing[@]}"; do
-        echo -e "  ${RED}✗${NC} $p"
+        case "$p" in
+            gnome-control-center) echo -e "  ${RED}✗${NC} $p  (Settings app)" ;;
+            gnome-terminal)       echo -e "  ${RED}✗${NC} $p  (Terminal app)" ;;
+            *)                    echo -e "  ${RED}✗${NC} $p" ;;
+        esac
     done
-    echo ""
-    echo "This usually means a previous purge / autoremove dragged them out as"
-    echo "broken dependencies. Without gnome-control-center you have no 'Settings' app."
     echo ""
     read -p "Restore them now via apt-get install? (y/n): " fix_choice < /dev/tty
     if [[ "$fix_choice" =~ ^[Yy]$ ]]; then
         sudo apt-get update -qq
-        sudo apt-get install -y "${missing[@]}" gnome-remote-desktop 2>&1 | tail -5
-        log_success "Critical packages reinstalled"
+        sudo apt-get install -y "${missing[@]}" 2>&1 | tail -5
+        log_success "Restored: ${missing[*]}"
     else
-        log_warning "Skipped - you can run later: sudo apt install ${missing[*]}"
+        log_warning "Skipped. To restore later: sudo apt install ${missing[*]}"
     fi
 }
 

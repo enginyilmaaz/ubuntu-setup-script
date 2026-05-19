@@ -16,7 +16,7 @@
 #===============================================================================
 
 SCRIPT_VERSION="2.5.0"
-SCRIPT_REVISION="121"
+SCRIPT_REVISION="122"
 SCRIPT_DATE="2026-03-27"
 
 # NOTE: We intentionally do NOT use set -e here.
@@ -4463,6 +4463,38 @@ NOSNAPEOF
                 log_success "Snap stack completely removed. Rollback note: $_snap_log"
                 ;;
             *)
+                # Safety: dry-run to see what apt actually plans to remove.
+                # If apt wants to take out MORE packages than we asked for
+                # (because some other installed package depends on this one),
+                # ask the user before proceeding so we don't drag out the desktop.
+                local _planned_remove
+                # shellcheck disable=SC2086
+                _planned_remove=$(LC_ALL=C apt-get -s remove -y ${DEBLOAT_SELECTED_PKGS[$bi]} 2>&1 | \
+                                  awk '/^Remv /{print $2}')
+                local _planned_count
+                _planned_count=$(echo "$_planned_remove" | grep -c .)
+                local _asked_count
+                # shellcheck disable=SC2086
+                _asked_count=$(echo ${DEBLOAT_SELECTED_PKGS[$bi]} | wc -w)
+
+                if [ "$_planned_count" -gt "$_asked_count" ]; then
+                    echo ""
+                    echo -e "${YELLOW}⚠  Removing '${DEBLOAT_SELECTED_NAMES[$bi]}' will ALSO remove these dependents:${NC}"
+                    echo "$_planned_remove" | while read -r _p; do
+                        # shellcheck disable=SC2086
+                        if ! echo " ${DEBLOAT_SELECTED_PKGS[$bi]} " | grep -q " $_p "; then
+                            echo -e "    ${RED}-${NC} $_p"
+                        fi
+                    done
+                    echo ""
+                    read -p "  Continue anyway? (y/n): " _dep_ok < /dev/tty
+                    if [[ ! "$_dep_ok" =~ ^[Yy]$ ]]; then
+                        log_info "Skipped '${DEBLOAT_SELECTED_NAMES[$bi]}' (kept dependents)."
+                        removed_count=$((removed_count + 1))
+                        continue
+                    fi
+                fi
+
                 # shellcheck disable=SC2086
                 sudo apt-get remove -y ${DEBLOAT_SELECTED_PKGS[$bi]} 2>/dev/null || true
                 ;;
@@ -4865,9 +4897,53 @@ except Exception:
     exec bash "$new_script" "$@"
 }
 
+#===============================================================================
+# Critical-package health check
+# If a previous run accidentally pulled out core desktop packages, offer to fix.
+#===============================================================================
+check_critical_packages() {
+    # Only check on Ubuntu desktop systems (skip headless servers)
+    command_exists gnome-shell || return 0
+
+    local -a missing=()
+    # gnome-control-center = "Settings" app
+    package_installed gnome-control-center || missing+=("gnome-control-center")
+    # Core meta-packages that hold the desktop together
+    package_installed ubuntu-desktop-minimal || missing+=("ubuntu-desktop-minimal")
+
+    if [ "${#missing[@]}" -eq 0 ]; then
+        return 0
+    fi
+
+    echo ""
+    echo -e "${RED}╔═══════════════════════════════════════════════════════════════════════════╗${NC}"
+    echo -e "${RED}║  CRITICAL DESKTOP PACKAGES ARE MISSING                                       ║${NC}"
+    echo -e "${RED}╚═══════════════════════════════════════════════════════════════════════════╝${NC}"
+    echo ""
+    echo -e "${YELLOW}The following core desktop packages are NOT installed:${NC}"
+    for p in "${missing[@]}"; do
+        echo -e "  ${RED}✗${NC} $p"
+    done
+    echo ""
+    echo "This usually means a previous purge / autoremove dragged them out as"
+    echo "broken dependencies. Without gnome-control-center you have no 'Settings' app."
+    echo ""
+    read -p "Restore them now via apt-get install? (y/n): " fix_choice < /dev/tty
+    if [[ "$fix_choice" =~ ^[Yy]$ ]]; then
+        sudo apt-get update -qq
+        sudo apt-get install -y "${missing[@]}" gnome-remote-desktop 2>&1 | tail -5
+        log_success "Critical packages reinstalled"
+    else
+        log_warning "Skipped - you can run later: sudo apt install ${missing[*]}"
+    fi
+}
+
 main() {
     # Self-update check (skipped for git checkouts and when SKIP_UPDATE_CHECK=1)
     check_for_update "$@"
+
+    # Sanity check: warn if the desktop is missing core pieces
+    check_critical_packages
 
     # Handle special commands first (no root check needed)
     if $SHOW_HELP; then

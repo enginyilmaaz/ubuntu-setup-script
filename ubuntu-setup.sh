@@ -16,7 +16,7 @@
 #===============================================================================
 
 SCRIPT_VERSION="2.5.0"
-SCRIPT_REVISION="135"
+SCRIPT_REVISION="136"
 SCRIPT_DATE="2026-03-27"
 
 # NOTE: We intentionally do NOT use set -e here.
@@ -711,6 +711,52 @@ show_debloat_submenu() {
     # Ubuntu Videos (Totem)
     if dpkg -l totem 2>/dev/null | grep -q "^ii"; then
         BLOAT_NAMES+=("Ubuntu Videos");     BLOAT_DESCS+=("Remove Totem video player (GNOME Videos)");   BLOAT_PKGS+=("totem totem-common totem-plugins")
+    fi
+    # === Language packs (dynamic — list each installed lang pack so user can pick) ===
+    local _lang_pkg _lang_code _lang_name
+    while read -r _lang_pkg; do
+        # Extract code like 'en' from 'language-pack-en'
+        _lang_code="${_lang_pkg#language-pack-}"
+        case "$_lang_code" in
+            en) _lang_name="English" ;;
+            tr) _lang_name="Turkish" ;;
+            de) _lang_name="German" ;;
+            fr) _lang_name="French" ;;
+            es) _lang_name="Spanish" ;;
+            it) _lang_name="Italian" ;;
+            ru) _lang_name="Russian" ;;
+            zh-hans) _lang_name="Chinese (Simplified)" ;;
+            zh-hant) _lang_name="Chinese (Traditional)" ;;
+            ja) _lang_name="Japanese" ;;
+            ko) _lang_name="Korean" ;;
+            ar) _lang_name="Arabic" ;;
+            *)  _lang_name="$_lang_code" ;;
+        esac
+        # Skip Turkish (user's primary, never remove)
+        [ "$_lang_code" = "tr" ] && continue
+        BLOAT_NAMES+=("Lang: $_lang_name"); BLOAT_DESCS+=("Remove $_lang_name language packs (4 packages)"); BLOAT_PKGS+=("language-pack-$_lang_code language-pack-$_lang_code-base language-pack-gnome-$_lang_code language-pack-gnome-$_lang_code-base")
+    done < <(dpkg -l 'language-pack-*' 2>/dev/null | awk '/^ii / && $2 !~ /^language-pack-gnome/ && $2 !~ /-base$/ {print $2}')
+    # XKB layout removal (extra keyboard layouts the user no longer wants)
+    local _xkb_sources
+    _xkb_sources=$(gsettings get org.gnome.desktop.input-sources sources 2>/dev/null)
+    # Iterate over each xkb code in the list, offer to drop any non-tr layout
+    if [[ "$_xkb_sources" =~ \( ]]; then
+        local _xkb_code
+        for _xkb_code in $(echo "$_xkb_sources" | grep -oP "'xkb', '[^']+'" | grep -oP "'[a-zA-Z0-9_+-]+'" | grep -v "'xkb'" | tr -d "'"); do
+            # Only suggest removing 'us' (English) here, since the user explicitly
+            # asked about English. Skip 'tr'.
+            [ "$_xkb_code" = "tr" ] && continue
+            local _xkb_label
+            case "$_xkb_code" in
+                us) _xkb_label="English (US)" ;;
+                gb) _xkb_label="English (UK)" ;;
+                de) _xkb_label="German" ;;
+                fr) _xkb_label="French" ;;
+                es) _xkb_label="Spanish" ;;
+                *)  _xkb_label="$_xkb_code" ;;
+            esac
+            BLOAT_NAMES+=("Keyboard: $_xkb_label"); BLOAT_DESCS+=("Drop '$_xkb_code' XKB layout from GNOME (keeps tr)"); BLOAT_PKGS+=("__XKB_DROP__:$_xkb_code")
+        done
     fi
     # NOTE: Ubuntu Help (yelp/gnome-user-docs) removed from Debloat by user
     # request — it cascaded to ubuntu-desktop meta and was confusing. Manual:
@@ -4545,6 +4591,24 @@ debloat_system() {
                 sudo systemctl disable jtop 2>/dev/null || true
                 sudo -H pip3 uninstall -y jetson-stats 2>/dev/null || true
                 log_info "jtop / jetson-stats removed"
+                ;;
+            "__XKB_DROP__:"*)
+                local _drop_code="${DEBLOAT_SELECTED_PKGS[$bi]#__XKB_DROP__:}"
+                log_info "Removing '$_drop_code' from GNOME keyboard layouts..."
+                # Rebuild sources list without the dropped code
+                local _curr _new
+                _curr=$(gsettings get org.gnome.desktop.input-sources sources 2>/dev/null)
+                # Use python to safely filter
+                _new=$(python3 -c "
+import sys, ast
+s = ast.literal_eval('''$_curr''')
+filtered = [t for t in s if t[1] != '$_drop_code']
+print(repr(filtered).replace('[', '[').replace(']', ']'))
+" 2>/dev/null)
+                if [ -n "$_new" ]; then
+                    gsettings set org.gnome.desktop.input-sources sources "$_new" 2>/dev/null || true
+                    log_success "XKB layout '$_drop_code' removed from GNOME"
+                fi
                 ;;
             "__APPORT__")
                 sudo systemctl stop apport.service 2>/dev/null || true

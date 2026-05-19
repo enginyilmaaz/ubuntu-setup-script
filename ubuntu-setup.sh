@@ -16,7 +16,7 @@
 #===============================================================================
 
 SCRIPT_VERSION="2.5.0"
-SCRIPT_REVISION="112"
+SCRIPT_REVISION="113"
 SCRIPT_DATE="2026-03-27"
 
 # NOTE: We intentionally do NOT use set -e here.
@@ -1104,7 +1104,52 @@ show_interactive_install_menu() {
                 echo ""
                 for ((i=0; i<TOTAL_ITEMS; i++)); do
                     if [ "${SELECTED[$i]}" = "1" ]; then
-                        echo -e "  ${GREEN}✓${NC} ${APP_NAMES[$i]} - ${APP_DESCS[$i]}"
+                        case "${APP_VARS[$i]}" in
+                            INSTALL_GNOME)
+                                # List actual Tweaks sub-menu picks
+                                local tweaks_list=""
+                                $GNOME_SUB_EXTENSIONS  && tweaks_list+="Extensions, "
+                                $GNOME_SUB_TWEAKS_APP  && tweaks_list+="GNOME Tweaks App, "
+                                $GNOME_SUB_DOCK        && tweaks_list+="Dash to Dock, "
+                                $GNOME_SUB_SCRIPT      && tweaks_list+="Script Launcher, "
+                                $GNOME_SUB_WAYLAND     && tweaks_list+="Disable Wayland, "
+                                $GNOME_SUB_SSH         && tweaks_list+="OpenSSH Server, "
+                                $GNOME_SUB_ALIASES     && tweaks_list+="CLI Aliases, "
+                                $GNOME_SUB_ENGLISH     && tweaks_list+="English Language, "
+                                $GNOME_SUB_SCREEN      && tweaks_list+="Screen Off: Never, "
+                                $GNOME_SUB_HIDDEN      && tweaks_list+="Show Hidden Files, "
+                                $GNOME_SUB_KB_TR       && tweaks_list+="Keyboard: Turkish Q, "
+                                $GNOME_SUB_KB_EN       && tweaks_list+="Keyboard: English Q, "
+                                $GNOME_SUB_VSCREEN     && tweaks_list+="Virtual Screen 1080p, "
+                                $GNOME_SUB_AUTOLOGIN   && tweaks_list+="GDM Auto-Login, "
+                                $GNOME_SUB_HOSTNAME    && tweaks_list+="Change Hostname → $NEW_HOSTNAME, "
+                                tweaks_list="${tweaks_list%, }"
+                                if [ -n "$tweaks_list" ]; then
+                                    echo -e "  ${GREEN}✓${NC} ${GREEN}Tweaks:${NC}"
+                                    # Word-wrap by splitting on comma
+                                    echo "$tweaks_list" | tr ',' '\n' | while IFS= read -r item; do
+                                        item="${item## }"
+                                        [ -n "$item" ] && echo -e "       ${CYAN}•${NC} $item"
+                                    done
+                                else
+                                    echo -e "  ${YELLOW}!${NC} ${GREEN}Tweaks:${NC} (no sub-items selected - will skip)"
+                                fi
+                                ;;
+                            DO_DEBLOAT)
+                                # List actual Debloat sub-menu picks
+                                if [ "${#DEBLOAT_SELECTED_NAMES[@]}" -gt 0 ]; then
+                                    echo -e "  ${RED}✗${NC} ${RED}Debloat (will remove):${NC}"
+                                    for _dn in "${DEBLOAT_SELECTED_NAMES[@]}"; do
+                                        echo -e "       ${RED}•${NC} $_dn"
+                                    done
+                                else
+                                    echo -e "  ${YELLOW}!${NC} ${RED}Debloat:${NC} (no items selected - will skip)"
+                                fi
+                                ;;
+                            *)
+                                echo -e "  ${GREEN}✓${NC} ${APP_NAMES[$i]} - ${APP_DESCS[$i]}"
+                                ;;
+                        esac
                     fi
                 done
                 echo ""

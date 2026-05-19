@@ -16,7 +16,7 @@
 #===============================================================================
 
 SCRIPT_VERSION="2.5.0"
-SCRIPT_REVISION="127"
+SCRIPT_REVISION="128"
 SCRIPT_DATE="2026-03-27"
 
 # NOTE: We intentionally do NOT use set -e here.
@@ -2843,10 +2843,20 @@ install_gnome_extensions() {
 
     # 0. Update system packages first (so subsequent installs use fresh index)
     if $GNOME_SUB_UPDATE; then
+        # Silence GNOME's update-notifier so its popup doesn't open a browser
+        # mid-script. We re-enable it at the end.
+        log_info "Pausing update-notifier so it doesn't pop up..."
+        pkill -f update-notifier 2>/dev/null || true
+        sudo systemctl stop update-notifier-download.timer update-notifier-motd.timer 2>/dev/null || true
+
         log_info "Running: sudo apt update"
         sudo apt-get update
         log_info "Running: sudo apt upgrade -y"
         sudo DEBIAN_FRONTEND=noninteractive apt-get upgrade -y
+
+        # Resume update-notifier timers
+        sudo systemctl start update-notifier-download.timer update-notifier-motd.timer 2>/dev/null || true
+
         log_success "System packages updated"
     fi
 

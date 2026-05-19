@@ -16,7 +16,7 @@
 #===============================================================================
 
 SCRIPT_VERSION="2.5.0"
-SCRIPT_REVISION="107"
+SCRIPT_REVISION="108"
 SCRIPT_DATE="2026-03-27"
 
 # NOTE: We intentionally do NOT use set -e here.
@@ -3745,17 +3745,12 @@ install_realvnc() {
     # Disable Wayland for VNC compatibility
     disable_wayland
 
-    # Headless-only auto-setup (Jetson with no monitor) — for normal PCs with
-    # a real monitor, RealVNC works at the GDM login screen out of the box.
-    if $IS_JETSON; then
-        if ! virtual_screen_installed; then
-            log_info "Jetson headless detected — setting up virtual 1920x1080 screen for VNC..."
-            setup_virtual_screen
-        fi
-        if ! autologin_enabled; then
-            log_info "Jetson headless — enabling GDM auto-login (needed for tray icon)..."
-            enable_autologin
-        fi
+    # Virtual screen and auto-login are NOT auto-applied here.
+    # They are opt-in via the GNOME Tweaks sub-menu (selected by default there).
+    # On Jetson headless they are needed; on normal PCs with monitor they aren't.
+    if $IS_JETSON && (! virtual_screen_installed || ! autologin_enabled); then
+        log_info "Jetson detected: if you're headless (no monitor), also select GNOME Tweaks"
+        log_info "  → 'Virtual Screen 1080p' and 'GDM Auto-Login' to get tray icon working."
     fi
 }
 

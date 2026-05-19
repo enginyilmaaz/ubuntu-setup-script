@@ -16,7 +16,7 @@
 #===============================================================================
 
 SCRIPT_VERSION="2.5.0"
-SCRIPT_REVISION="129"
+SCRIPT_REVISION="130"
 SCRIPT_DATE="2026-03-27"
 
 # NOTE: We intentionally do NOT use set -e here.
@@ -214,8 +214,21 @@ handle_error() {
     return 0
 }
 
-# Safe apt-get update - tolerates repo errors and asks user on failure
+# Silence GNOME's update-notifier briefly so its popup doesn't open a
+# browser tab mid-script. Returns a value the caller passes back to the
+# matching _resume function.
+_pause_update_notifier() {
+    pkill -f update-notifier 2>/dev/null || true
+    sudo systemctl stop update-notifier-download.timer update-notifier-motd.timer 2>/dev/null || true
+}
+_resume_update_notifier() {
+    sudo systemctl start update-notifier-download.timer update-notifier-motd.timer 2>/dev/null || true
+}
+
+# Safe apt-get update - tolerates repo errors and asks user on failure.
+# Also pauses GNOME's update-notifier so its popup doesn't open a browser tab.
 safe_apt_update() {
+    _pause_update_notifier
     if ! sudo apt-get update 2>&1 | tee /tmp/apt-update-output.tmp; then
         local errors
         errors=$(grep -i "err\|failed\|error" /tmp/apt-update-output.tmp 2>/dev/null || true)
@@ -224,6 +237,7 @@ safe_apt_update() {
         fi
     fi
     rm -f /tmp/apt-update-output.tmp
+    _resume_update_notifier
 }
 
 #===============================================================================
@@ -2885,20 +2899,12 @@ install_gnome_extensions() {
 
     # 0. Update system packages first (so subsequent installs use fresh index)
     if $GNOME_SUB_UPDATE; then
-        # Silence GNOME's update-notifier so its popup doesn't open a browser
-        # mid-script. We re-enable it at the end.
-        log_info "Pausing update-notifier so it doesn't pop up..."
-        pkill -f update-notifier 2>/dev/null || true
-        sudo systemctl stop update-notifier-download.timer update-notifier-motd.timer 2>/dev/null || true
-
+        _pause_update_notifier
         log_info "Running: sudo apt update"
         sudo apt-get update
         log_info "Running: sudo apt upgrade -y"
         sudo DEBIAN_FRONTEND=noninteractive apt-get upgrade -y
-
-        # Resume update-notifier timers
-        sudo systemctl start update-notifier-download.timer update-notifier-motd.timer 2>/dev/null || true
-
+        _resume_update_notifier
         log_success "System packages updated"
     fi
 
@@ -5013,8 +5019,10 @@ check_critical_packages() {
     fi
 
     if [ "${#to_install[@]}" -gt 0 ]; then
+        _pause_update_notifier
         sudo apt-get update -qq
         sudo apt-get install -y "${to_install[@]}" 2>&1 | tail -5
+        _resume_update_notifier
         log_success "Reinstalled: ${to_install[*]}"
     fi
 }

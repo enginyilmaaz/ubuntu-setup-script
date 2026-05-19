@@ -16,7 +16,7 @@
 #===============================================================================
 
 SCRIPT_VERSION="2.5.0"
-SCRIPT_REVISION="122"
+SCRIPT_REVISION="123"
 SCRIPT_DATE="2026-03-27"
 
 # NOTE: We intentionally do NOT use set -e here.
@@ -688,13 +688,17 @@ show_debloat_submenu() {
     if dpkg -l rhythmbox 2>/dev/null | grep -q "^ii"; then
         BLOAT_NAMES+=("Rhythmbox");         BLOAT_DESCS+=("Remove Rhythmbox music player");              BLOAT_PKGS+=("rhythmbox rhythmbox-data rhythmbox-plugins")
     fi
-    # Ubuntu Help (yelp) + GNOME user docs
-    if dpkg -l yelp 2>/dev/null | grep -q "^ii" || dpkg -l gnome-user-docs 2>/dev/null | grep -q "^ii"; then
-        BLOAT_NAMES+=("Ubuntu Help");       BLOAT_DESCS+=("Remove Ubuntu Help (yelp + gnome-user-docs)"); BLOAT_PKGS+=("yelp gnome-user-docs")
+    # Ubuntu Help (yelp) - removed with --force-depends so dependent packages
+    # (ubuntu-docs, gnome-user-docs, ubuntu-desktop) stay installed even though
+    # they have a "Depends: yelp" line that's now unsatisfied. They keep
+    # working; apt will just warn until you reinstall yelp.
+    if dpkg -l yelp 2>/dev/null | grep -q "^ii"; then
+        BLOAT_NAMES+=("Ubuntu Help (yelp)"); BLOAT_DESCS+=("Remove yelp ONLY (force, leaves dependents broken-but-installed)"); BLOAT_PKGS+=("__FORCE__:yelp")
     fi
-    # Language Support
+    # Language Support GUI - same treatment, force-remove leaves
+    # gnome-control-center installed (Settings app still works)
     if dpkg -l language-selector-gnome 2>/dev/null | grep -q "^ii"; then
-        BLOAT_NAMES+=("Language Support");  BLOAT_DESCS+=("Remove Language Support GUI");               BLOAT_PKGS+=("language-selector-gnome")
+        BLOAT_NAMES+=("Language Support");  BLOAT_DESCS+=("Force-remove language-selector-gnome ONLY");           BLOAT_PKGS+=("__FORCE__:language-selector-gnome")
     fi
     # Power Statistics
     if dpkg -l gnome-power-manager 2>/dev/null | grep -q "^ii"; then
@@ -4403,6 +4407,14 @@ debloat_system() {
                 sudo snap remove --purge "$_snap_to_remove" 2>/dev/null || true
                 log_info "Snap '$_snap_to_remove' removed"
                 ;;
+            "__FORCE__:"*)
+                # Force-remove ONLY this package using dpkg, leaving dependents
+                # in place (broken dependency state but functional system).
+                local _force_pkg="${DEBLOAT_SELECTED_PKGS[$bi]#__FORCE__:}"
+                log_info "Force-removing '$_force_pkg' only (dependents left in place)..."
+                sudo dpkg --force-depends --remove "$_force_pkg" 2>/dev/null || true
+                log_success "'$_force_pkg' removed. Note: some packages may show as having missing deps in apt - that's expected."
+                ;;
             "__SNAP_PURGE_ALL__")
                 # Snapshot what we're about to nuke (for the rollback log)
                 local _snap_log="$HOME/Desktop/snap-removal-$(date +%Y%m%d_%H%M%S).txt"
@@ -4463,10 +4475,7 @@ NOSNAPEOF
                 log_success "Snap stack completely removed. Rollback note: $_snap_log"
                 ;;
             *)
-                # Safety: dry-run to see what apt actually plans to remove.
-                # If apt wants to take out MORE packages than we asked for
-                # (because some other installed package depends on this one),
-                # ask the user before proceeding so we don't drag out the desktop.
+                # Dry-run to detect cascading removals.
                 local _planned_remove
                 # shellcheck disable=SC2086
                 _planned_remove=$(LC_ALL=C apt-get -s remove -y ${DEBLOAT_SELECTED_PKGS[$bi]} 2>&1 | \
@@ -4478,25 +4487,19 @@ NOSNAPEOF
                 _asked_count=$(echo ${DEBLOAT_SELECTED_PKGS[$bi]} | wc -w)
 
                 if [ "$_planned_count" -gt "$_asked_count" ]; then
-                    echo ""
-                    echo -e "${YELLOW}⚠  Removing '${DEBLOAT_SELECTED_NAMES[$bi]}' will ALSO remove these dependents:${NC}"
-                    echo "$_planned_remove" | while read -r _p; do
-                        # shellcheck disable=SC2086
-                        if ! echo " ${DEBLOAT_SELECTED_PKGS[$bi]} " | grep -q " $_p "; then
-                            echo -e "    ${RED}-${NC} $_p"
-                        fi
+                    # apt would cascade. Use dpkg --force-depends per asked
+                    # package — removes ONLY the selected package, dependents
+                    # are left installed with a broken-deps note (functional).
+                    log_info "'${DEBLOAT_SELECTED_NAMES[$bi]}' has reverse-deps; using dpkg --force-depends to keep dependents installed..."
+                    # shellcheck disable=SC2086
+                    for _pkg in ${DEBLOAT_SELECTED_PKGS[$bi]}; do
+                        sudo dpkg --force-depends --remove "$_pkg" 2>/dev/null || true
                     done
-                    echo ""
-                    read -p "  Continue anyway? (y/n): " _dep_ok < /dev/tty
-                    if [[ ! "$_dep_ok" =~ ^[Yy]$ ]]; then
-                        log_info "Skipped '${DEBLOAT_SELECTED_NAMES[$bi]}' (kept dependents)."
-                        removed_count=$((removed_count + 1))
-                        continue
-                    fi
+                else
+                    # No cascade, normal apt-get remove is safe
+                    # shellcheck disable=SC2086
+                    sudo apt-get remove -y ${DEBLOAT_SELECTED_PKGS[$bi]} 2>/dev/null || true
                 fi
-
-                # shellcheck disable=SC2086
-                sudo apt-get remove -y ${DEBLOAT_SELECTED_PKGS[$bi]} 2>/dev/null || true
                 ;;
         esac
         removed_count=$((removed_count + 1))

@@ -16,7 +16,7 @@
 #===============================================================================
 
 SCRIPT_VERSION="2.5.0"
-SCRIPT_REVISION="128"
+SCRIPT_REVISION="129"
 SCRIPT_DATE="2026-03-27"
 
 # NOTE: We intentionally do NOT use set -e here.
@@ -41,6 +41,7 @@ INSTALL_CLOUDFLARED=false
 INSTALL_DOCKER=false
 INSTALL_CLAUDE=false
 INSTALL_CODEX=false
+INSTALL_JTOP=false
 INSTALL_GH=false
 INSTALL_POSTMAN=false
 INSTALL_FILEZILLA=false
@@ -787,6 +788,10 @@ show_debloat_submenu() {
     if dpkg -l firefox 2>/dev/null | grep -q "^ii"; then
         BLOAT_NAMES+=("Firefox");              BLOAT_DESCS+=("Remove Firefox APT (deb / xtradeb PPA)");           BLOAT_PKGS+=("firefox")
     fi
+    # jtop (Jetson stats) - pip installed
+    if command_exists jtop; then
+        BLOAT_NAMES+=("jtop");                 BLOAT_DESCS+=("Remove jtop / jetson-stats (pip uninstall)");      BLOAT_PKGS+=("__JTOP__")
+    fi
     if dpkg -l firefox-esr 2>/dev/null | grep -q "^ii"; then
         BLOAT_NAMES+=("Firefox ESR");          BLOAT_DESCS+=("Remove Firefox ESR APT");                          BLOAT_PKGS+=("firefox-esr")
     fi
@@ -992,6 +997,10 @@ show_interactive_install_menu() {
     APP_NAMES+=("Debloat");     APP_DESCS+=("Debloat (Enter to expand sub-menu)");    APP_VARS+=("DO_DEBLOAT")
 
     # ARM Fix - only on Jetson devices (other ARM devices don't need snapd fix)
+    # Jetson-only: jtop (jetson-stats) live monitor
+    if $IS_JETSON; then
+        APP_NAMES+=("jtop");    APP_DESCS+=("jetson-stats (live CPU/GPU/RAM/temp monitor)"); APP_VARS+=("INSTALL_JTOP")
+    fi
     if $IS_JETSON && command_exists snap; then
         APP_NAMES+=("ARM Fix"); APP_DESCS+=("Jetson Snapd Fix (Browser Fix)");        APP_VARS+=("APPLY_JETSON_FIX")
     fi
@@ -1841,6 +1850,7 @@ run_installations() {
     if $INSTALL_DOCKER; then install_docker || handle_error "Docker installation failed"; fi
     if $INSTALL_CLAUDE; then install_claude_code || handle_error "Claude Code installation failed"; fi
     if $INSTALL_CODEX; then install_codex || handle_error "Codex installation failed"; fi
+    if $INSTALL_JTOP; then install_jtop || handle_error "jtop installation failed"; fi
     if $INSTALL_GH; then install_gh || handle_error "GitHub CLI installation failed"; fi
     if $INSTALL_POSTMAN; then install_postman || handle_error "Postman installation failed"; fi
     if $INSTALL_FILEZILLA; then install_filezilla || handle_error "FileZilla installation failed"; fi
@@ -2312,6 +2322,38 @@ install_filezilla() {
     else
         log_warning "FileZilla installation failed"
         return 1
+    fi
+}
+
+#===============================================================================
+# jtop / jetson-stats (Jetson-only live system monitor)
+#===============================================================================
+install_jtop() {
+    log_step "Installing jtop (jetson-stats)"
+
+    if ! $IS_JETSON; then
+        log_warning "Not a Jetson device, skipping jtop..."
+        return 0
+    fi
+
+    # Needs pip3
+    if ! command_exists pip3; then
+        log_info "Installing python3-pip (required for jtop)..."
+        sudo apt-get install -y python3-pip 2>&1 | tail -3
+    fi
+
+    if command_exists jtop; then
+        log_warning "jtop already installed, upgrading..."
+        sudo -H pip3 install -U jetson-stats 2>&1 | tail -3
+    else
+        sudo -H pip3 install jetson-stats 2>&1 | tail -3
+    fi
+
+    if command_exists jtop; then
+        log_success "jtop installed. Run with: sudo jtop"
+        log_info "  → service jtop start  (enables daemon for non-sudo access)"
+    else
+        log_warning "jtop installation could not be verified"
     fi
 }
 
@@ -4421,6 +4463,13 @@ debloat_system() {
                 local _snap_to_remove="${DEBLOAT_SELECTED_PKGS[$bi]#__SNAP__:}"
                 sudo snap remove --purge "$_snap_to_remove" 2>/dev/null || true
                 log_info "Snap '$_snap_to_remove' removed"
+                ;;
+            "__JTOP__")
+                # Stop the jtop systemd service if it exists
+                sudo systemctl stop jtop 2>/dev/null || true
+                sudo systemctl disable jtop 2>/dev/null || true
+                sudo -H pip3 uninstall -y jetson-stats 2>/dev/null || true
+                log_info "jtop / jetson-stats removed"
                 ;;
             "__SNAP_PURGE_ALL__")
                 # Snapshot what we're about to nuke (for the rollback log)

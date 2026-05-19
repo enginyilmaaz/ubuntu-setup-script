@@ -16,7 +16,7 @@
 #===============================================================================
 
 SCRIPT_VERSION="2.5.0"
-SCRIPT_REVISION="130"
+SCRIPT_REVISION="131"
 SCRIPT_DATE="2026-03-27"
 
 # NOTE: We intentionally do NOT use set -e here.
@@ -475,6 +475,8 @@ GNOME_SUB_SCRIPT=false; GNOME_SUB_WAYLAND=false; GNOME_SUB_SSH=false
 GNOME_SUB_ALIASES=false; GNOME_SUB_ENGLISH=false
 GNOME_SUB_SCREEN=false; GNOME_SUB_HIDDEN=false; GNOME_SUB_KB_TR=false; GNOME_SUB_KB_EN=false
 GNOME_SUB_VSCREEN=false; GNOME_SUB_AUTOLOGIN=false; GNOME_SUB_HOSTNAME=false
+GNOME_SUB_NO_IBUS=false; GNOME_SUB_APPORT=false
+GNOME_SUB_NO_IBUS=false; GNOME_SUB_APPORT=false
 # Hostname value collected before install starts (when Tweaks + Change Hostname selected)
 NEW_HOSTNAME=""
 
@@ -502,6 +504,8 @@ show_gnome_submenu() {
     TWEAK_NAMES+=("Show Hidden Files"); TWEAK_DESCS+=("Show hidden files in file manager");                    TWEAK_KEYS+=("GNOME_SUB_HIDDEN")
     TWEAK_NAMES+=("Keyboard: Turkish Q"); TWEAK_DESCS+=("Add Turkish Q keyboard layout");                      TWEAK_KEYS+=("GNOME_SUB_KB_TR")
     TWEAK_NAMES+=("Keyboard: English Q"); TWEAK_DESCS+=("Add English (US) keyboard layout");                   TWEAK_KEYS+=("GNOME_SUB_KB_EN")
+    TWEAK_NAMES+=("IBus Leak Fix");      TWEAK_DESCS+=("Disable ibus-daemon, use XKB only (fix memory leak)");   TWEAK_KEYS+=("GNOME_SUB_NO_IBUS")
+    TWEAK_NAMES+=("Activate Apport");    TWEAK_DESCS+=("Install + enable Ubuntu crash reporting (apport)");      TWEAK_KEYS+=("GNOME_SUB_APPORT")
     TWEAK_NAMES+=("Virtual Screen 1080p"); TWEAK_DESCS+=("Create virtual 1920x1080 display (for VNC/RDP/headless)"); TWEAK_KEYS+=("GNOME_SUB_VSCREEN")
     TWEAK_NAMES+=("GDM Auto-Login");       TWEAK_DESCS+=("Auto-login to GUI on boot (needed for VNC tray icon)");   TWEAK_KEYS+=("GNOME_SUB_AUTOLOGIN")
 
@@ -805,6 +809,10 @@ show_debloat_submenu() {
     # jtop (Jetson stats) - pip installed
     if command_exists jtop; then
         BLOAT_NAMES+=("jtop");                 BLOAT_DESCS+=("Remove jtop / jetson-stats (pip uninstall)");      BLOAT_PKGS+=("__JTOP__")
+    fi
+    # Apport - Ubuntu crash reporter (also pops up annoying dialogs)
+    if dpkg -l apport 2>/dev/null | grep -q "^ii"; then
+        BLOAT_NAMES+=("Apport");               BLOAT_DESCS+=("Remove Apport crash reporter (re-enable from Tweaks)"); BLOAT_PKGS+=("__APPORT__")
     fi
     if dpkg -l firefox-esr 2>/dev/null | grep -q "^ii"; then
         BLOAT_NAMES+=("Firefox ESR");          BLOAT_DESCS+=("Remove Firefox ESR APT");                          BLOAT_PKGS+=("firefox-esr")
@@ -1201,6 +1209,8 @@ show_interactive_install_menu() {
                                 $GNOME_SUB_VSCREEN     && tweaks_list+="Virtual Screen 1080p, "
                                 $GNOME_SUB_AUTOLOGIN   && tweaks_list+="GDM Auto-Login, "
                                 $GNOME_SUB_HOSTNAME    && tweaks_list+="Change Hostname → $NEW_HOSTNAME, "
+                                $GNOME_SUB_NO_IBUS     && tweaks_list+="IBus Leak Fix, "
+                                $GNOME_SUB_APPORT      && tweaks_list+="Activate Apport, "
                                 tweaks_list="${tweaks_list%, }"
                                 if [ -n "$tweaks_list" ]; then
                                     echo -e "  ${GREEN}✓${NC} ${GREEN}Tweaks:${NC}"
@@ -3078,6 +3088,39 @@ ACCOUNTSEOF
         log_success "Hostname set to: $NEW_HOSTNAME (takes effect on next login)"
     fi
 
+    # 15. IBus Leak Fix - disable ibus-daemon, use XKB only
+    if $GNOME_SUB_NO_IBUS; then
+        log_info "Disabling ibus-daemon (XKB-only mode)..."
+        # Ensure xkb-only sources are set (covers both TR/EN if either selected,
+        # otherwise leave whatever the user has)
+        local _src
+        _src=$(gsettings get org.gnome.desktop.input-sources sources 2>/dev/null)
+        if [ -z "$_src" ] || [ "$_src" = "@a(ss) []" ]; then
+            gsettings set org.gnome.desktop.input-sources sources "[('xkb', 'tr'), ('xkb', 'us')]" 2>/dev/null || true
+        fi
+        # Mask the user systemd unit so ibus-daemon never starts again
+        systemctl --user mask org.freedesktop.IBus.session.GNOME 2>/dev/null || true
+        # Kill any currently running ibus-daemon
+        pkill -f ibus-daemon 2>/dev/null || true
+        log_success "IBus disabled. TR/EN keyboard still switchable with Super+Space."
+        log_info "  Note: Chinese/Japanese/Korean IME won't work, but you don't use them."
+    fi
+
+    # 16. Activate Apport - install + enable Ubuntu crash reporting
+    if $GNOME_SUB_APPORT; then
+        log_info "Activating Apport (crash reporting)..."
+        if ! package_installed apport; then
+            sudo apt-get install -y apport apport-gtk 2>&1 | tail -3
+        fi
+        # Enable in /etc/default/apport
+        if [ -f /etc/default/apport ]; then
+            sudo sed -i 's/^enabled=.*/enabled=1/' /etc/default/apport
+        fi
+        sudo systemctl enable apport.service 2>/dev/null || true
+        sudo systemctl start apport.service 2>/dev/null || true
+        log_success "Apport enabled and started"
+    fi
+
     log_success "GNOME Tweaks setup completed"
 }
 
@@ -4477,6 +4520,16 @@ debloat_system() {
                 sudo -H pip3 uninstall -y jetson-stats 2>/dev/null || true
                 log_info "jtop / jetson-stats removed"
                 ;;
+            "__APPORT__")
+                sudo systemctl stop apport.service 2>/dev/null || true
+                sudo systemctl disable apport.service 2>/dev/null || true
+                # Set enabled=0 in case the package is reinstalled later
+                if [ -f /etc/default/apport ]; then
+                    sudo sed -i 's/^enabled=.*/enabled=0/' /etc/default/apport
+                fi
+                sudo apt-get remove -y apport apport-gtk apport-symptoms 2>/dev/null || true
+                log_info "Apport removed (re-enable via Tweaks → Activate Apport)"
+                ;;
             "__SNAP_PURGE_ALL__")
                 # Snapshot what we're about to nuke (for the rollback log)
                 local _snap_log="$HOME/Desktop/snap-removal-$(date +%Y%m%d_%H%M%S).txt"
@@ -4748,6 +4801,8 @@ print_summary() {
         $GNOME_SUB_VSCREEN    && any_tweak=true
         $GNOME_SUB_AUTOLOGIN  && any_tweak=true
         $GNOME_SUB_HOSTNAME   && any_tweak=true
+        $GNOME_SUB_NO_IBUS    && any_tweak=true
+        $GNOME_SUB_APPORT     && any_tweak=true
 
         if $any_tweak; then
             echo -e "  ${GREEN}✓${NC} Tweaks"
@@ -4767,6 +4822,8 @@ print_summary() {
             $GNOME_SUB_VSCREEN    && virtual_screen_installed && echo -e "    ${GREEN}✓${NC} Virtual Screen 1080p"
             $GNOME_SUB_AUTOLOGIN  && autologin_enabled        && echo -e "    ${GREEN}✓${NC} GDM Auto-Login"
             $GNOME_SUB_HOSTNAME   && [ -n "$NEW_HOSTNAME" ]   && echo -e "    ${GREEN}✓${NC} Hostname → $NEW_HOSTNAME"
+            $GNOME_SUB_NO_IBUS    && echo -e "    ${GREEN}✓${NC} IBus disabled (XKB-only)"
+            $GNOME_SUB_APPORT     && systemctl is-active apport &>/dev/null && echo -e "    ${GREEN}✓${NC} Apport activated"
         fi
     fi
 

@@ -16,7 +16,7 @@
 #===============================================================================
 
 SCRIPT_VERSION="2.5.0"
-SCRIPT_REVISION="115"
+SCRIPT_REVISION="116"
 SCRIPT_DATE="2026-03-27"
 
 # NOTE: We intentionally do NOT use set -e here.
@@ -455,7 +455,7 @@ show_system_header() {
 }
 
 # GNOME Tweaks sub-menu selections (global so install_gnome_extensions can read them)
-GNOME_SUB_EXTENSIONS=false; GNOME_SUB_TWEAKS_APP=false; GNOME_SUB_DOCK=false
+GNOME_SUB_EXTENSIONS=false; GNOME_SUB_UPDATE=false; GNOME_SUB_TWEAKS_APP=false; GNOME_SUB_DOCK=false
 GNOME_SUB_SCRIPT=false; GNOME_SUB_WAYLAND=false; GNOME_SUB_SSH=false
 GNOME_SUB_ALIASES=false; GNOME_SUB_ENGLISH=false
 GNOME_SUB_SCREEN=false; GNOME_SUB_HIDDEN=false; GNOME_SUB_KB_TR=false; GNOME_SUB_KB_EN=false
@@ -474,6 +474,7 @@ show_gnome_submenu() {
     local -a TWEAK_KEYS=()
 
     TWEAK_NAMES+=("Extensions");        TWEAK_DESCS+=("Extension Manager + Shell Extensions + AppIndicator");  TWEAK_KEYS+=("GNOME_SUB_EXTENSIONS")
+    TWEAK_NAMES+=("Update System");     TWEAK_DESCS+=("sudo apt update && sudo apt upgrade -y");               TWEAK_KEYS+=("GNOME_SUB_UPDATE")
     TWEAK_NAMES+=("GNOME Tweaks");      TWEAK_DESCS+=("GNOME Tweaks App + Browser Connector");                 TWEAK_KEYS+=("GNOME_SUB_TWEAKS_APP")
     TWEAK_NAMES+=("Dash to Dock");      TWEAK_DESCS+=("Dock settings, single workspace, performance mode");    TWEAK_KEYS+=("GNOME_SUB_DOCK")
     TWEAK_NAMES+=("Script Launcher");   TWEAK_DESCS+=("Right-click context menu (Claude, Codex, VS Code)");    TWEAK_KEYS+=("GNOME_SUB_SCRIPT")
@@ -1129,6 +1130,7 @@ show_interactive_install_menu() {
                                 # List actual Tweaks sub-menu picks
                                 local tweaks_list=""
                                 $GNOME_SUB_EXTENSIONS  && tweaks_list+="Extensions, "
+                                $GNOME_SUB_UPDATE      && tweaks_list+="Update System, "
                                 $GNOME_SUB_TWEAKS_APP  && tweaks_list+="GNOME Tweaks App, "
                                 $GNOME_SUB_DOCK        && tweaks_list+="Dash to Dock, "
                                 $GNOME_SUB_SCRIPT      && tweaks_list+="Script Launcher, "
@@ -2795,6 +2797,15 @@ install_gnome_extensions() {
     fi
 
     # Selections already made in show_gnome_submenu(), read from globals
+
+    # 0. Update system packages first (so subsequent installs use fresh index)
+    if $GNOME_SUB_UPDATE; then
+        log_info "Updating package lists (sudo apt update)..."
+        sudo apt-get update 2>&1 | tail -3
+        log_info "Upgrading packages (sudo apt upgrade -y)..."
+        sudo DEBIAN_FRONTEND=noninteractive apt-get upgrade -y 2>&1 | tail -5
+        log_success "System packages updated"
+    fi
 
     # 1. Extensions (Extension Manager + Shell Extensions + AppIndicator)
     if $GNOME_SUB_EXTENSIONS; then

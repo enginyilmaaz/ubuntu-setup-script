@@ -16,7 +16,7 @@
 #===============================================================================
 
 SCRIPT_VERSION="2.5.0"
-SCRIPT_REVISION="124"
+SCRIPT_REVISION="125"
 SCRIPT_DATE="2026-03-27"
 
 # NOTE: We intentionally do NOT use set -e here.
@@ -782,6 +782,13 @@ show_debloat_submenu() {
     # FileZilla
     if dpkg -l filezilla 2>/dev/null | grep -q "^ii"; then
         BLOAT_NAMES+=("FileZilla");            BLOAT_DESCS+=("Remove FileZilla (FTP/SFTP client)");             BLOAT_PKGS+=("filezilla")
+    fi
+    # Firefox (APT deb, including xtradeb PPA version)
+    if dpkg -l firefox 2>/dev/null | grep -q "^ii"; then
+        BLOAT_NAMES+=("Firefox");              BLOAT_DESCS+=("Remove Firefox APT (deb / xtradeb PPA)");           BLOAT_PKGS+=("firefox")
+    fi
+    if dpkg -l firefox-esr 2>/dev/null | grep -q "^ii"; then
+        BLOAT_NAMES+=("Firefox ESR");          BLOAT_DESCS+=("Remove Firefox ESR APT");                          BLOAT_PKGS+=("firefox-esr")
     fi
 
     # === Snap packages (auto-detected, system snaps filtered out) ===

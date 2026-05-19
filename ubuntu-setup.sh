@@ -16,7 +16,7 @@
 #===============================================================================
 
 SCRIPT_VERSION="2.5.0"
-SCRIPT_REVISION="111"
+SCRIPT_REVISION="112"
 SCRIPT_DATE="2026-03-27"
 
 # NOTE: We intentionally do NOT use set -e here.
@@ -455,11 +455,11 @@ show_system_header() {
 }
 
 # GNOME Tweaks sub-menu selections (global so install_gnome_extensions can read them)
-GNOME_SUB_EXTENSIONS=true; GNOME_SUB_TWEAKS_APP=true; GNOME_SUB_DOCK=true
-GNOME_SUB_SCRIPT=true; GNOME_SUB_WAYLAND=true; GNOME_SUB_SSH=true
-GNOME_SUB_ALIASES=true; GNOME_SUB_ENGLISH=true
-GNOME_SUB_SCREEN=true; GNOME_SUB_HIDDEN=true; GNOME_SUB_KB_TR=true; GNOME_SUB_KB_EN=true
-GNOME_SUB_VSCREEN=true; GNOME_SUB_AUTOLOGIN=true; GNOME_SUB_HOSTNAME=true
+GNOME_SUB_EXTENSIONS=false; GNOME_SUB_TWEAKS_APP=false; GNOME_SUB_DOCK=false
+GNOME_SUB_SCRIPT=false; GNOME_SUB_WAYLAND=false; GNOME_SUB_SSH=false
+GNOME_SUB_ALIASES=false; GNOME_SUB_ENGLISH=false
+GNOME_SUB_SCREEN=false; GNOME_SUB_HIDDEN=false; GNOME_SUB_KB_TR=false; GNOME_SUB_KB_EN=false
+GNOME_SUB_VSCREEN=false; GNOME_SUB_AUTOLOGIN=false; GNOME_SUB_HOSTNAME=false
 # Hostname value collected before install starts (when Tweaks + Change Hostname selected)
 NEW_HOSTNAME=""
 
@@ -492,7 +492,7 @@ show_gnome_submenu() {
     local TOTAL_TWEAKS=${#TWEAK_NAMES[@]}
     local -a TSELECTED=()
     for ((ti=0; ti<TOTAL_TWEAKS; ti++)); do
-        TSELECTED+=(1)
+        TSELECTED+=(0)
     done
     local tcursor=0
 

@@ -16,7 +16,7 @@
 #===============================================================================
 
 SCRIPT_VERSION="2.5.0"
-SCRIPT_REVISION="134"
+SCRIPT_REVISION="135"
 SCRIPT_DATE="2026-03-27"
 
 # NOTE: We intentionally do NOT use set -e here.
@@ -707,6 +707,10 @@ show_debloat_submenu() {
     # Rhythmbox music player
     if dpkg -l rhythmbox 2>/dev/null | grep -q "^ii"; then
         BLOAT_NAMES+=("Rhythmbox");         BLOAT_DESCS+=("Remove Rhythmbox music player");              BLOAT_PKGS+=("rhythmbox rhythmbox-data rhythmbox-plugins")
+    fi
+    # Ubuntu Videos (Totem)
+    if dpkg -l totem 2>/dev/null | grep -q "^ii"; then
+        BLOAT_NAMES+=("Ubuntu Videos");     BLOAT_DESCS+=("Remove Totem video player (GNOME Videos)");   BLOAT_PKGS+=("totem totem-common totem-plugins")
     fi
     # NOTE: Ubuntu Help (yelp/gnome-user-docs) removed from Debloat by user
     # request — it cascaded to ubuntu-desktop meta and was confusing. Manual:

@@ -16,7 +16,7 @@
 #===============================================================================
 
 SCRIPT_VERSION="2.5.0"
-SCRIPT_REVISION="110"
+SCRIPT_REVISION="111"
 SCRIPT_DATE="2026-03-27"
 
 # NOTE: We intentionally do NOT use set -e here.
@@ -4236,18 +4236,35 @@ debloat_system() {
                 log_info "xrdp (RDP server) removed"
                 ;;
             "__CLAUDE__")
-                # Native installer - remove the binary + ~/.claude dir + PATH entries
+                # 1) Binary + ~/.claude dir + PATH entries
                 rm -f "$HOME/.claude/bin/claude" "$HOME/.local/bin/claude" 2>/dev/null
                 rm -rf "$HOME/.claude" 2>/dev/null
                 command_exists npm && npm uninstall -g @anthropic-ai/claude-code 2>/dev/null || true
                 for rcfile in "$HOME/.bashrc" "$HOME/.zshrc" "$HOME/.profile"; do
                     [ -f "$rcfile" ] && sed -i '/\.claude\/bin/d; /# Added by Claude/d' "$rcfile" 2>/dev/null
                 done
-                log_info "Claude Code CLI removed"
+                # 2) Bash aliases (claude-skip, ccskip)
+                sed -i '/^alias claude-skip=/d; /^alias ccskip=/d' "$HOME/.bashrc" 2>/dev/null
+                # 3) VS Code extension
+                if command_exists code; then
+                    code --uninstall-extension anthropic.claude-code 2>/dev/null || true
+                    code --uninstall-extension saoudrizwan.claude-dev 2>/dev/null || true
+                fi
+                # 4) Context menu — auto-hides at runtime via shutil.which('claude')
+                log_info "Claude Code CLI removed (binary, aliases, VS Code extension)"
                 ;;
             "__CODEX__")
+                # 1) npm uninstall
                 command_exists npm && npm uninstall -g @openai/codex 2>/dev/null || true
-                log_info "Codex CLI removed"
+                # 2) Bash aliases (codex-skip, cxskip)
+                sed -i '/^alias codex-skip=/d; /^alias cxskip=/d' "$HOME/.bashrc" 2>/dev/null
+                # 3) VS Code extension
+                if command_exists code; then
+                    code --uninstall-extension openai.chatgpt 2>/dev/null || true
+                    code --uninstall-extension gencay.vscode-chatgpt 2>/dev/null || true
+                fi
+                # 4) Context menu — auto-hides at runtime via shutil.which('codex')
+                log_info "Codex CLI removed (npm package, aliases, VS Code extension)"
                 ;;
             "__REALVNC__")
                 sudo systemctl stop vncserver-x11-serviced 2>/dev/null || true

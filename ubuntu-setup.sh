@@ -16,7 +16,7 @@
 #===============================================================================
 
 SCRIPT_VERSION="2.5.0"
-SCRIPT_REVISION="131"
+SCRIPT_REVISION="132"
 SCRIPT_DATE="2026-03-27"
 
 # NOTE: We intentionally do NOT use set -e here.
@@ -475,8 +475,7 @@ GNOME_SUB_SCRIPT=false; GNOME_SUB_WAYLAND=false; GNOME_SUB_SSH=false
 GNOME_SUB_ALIASES=false; GNOME_SUB_ENGLISH=false
 GNOME_SUB_SCREEN=false; GNOME_SUB_HIDDEN=false; GNOME_SUB_KB_TR=false; GNOME_SUB_KB_EN=false
 GNOME_SUB_VSCREEN=false; GNOME_SUB_AUTOLOGIN=false; GNOME_SUB_HOSTNAME=false
-GNOME_SUB_NO_IBUS=false; GNOME_SUB_APPORT=false
-GNOME_SUB_NO_IBUS=false; GNOME_SUB_APPORT=false
+GNOME_SUB_NO_IBUS=false; GNOME_SUB_APPORT=false; GNOME_SUB_DESKTOP_META=false
 # Hostname value collected before install starts (when Tweaks + Change Hostname selected)
 NEW_HOSTNAME=""
 
@@ -506,6 +505,7 @@ show_gnome_submenu() {
     TWEAK_NAMES+=("Keyboard: English Q"); TWEAK_DESCS+=("Add English (US) keyboard layout");                   TWEAK_KEYS+=("GNOME_SUB_KB_EN")
     TWEAK_NAMES+=("IBus Leak Fix");      TWEAK_DESCS+=("Disable ibus-daemon, use XKB only (fix memory leak)");   TWEAK_KEYS+=("GNOME_SUB_NO_IBUS")
     TWEAK_NAMES+=("Activate Apport");    TWEAK_DESCS+=("Install + enable Ubuntu crash reporting (apport)");      TWEAK_KEYS+=("GNOME_SUB_APPORT")
+    TWEAK_NAMES+=("Restore Desktop Meta"); TWEAK_DESCS+=("Reinstall ubuntu-desktop + ubuntu-desktop-minimal meta-packages"); TWEAK_KEYS+=("GNOME_SUB_DESKTOP_META")
     TWEAK_NAMES+=("Virtual Screen 1080p"); TWEAK_DESCS+=("Create virtual 1920x1080 display (for VNC/RDP/headless)"); TWEAK_KEYS+=("GNOME_SUB_VSCREEN")
     TWEAK_NAMES+=("GDM Auto-Login");       TWEAK_DESCS+=("Auto-login to GUI on boot (needed for VNC tray icon)");   TWEAK_KEYS+=("GNOME_SUB_AUTOLOGIN")
 
@@ -1211,6 +1211,7 @@ show_interactive_install_menu() {
                                 $GNOME_SUB_HOSTNAME    && tweaks_list+="Change Hostname → $NEW_HOSTNAME, "
                                 $GNOME_SUB_NO_IBUS     && tweaks_list+="IBus Leak Fix, "
                                 $GNOME_SUB_APPORT      && tweaks_list+="Activate Apport, "
+                                $GNOME_SUB_DESKTOP_META && tweaks_list+="Restore Desktop Meta, "
                                 tweaks_list="${tweaks_list%, }"
                                 if [ -n "$tweaks_list" ]; then
                                     echo -e "  ${GREEN}✓${NC} ${GREEN}Tweaks:${NC}"
@@ -3121,6 +3122,15 @@ ACCOUNTSEOF
         log_success "Apport enabled and started"
     fi
 
+    # 17. Restore Ubuntu Desktop meta-packages
+    if $GNOME_SUB_DESKTOP_META; then
+        log_info "Reinstalling ubuntu-desktop meta-packages..."
+        _pause_update_notifier
+        sudo apt-get install -y ubuntu-desktop ubuntu-desktop-minimal 2>&1 | tail -3
+        _resume_update_notifier
+        log_success "ubuntu-desktop / ubuntu-desktop-minimal restored"
+    fi
+
     log_success "GNOME Tweaks setup completed"
 }
 
@@ -4803,6 +4813,7 @@ print_summary() {
         $GNOME_SUB_HOSTNAME   && any_tweak=true
         $GNOME_SUB_NO_IBUS    && any_tweak=true
         $GNOME_SUB_APPORT     && any_tweak=true
+        $GNOME_SUB_DESKTOP_META && any_tweak=true
 
         if $any_tweak; then
             echo -e "  ${GREEN}✓${NC} Tweaks"
@@ -4824,6 +4835,7 @@ print_summary() {
             $GNOME_SUB_HOSTNAME   && [ -n "$NEW_HOSTNAME" ]   && echo -e "    ${GREEN}✓${NC} Hostname → $NEW_HOSTNAME"
             $GNOME_SUB_NO_IBUS    && echo -e "    ${GREEN}✓${NC} IBus disabled (XKB-only)"
             $GNOME_SUB_APPORT     && systemctl is-active apport &>/dev/null && echo -e "    ${GREEN}✓${NC} Apport activated"
+            $GNOME_SUB_DESKTOP_META && package_installed ubuntu-desktop && echo -e "    ${GREEN}✓${NC} Desktop Meta restored"
         fi
     fi
 
@@ -5007,80 +5019,45 @@ check_critical_packages() {
     # Only check on Ubuntu desktop systems (skip headless servers)
     command_exists gnome-shell || return 0
 
-    # Two categories:
-    #   CRITICAL  – missing this breaks an actual app (Settings, Terminal, files)
-    #   ADVISORY  – meta-packages that hold no files but their absence signals
-    #               a previous cascading remove. Shown so the user knows.
+    # Only flag REAL app binaries — missing one of these = actual breakage.
+    # ubuntu-desktop / ubuntu-desktop-minimal are intentionally skipped here
+    # because they're meta-packages (no files). If the user wants those back
+    # they can pick "Restore Ubuntu Desktop Meta" from the Tweaks menu.
     local -a missing_critical=()
-    local -a missing_advisory=()
-
-    # Critical: real binaries
     package_installed gnome-control-center || missing_critical+=("gnome-control-center")
     package_installed gnome-terminal       || missing_critical+=("gnome-terminal")
     package_installed nautilus             || missing_critical+=("nautilus")
     package_installed gnome-shell          || missing_critical+=("gnome-shell")
 
-    # Advisory: meta-packages
-    package_installed ubuntu-desktop          || missing_advisory+=("ubuntu-desktop")
-    package_installed ubuntu-desktop-minimal  || missing_advisory+=("ubuntu-desktop-minimal")
-
-    if [ "${#missing_critical[@]}" -eq 0 ] && [ "${#missing_advisory[@]}" -eq 0 ]; then
+    if [ "${#missing_critical[@]}" -eq 0 ]; then
         return 0
     fi
 
     echo ""
-    echo -e "${YELLOW}╔═══════════════════════════════════════════════════════════════════════════╗${NC}"
-    echo -e "${YELLOW}║  Desktop package check                                                        ║${NC}"
-    echo -e "${YELLOW}╚═══════════════════════════════════════════════════════════════════════════╝${NC}"
+    echo -e "${RED}╔═══════════════════════════════════════════════════════════════════════════╗${NC}"
+    echo -e "${RED}║  Core desktop app(s) missing                                                  ║${NC}"
+    echo -e "${RED}╚═══════════════════════════════════════════════════════════════════════════╝${NC}"
     echo ""
-
-    if [ "${#missing_critical[@]}" -gt 0 ]; then
-        echo -e "${RED}CRITICAL — these are real apps and need to come back:${NC}"
-        for p in "${missing_critical[@]}"; do
-            case "$p" in
-                gnome-control-center) echo -e "  ${RED}✗${NC} $p  → Settings app" ;;
-                gnome-terminal)       echo -e "  ${RED}✗${NC} $p  → Terminal app" ;;
-                nautilus)             echo -e "  ${RED}✗${NC} $p  → Files app" ;;
-                gnome-shell)          echo -e "  ${RED}✗${NC} $p  → GNOME Shell itself" ;;
-                *)                    echo -e "  ${RED}✗${NC} $p" ;;
-            esac
-        done
-        echo ""
-    fi
-
-    if [ "${#missing_advisory[@]}" -gt 0 ]; then
-        echo -e "${CYAN}ADVISORY — meta-packages only (no real files, removable on purpose):${NC}"
-        for p in "${missing_advisory[@]}"; do
-            echo -e "  ${YELLOW}!${NC} $p"
-        done
-        echo ""
-    fi
-
-    # Always ask, but only auto-install the critical ones; user can opt to
-    # also restore meta-packages.
-    local -a to_install=("${missing_critical[@]}")
-
-    if [ "${#missing_critical[@]}" -gt 0 ]; then
-        read -p "Reinstall the CRITICAL apps now? (y/n): " crit_choice < /dev/tty
-        if [[ ! "$crit_choice" =~ ^[Yy]$ ]]; then
-            to_install=()
-            log_warning "Skipped — to fix later: sudo apt install ${missing_critical[*]}"
-        fi
-    fi
-
-    if [ "${#missing_advisory[@]}" -gt 0 ]; then
-        read -p "Also reinstall the meta-packages (cosmetic)? (y/n): " meta_choice < /dev/tty
-        if [[ "$meta_choice" =~ ^[Yy]$ ]]; then
-            to_install+=("${missing_advisory[@]}")
-        fi
-    fi
-
-    if [ "${#to_install[@]}" -gt 0 ]; then
+    echo -e "${YELLOW}These real apps are NOT installed (probably a cascading apt-purge previously):${NC}"
+    for p in "${missing_critical[@]}"; do
+        case "$p" in
+            gnome-control-center) echo -e "  ${RED}✗${NC} $p  → Settings app" ;;
+            gnome-terminal)       echo -e "  ${RED}✗${NC} $p  → Terminal app" ;;
+            nautilus)             echo -e "  ${RED}✗${NC} $p  → Files app" ;;
+            gnome-shell)          echo -e "  ${RED}✗${NC} $p  → GNOME Shell itself" ;;
+            *)                    echo -e "  ${RED}✗${NC} $p" ;;
+        esac
+    done
+    echo ""
+    read -p "Reinstall them now? (y/n): " crit_choice < /dev/tty
+    if [[ "$crit_choice" =~ ^[Yy]$ ]]; then
         _pause_update_notifier
         sudo apt-get update -qq
-        sudo apt-get install -y "${to_install[@]}" 2>&1 | tail -5
+        sudo apt-get install -y "${missing_critical[@]}" 2>&1 | tail -5
         _resume_update_notifier
-        log_success "Reinstalled: ${to_install[*]}"
+        log_success "Reinstalled: ${missing_critical[*]}"
+    else
+        log_warning "Skipped — to fix later: sudo apt install ${missing_critical[*]}"
     fi
 }
 

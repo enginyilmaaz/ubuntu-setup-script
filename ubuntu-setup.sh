@@ -16,7 +16,7 @@
 #===============================================================================
 
 SCRIPT_VERSION="2.5.0"
-SCRIPT_REVISION="126"
+SCRIPT_REVISION="127"
 SCRIPT_DATE="2026-03-27"
 
 # NOTE: We intentionally do NOT use set -e here.
@@ -4885,41 +4885,78 @@ check_critical_packages() {
     # Only check on Ubuntu desktop systems (skip headless servers)
     command_exists gnome-shell || return 0
 
-    # Only check things that actually break the user experience:
-    #   - gnome-control-center → the Settings app binary
-    #   - gnome-terminal       → the Terminal app binary
-    # Meta-packages like ubuntu-desktop / ubuntu-desktop-minimal aren't
-    # checked because they hold no actual files, so their absence is
-    # cosmetic and the user might have removed them on purpose.
-    local -a missing=()
-    package_installed gnome-control-center || missing+=("gnome-control-center")
-    package_installed gnome-terminal       || missing+=("gnome-terminal")
+    # Two categories:
+    #   CRITICAL  – missing this breaks an actual app (Settings, Terminal, files)
+    #   ADVISORY  – meta-packages that hold no files but their absence signals
+    #               a previous cascading remove. Shown so the user knows.
+    local -a missing_critical=()
+    local -a missing_advisory=()
 
-    if [ "${#missing[@]}" -eq 0 ]; then
+    # Critical: real binaries
+    package_installed gnome-control-center || missing_critical+=("gnome-control-center")
+    package_installed gnome-terminal       || missing_critical+=("gnome-terminal")
+    package_installed nautilus             || missing_critical+=("nautilus")
+    package_installed gnome-shell          || missing_critical+=("gnome-shell")
+
+    # Advisory: meta-packages
+    package_installed ubuntu-desktop          || missing_advisory+=("ubuntu-desktop")
+    package_installed ubuntu-desktop-minimal  || missing_advisory+=("ubuntu-desktop-minimal")
+
+    if [ "${#missing_critical[@]}" -eq 0 ] && [ "${#missing_advisory[@]}" -eq 0 ]; then
         return 0
     fi
 
     echo ""
-    echo -e "${RED}╔═══════════════════════════════════════════════════════════════════════════╗${NC}"
-    echo -e "${RED}║  Core desktop app(s) missing                                                  ║${NC}"
-    echo -e "${RED}╚═══════════════════════════════════════════════════════════════════════════╝${NC}"
+    echo -e "${YELLOW}╔═══════════════════════════════════════════════════════════════════════════╗${NC}"
+    echo -e "${YELLOW}║  Desktop package check                                                        ║${NC}"
+    echo -e "${YELLOW}╚═══════════════════════════════════════════════════════════════════════════╝${NC}"
     echo ""
-    echo -e "${YELLOW}These core apps are NOT installed (probably a cascading apt-purge in a previous run):${NC}"
-    for p in "${missing[@]}"; do
-        case "$p" in
-            gnome-control-center) echo -e "  ${RED}✗${NC} $p  (Settings app)" ;;
-            gnome-terminal)       echo -e "  ${RED}✗${NC} $p  (Terminal app)" ;;
-            *)                    echo -e "  ${RED}✗${NC} $p" ;;
-        esac
-    done
-    echo ""
-    read -p "Restore them now via apt-get install? (y/n): " fix_choice < /dev/tty
-    if [[ "$fix_choice" =~ ^[Yy]$ ]]; then
+
+    if [ "${#missing_critical[@]}" -gt 0 ]; then
+        echo -e "${RED}CRITICAL — these are real apps and need to come back:${NC}"
+        for p in "${missing_critical[@]}"; do
+            case "$p" in
+                gnome-control-center) echo -e "  ${RED}✗${NC} $p  → Settings app" ;;
+                gnome-terminal)       echo -e "  ${RED}✗${NC} $p  → Terminal app" ;;
+                nautilus)             echo -e "  ${RED}✗${NC} $p  → Files app" ;;
+                gnome-shell)          echo -e "  ${RED}✗${NC} $p  → GNOME Shell itself" ;;
+                *)                    echo -e "  ${RED}✗${NC} $p" ;;
+            esac
+        done
+        echo ""
+    fi
+
+    if [ "${#missing_advisory[@]}" -gt 0 ]; then
+        echo -e "${CYAN}ADVISORY — meta-packages only (no real files, removable on purpose):${NC}"
+        for p in "${missing_advisory[@]}"; do
+            echo -e "  ${YELLOW}!${NC} $p"
+        done
+        echo ""
+    fi
+
+    # Always ask, but only auto-install the critical ones; user can opt to
+    # also restore meta-packages.
+    local -a to_install=("${missing_critical[@]}")
+
+    if [ "${#missing_critical[@]}" -gt 0 ]; then
+        read -p "Reinstall the CRITICAL apps now? (y/n): " crit_choice < /dev/tty
+        if [[ ! "$crit_choice" =~ ^[Yy]$ ]]; then
+            to_install=()
+            log_warning "Skipped — to fix later: sudo apt install ${missing_critical[*]}"
+        fi
+    fi
+
+    if [ "${#missing_advisory[@]}" -gt 0 ]; then
+        read -p "Also reinstall the meta-packages (cosmetic)? (y/n): " meta_choice < /dev/tty
+        if [[ "$meta_choice" =~ ^[Yy]$ ]]; then
+            to_install+=("${missing_advisory[@]}")
+        fi
+    fi
+
+    if [ "${#to_install[@]}" -gt 0 ]; then
         sudo apt-get update -qq
-        sudo apt-get install -y "${missing[@]}" 2>&1 | tail -5
-        log_success "Restored: ${missing[*]}"
-    else
-        log_warning "Skipped. To restore later: sudo apt install ${missing[*]}"
+        sudo apt-get install -y "${to_install[@]}" 2>&1 | tail -5
+        log_success "Reinstalled: ${to_install[*]}"
     fi
 }
 

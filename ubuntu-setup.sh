@@ -16,7 +16,7 @@
 #===============================================================================
 
 SCRIPT_VERSION="2.5.0"
-SCRIPT_REVISION="133"
+SCRIPT_REVISION="134"
 SCRIPT_DATE="2026-03-27"
 
 # NOTE: We intentionally do NOT use set -e here.
@@ -475,7 +475,7 @@ GNOME_SUB_SCRIPT=false; GNOME_SUB_WAYLAND=false; GNOME_SUB_SSH=false
 GNOME_SUB_ALIASES=false; GNOME_SUB_ENGLISH=false
 GNOME_SUB_SCREEN=false; GNOME_SUB_HIDDEN=false; GNOME_SUB_KB_TR=false; GNOME_SUB_KB_EN=false
 GNOME_SUB_VSCREEN=false; GNOME_SUB_AUTOLOGIN=false; GNOME_SUB_HOSTNAME=false
-GNOME_SUB_NO_IBUS=false; GNOME_SUB_APPORT=false; GNOME_SUB_DESKTOP_META=false
+GNOME_SUB_NO_IBUS=false; GNOME_SUB_APPORT=false
 # Hostname value collected before install starts (when Tweaks + Change Hostname selected)
 NEW_HOSTNAME=""
 
@@ -505,7 +505,8 @@ show_gnome_submenu() {
     TWEAK_NAMES+=("Keyboard: English Q"); TWEAK_DESCS+=("Add English (US) keyboard layout");                   TWEAK_KEYS+=("GNOME_SUB_KB_EN")
     TWEAK_NAMES+=("IBus Leak Fix");      TWEAK_DESCS+=("Disable ibus-daemon, use XKB only (fix memory leak)");   TWEAK_KEYS+=("GNOME_SUB_NO_IBUS")
     TWEAK_NAMES+=("Activate Apport");    TWEAK_DESCS+=("Install + enable Ubuntu crash reporting (apport)");      TWEAK_KEYS+=("GNOME_SUB_APPORT")
-    TWEAK_NAMES+=("Restore Desktop Meta"); TWEAK_DESCS+=("Reinstall ubuntu-desktop + ubuntu-desktop-minimal meta-packages"); TWEAK_KEYS+=("GNOME_SUB_DESKTOP_META")
+    # Note: "Restore Desktop Meta" tweak removed by user request. If anyone
+    # really needs it: sudo apt install --no-install-recommends ubuntu-desktop
     TWEAK_NAMES+=("Virtual Screen 1080p"); TWEAK_DESCS+=("Create virtual 1920x1080 display (for VNC/RDP/headless)"); TWEAK_KEYS+=("GNOME_SUB_VSCREEN")
     TWEAK_NAMES+=("GDM Auto-Login");       TWEAK_DESCS+=("Auto-login to GUI on boot (needed for VNC tray icon)");   TWEAK_KEYS+=("GNOME_SUB_AUTOLOGIN")
 
@@ -707,12 +708,9 @@ show_debloat_submenu() {
     if dpkg -l rhythmbox 2>/dev/null | grep -q "^ii"; then
         BLOAT_NAMES+=("Rhythmbox");         BLOAT_DESCS+=("Remove Rhythmbox music player");              BLOAT_PKGS+=("rhythmbox rhythmbox-data rhythmbox-plugins")
     fi
-    # Ubuntu Help (yelp + gnome-user-docs). This cascades to ubuntu-desktop
-    # but ubuntu-desktop is just a meta-package — removing it doesn't break
-    # anything real, just removes the "this machine has ubuntu-desktop" tag.
-    if dpkg -l yelp 2>/dev/null | grep -q "^ii" || dpkg -l gnome-user-docs 2>/dev/null | grep -q "^ii"; then
-        BLOAT_NAMES+=("Ubuntu Help");       BLOAT_DESCS+=("Remove yelp + docs (also drops ubuntu-desktop meta, harmless)"); BLOAT_PKGS+=("yelp gnome-user-docs")
-    fi
+    # NOTE: Ubuntu Help (yelp/gnome-user-docs) removed from Debloat by user
+    # request — it cascaded to ubuntu-desktop meta and was confusing. Manual:
+    #   sudo apt remove yelp gnome-user-docs
     # NOTE: Language Support (language-selector-gnome) is intentionally NOT in
     # this menu — it has a hard rev-dep from gnome-control-center, so removing
     # it KILLS the Settings app. If you really want it gone, do it manually:
@@ -1234,7 +1232,6 @@ show_interactive_install_menu() {
                                 $GNOME_SUB_HOSTNAME    && tweaks_list+="Change Hostname → $NEW_HOSTNAME, "
                                 $GNOME_SUB_NO_IBUS     && tweaks_list+="IBus Leak Fix, "
                                 $GNOME_SUB_APPORT      && tweaks_list+="Activate Apport, "
-                                $GNOME_SUB_DESKTOP_META && tweaks_list+="Restore Desktop Meta, "
                                 tweaks_list="${tweaks_list%, }"
                                 if [ -n "$tweaks_list" ]; then
                                     echo -e "  ${GREEN}✓${NC} ${GREEN}Tweaks:${NC}"
@@ -3145,17 +3142,6 @@ ACCOUNTSEOF
         log_success "Apport enabled and started"
     fi
 
-    # 17. Restore Ubuntu Desktop meta-packages
-    # CRITICAL: --no-install-recommends so the meta doesn't drag back
-    # all the bloatware (remmina, shotwell, libreoffice, rhythmbox, ...)
-    # that ubuntu-desktop Recommends.
-    if $GNOME_SUB_DESKTOP_META; then
-        log_info "Reinstalling ubuntu-desktop meta-packages (without Recommends)..."
-        _pause_update_notifier
-        sudo apt-get install -y --no-install-recommends ubuntu-desktop ubuntu-desktop-minimal 2>&1 | tail -3
-        _resume_update_notifier
-        log_success "ubuntu-desktop / ubuntu-desktop-minimal restored (no bloatware re-pulled)"
-    fi
 
     log_success "GNOME Tweaks setup completed"
 }
@@ -4839,7 +4825,6 @@ print_summary() {
         $GNOME_SUB_HOSTNAME   && any_tweak=true
         $GNOME_SUB_NO_IBUS    && any_tweak=true
         $GNOME_SUB_APPORT     && any_tweak=true
-        $GNOME_SUB_DESKTOP_META && any_tweak=true
 
         if $any_tweak; then
             echo -e "  ${GREEN}✓${NC} Tweaks"
@@ -4861,7 +4846,6 @@ print_summary() {
             $GNOME_SUB_HOSTNAME   && [ -n "$NEW_HOSTNAME" ]   && echo -e "    ${GREEN}✓${NC} Hostname → $NEW_HOSTNAME"
             $GNOME_SUB_NO_IBUS    && echo -e "    ${GREEN}✓${NC} IBus disabled (XKB-only)"
             $GNOME_SUB_APPORT     && systemctl is-active apport &>/dev/null && echo -e "    ${GREEN}✓${NC} Apport activated"
-            $GNOME_SUB_DESKTOP_META && package_installed ubuntu-desktop && echo -e "    ${GREEN}✓${NC} Desktop Meta restored"
         fi
     fi
 

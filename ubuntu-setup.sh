@@ -16,7 +16,7 @@
 #===============================================================================
 
 SCRIPT_VERSION="2.5.0"
-SCRIPT_REVISION="114"
+SCRIPT_REVISION="115"
 SCRIPT_DATE="2026-03-27"
 
 # NOTE: We intentionally do NOT use set -e here.
@@ -682,6 +682,22 @@ show_debloat_submenu() {
     # Vim (preinstalled / vim-common)
     if dpkg -l vim 2>/dev/null | grep -q "^ii" || dpkg -l vim-tiny 2>/dev/null | grep -q "^ii"; then
         BLOAT_NAMES+=("Vim");               BLOAT_DESCS+=("Remove vim/vim-tiny editor");                BLOAT_PKGS+=("vim vim-tiny vim-common vim-runtime")
+    fi
+    # Rhythmbox music player
+    if dpkg -l rhythmbox 2>/dev/null | grep -q "^ii"; then
+        BLOAT_NAMES+=("Rhythmbox");         BLOAT_DESCS+=("Remove Rhythmbox music player");              BLOAT_PKGS+=("rhythmbox rhythmbox-data rhythmbox-plugins")
+    fi
+    # Ubuntu Help (yelp) + GNOME user docs
+    if dpkg -l yelp 2>/dev/null | grep -q "^ii" || dpkg -l gnome-user-docs 2>/dev/null | grep -q "^ii"; then
+        BLOAT_NAMES+=("Ubuntu Help");       BLOAT_DESCS+=("Remove Ubuntu Help (yelp + gnome-user-docs)"); BLOAT_PKGS+=("yelp gnome-user-docs")
+    fi
+    # Language Support
+    if dpkg -l language-selector-gnome 2>/dev/null | grep -q "^ii"; then
+        BLOAT_NAMES+=("Language Support");  BLOAT_DESCS+=("Remove Language Support GUI");               BLOAT_PKGS+=("language-selector-gnome")
+    fi
+    # Power Statistics
+    if dpkg -l gnome-power-manager 2>/dev/null | grep -q "^ii"; then
+        BLOAT_NAMES+=("Power Statistics");  BLOAT_DESCS+=("Remove GNOME Power Statistics app");         BLOAT_PKGS+=("gnome-power-manager")
     fi
     # Virtual Screen config (not a package, special marker)
     if virtual_screen_installed; then

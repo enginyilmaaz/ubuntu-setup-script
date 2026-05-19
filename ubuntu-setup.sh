@@ -16,7 +16,7 @@
 #===============================================================================
 
 SCRIPT_VERSION="2.5.0"
-SCRIPT_REVISION="118"
+SCRIPT_REVISION="119"
 SCRIPT_DATE="2026-03-27"
 
 # NOTE: We intentionally do NOT use set -e here.
@@ -1717,6 +1717,8 @@ check_already_installed() {
     export PATH="$HOME/.claude/bin:$HOME/.local/bin:$PATH"
 
     # Define: FLAG_VAR | Display Name | Detection Command
+    # NOTE: INSTALL_GNOME (Tweaks) is intentionally NOT here - its sub-menu
+    # handles per-item idempotency itself.
     local -a CHECKS=(
         "INSTALL_VNC|RealVNC|command_exists vncserver-x11 || command_exists vncserver || package_installed realvnc-connect"
         "INSTALL_RUSTDESK|RustDesk|command_exists rustdesk"
@@ -1724,12 +1726,12 @@ check_already_installed() {
         "INSTALL_CHROME|Chrome/Chromium|command_exists google-chrome || command_exists google-chrome-stable || command_exists chromium-browser || command_exists chromium"
         "INSTALL_VSCODE|VS Code|command_exists code"
         "INSTALL_PYTHON|Python 3|command_exists python3"
-        "INSTALL_GNOME|GNOME Extensions|package_installed gnome-shell-extensions"
         "INSTALL_DBEAVER|DBeaver|package_installed dbeaver-ce || command_exists dbeaver"
         "INSTALL_VLC|VLC|command_exists vlc"
         "INSTALL_CLOUDFLARED|Cloudflared|command_exists cloudflared"
         "INSTALL_DOCKER|Docker|command_exists docker"
         "INSTALL_CLAUDE|Claude Code|command_exists claude"
+        "INSTALL_CODEX|Codex|command_exists codex"
         "INSTALL_GH|GitHub CLI|command_exists gh"
         "INSTALL_POSTMAN|Postman|command_exists postman || snap list postman 2>/dev/null | grep -q postman"
         "INSTALL_FILEZILLA|FileZilla|command_exists filezilla"
@@ -2803,7 +2805,7 @@ force_enable_extension() {
 # 8. GNOME Shell Extensions
 #===============================================================================
 install_gnome_extensions() {
-    log_step "8. Ubuntu (GNOME) Tweaks"
+    log_step "Tweaks"
 
     if ! command_exists gnome-shell; then
         log_warning "GNOME Shell not detected, skipping extensions installation..."
@@ -2814,10 +2816,10 @@ install_gnome_extensions() {
 
     # 0. Update system packages first (so subsequent installs use fresh index)
     if $GNOME_SUB_UPDATE; then
-        log_info "Updating package lists (sudo apt update)..."
-        sudo apt-get update 2>&1 | tail -3
-        log_info "Upgrading packages (sudo apt upgrade -y)..."
-        sudo DEBIAN_FRONTEND=noninteractive apt-get upgrade -y 2>&1 | tail -5
+        log_info "Running: sudo apt update"
+        sudo apt-get update
+        log_info "Running: sudo apt upgrade -y"
+        sudo DEBIAN_FRONTEND=noninteractive apt-get upgrade -y
         log_success "System packages updated"
     fi
 

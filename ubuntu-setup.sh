@@ -16,7 +16,7 @@
 #===============================================================================
 
 SCRIPT_VERSION="2.5.0"
-SCRIPT_REVISION="120"
+SCRIPT_REVISION="121"
 SCRIPT_DATE="2026-03-27"
 
 # NOTE: We intentionally do NOT use set -e here.
@@ -794,6 +794,11 @@ show_debloat_submenu() {
                 BLOAT_NAMES+=("Snap: $_snap_name"); BLOAT_DESCS+=("Remove snap package '$_snap_name'"); BLOAT_PKGS+=("__SNAP__:$_snap_name")
             fi
         done < <(snap list 2>/dev/null | tail -n +2)
+
+        # Full snap stack removal (only offered if snapd is installed)
+        if dpkg -l snapd 2>/dev/null | grep -q "^ii"; then
+            BLOAT_NAMES+=("Remove Snap Completely"); BLOAT_DESCS+=("Remove ALL snaps + snapd + /snap dirs (frees ~300MB, irreversible-ish)"); BLOAT_PKGS+=("__SNAP_PURGE_ALL__")
+        fi
     fi
     # NOTE: OpenSSH Server is NOT listed here on purpose — removing it could
     # cut remote access for the user. Use 'sudo apt purge openssh-server' manually
@@ -955,7 +960,12 @@ show_interactive_install_menu() {
     if [ "$DEB_ARCH" == "amd64" ]; then
         APP_NAMES+=("Chrome");  APP_DESCS+=("Google Chrome");                         APP_VARS+=("INSTALL_CHROME")
     else
-        APP_NAMES+=("Chromium"); APP_DESCS+=("Chromium Browser (ARM)");               APP_VARS+=("INSTALL_CHROME")
+        # If chromium is currently a snap, suggest replacing it with the APT version
+        if snap list chromium &>/dev/null; then
+            APP_NAMES+=("Chromium"); APP_DESCS+=("Replace Chromium snap with APT (xtradeb PPA)"); APP_VARS+=("INSTALL_CHROME")
+        else
+            APP_NAMES+=("Chromium"); APP_DESCS+=("Chromium APT (xtradeb PPA, no snap)");          APP_VARS+=("INSTALL_CHROME")
+        fi
     fi
 
     APP_NAMES+=("VS Code");     APP_DESCS+=("Visual Studio Code (editor)");           APP_VARS+=("INSTALL_VSCODE")
@@ -2461,6 +2471,14 @@ install_chrome() {
     else
         # ARM64: Install Chromium (Chrome is not available for ARM64)
         log_info "Installing Chromium for ARM64 (Chrome not available)..."
+
+        # If a Chromium snap exists, remove it first so the APT version becomes
+        # the only one (avoids /snap/bin/chromium vs /usr/bin/chromium confusion).
+        if snap list chromium &>/dev/null; then
+            log_info "Removing existing Chromium snap before installing APT version..."
+            sudo snap remove --purge chromium 2>/dev/null || true
+            log_success "Chromium snap removed"
+        fi
 
         local chromium_installed=false
 
@@ -4384,6 +4402,65 @@ debloat_system() {
                 local _snap_to_remove="${DEBLOAT_SELECTED_PKGS[$bi]#__SNAP__:}"
                 sudo snap remove --purge "$_snap_to_remove" 2>/dev/null || true
                 log_info "Snap '$_snap_to_remove' removed"
+                ;;
+            "__SNAP_PURGE_ALL__")
+                # Snapshot what we're about to nuke (for the rollback log)
+                local _snap_log="$HOME/Desktop/snap-removal-$(date +%Y%m%d_%H%M%S).txt"
+                mkdir -p "$HOME/Desktop" 2>/dev/null || true
+                {
+                    echo "SNAP REMOVAL LOG"
+                    echo "Date: $(date)"
+                    echo ""
+                    echo "Snaps that were installed before removal:"
+                    snap list 2>/dev/null
+                    echo ""
+                    echo "Disk usage before removal:"
+                    sudo du -sh /snap /var/snap /var/lib/snapd 2>/dev/null
+                    echo ""
+                    echo "To restore snap functionality:"
+                    echo "  sudo apt install snapd gnome-software-plugin-snap"
+                    echo "  sudo systemctl enable --now snapd snapd.socket snapd.seeded"
+                    echo "  # then reinstall the snaps you want (e.g. sudo snap install <name>)"
+                } > "$_snap_log"
+                log_info "Saved snap rollback note to: $_snap_log"
+
+                # 1) Remove all user snaps (snap-store, postman, etc.) - in reverse install order
+                log_info "Removing all user snaps..."
+                while read -r _sn _; do
+                    [ -z "$_sn" ] || [ "$_sn" = "Name" ] && continue
+                    # skip base snaps (they have to be removed last)
+                    [[ "$_sn" =~ ^(core|core18|core20|core22|core24|snapd|bare)$ ]] && continue
+                    sudo snap remove --purge "$_sn" 2>/dev/null || true
+                done < <(snap list 2>/dev/null | tail -n +2)
+
+                # 2) Remove base snaps
+                log_info "Removing base snaps (core / core18 / etc.)..."
+                for _base in core22 core20 core18 core24 core bare snapd; do
+                    sudo snap remove --purge "$_base" 2>/dev/null || true
+                done
+
+                # 3) Stop + disable services BEFORE purging the package
+                log_info "Stopping snapd services..."
+                sudo systemctl disable --now snapd.service snapd.socket snapd.seeded 2>/dev/null || true
+                sudo apt-mark unhold snapd 2>/dev/null || true
+
+                # 4) Purge the snapd package + GNOME software plugin
+                log_info "Purging snapd package..."
+                sudo apt-get purge -y snapd gnome-software-plugin-snap 2>/dev/null || true
+
+                # 5) Clean up leftover directories
+                log_info "Cleaning up /snap, /var/snap, /var/lib/snapd..."
+                sudo rm -rf /snap /var/snap /var/lib/snapd "$HOME/snap" 2>/dev/null || true
+
+                # 6) Prevent snap from being reinstalled accidentally via apt
+                log_info "Adding apt preference to block snapd reinstall..."
+                sudo tee /etc/apt/preferences.d/nosnap.pref > /dev/null << 'NOSNAPEOF'
+Package: snapd
+Pin: release a=*
+Pin-Priority: -10
+NOSNAPEOF
+
+                log_success "Snap stack completely removed. Rollback note: $_snap_log"
                 ;;
             *)
                 # shellcheck disable=SC2086

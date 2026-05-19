@@ -16,7 +16,7 @@
 #===============================================================================
 
 SCRIPT_VERSION="2.5.0"
-SCRIPT_REVISION="113"
+SCRIPT_REVISION="114"
 SCRIPT_DATE="2026-03-27"
 
 # NOTE: We intentionally do NOT use set -e here.
@@ -678,6 +678,10 @@ show_debloat_submenu() {
     fi
     if dpkg -l gnome-calendar 2>/dev/null | grep -q "^ii"; then
         BLOAT_NAMES+=("Calendar");          BLOAT_DESCS+=("GNOME Calendar");                            BLOAT_PKGS+=("gnome-calendar")
+    fi
+    # Vim (preinstalled / vim-common)
+    if dpkg -l vim 2>/dev/null | grep -q "^ii" || dpkg -l vim-tiny 2>/dev/null | grep -q "^ii"; then
+        BLOAT_NAMES+=("Vim");               BLOAT_DESCS+=("Remove vim/vim-tiny editor");                BLOAT_PKGS+=("vim vim-tiny vim-common vim-runtime")
     fi
     # Virtual Screen config (not a package, special marker)
     if virtual_screen_installed; then

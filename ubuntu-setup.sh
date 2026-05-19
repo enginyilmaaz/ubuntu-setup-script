@@ -16,7 +16,7 @@
 #===============================================================================
 
 SCRIPT_VERSION="2.5.0"
-SCRIPT_REVISION="119"
+SCRIPT_REVISION="120"
 SCRIPT_DATE="2026-03-27"
 
 # NOTE: We intentionally do NOT use set -e here.
@@ -4575,18 +4575,45 @@ print_summary() {
         fi
     fi
 
-    # GNOME Tweaks
+    # Tweaks - show ONLY what was selected in this run (not all that exist)
     if $INSTALL_GNOME; then
-        echo -e "  ${GREEN}✓${NC} GNOME Tweaks"
-        package_installed gnome-shell-extensions && echo -e "    ${GREEN}✓${NC} Shell Extensions"
-        package_installed gnome-shell-extension-manager && echo -e "    ${GREEN}✓${NC} Extension Manager"
-        package_installed gnome-tweaks && echo -e "    ${GREEN}✓${NC} Tweaks App"
-        dconf list /org/gnome/shell/extensions/dash-to-dock/ &>/dev/null && echo -e "    ${GREEN}✓${NC} Dash to Dock"
-        grep -q "^WaylandEnable=false" /etc/gdm3/custom.conf 2>/dev/null && echo -e "    ${GREEN}✓${NC} Wayland Disabled"
-        systemctl is-active ssh &>/dev/null && echo -e "    ${GREEN}✓${NC} SSH Server"
-        systemctl is-active xrdp &>/dev/null && echo -e "    ${GREEN}✓${NC} RDP Server (xrdp)"
-        grep -q "alias claude-skip=" "$HOME/.bashrc" 2>/dev/null && echo -e "    ${GREEN}✓${NC} CLI Aliases"
-        [ -f "$HOME/.local/share/nautilus-python/extensions/smai-context-menus.py" ] && echo -e "    ${GREEN}✓${NC} Nautilus Context Menu"
+        local any_tweak=false
+        $GNOME_SUB_UPDATE     && any_tweak=true
+        $GNOME_SUB_EXTENSIONS && any_tweak=true
+        $GNOME_SUB_TWEAKS_APP && any_tweak=true
+        $GNOME_SUB_DOCK       && any_tweak=true
+        $GNOME_SUB_SCRIPT     && any_tweak=true
+        $GNOME_SUB_WAYLAND    && any_tweak=true
+        $GNOME_SUB_SSH        && any_tweak=true
+        $GNOME_SUB_ALIASES    && any_tweak=true
+        $GNOME_SUB_ENGLISH    && any_tweak=true
+        $GNOME_SUB_SCREEN     && any_tweak=true
+        $GNOME_SUB_HIDDEN     && any_tweak=true
+        $GNOME_SUB_KB_TR      && any_tweak=true
+        $GNOME_SUB_KB_EN      && any_tweak=true
+        $GNOME_SUB_VSCREEN    && any_tweak=true
+        $GNOME_SUB_AUTOLOGIN  && any_tweak=true
+        $GNOME_SUB_HOSTNAME   && any_tweak=true
+
+        if $any_tweak; then
+            echo -e "  ${GREEN}✓${NC} Tweaks"
+            $GNOME_SUB_UPDATE     && echo -e "    ${GREEN}✓${NC} Update System (apt update + upgrade)"
+            $GNOME_SUB_EXTENSIONS && package_installed gnome-shell-extensions &>/dev/null && echo -e "    ${GREEN}✓${NC} Extensions (Extension Manager + AppIndicator + Tray Icons)"
+            $GNOME_SUB_TWEAKS_APP && package_installed gnome-tweaks &>/dev/null         && echo -e "    ${GREEN}✓${NC} GNOME Tweaks App"
+            $GNOME_SUB_DOCK       && echo -e "    ${GREEN}✓${NC} Dash to Dock"
+            $GNOME_SUB_SCRIPT     && [ -d "$HOME/.local/share/gnome-shell/extensions/script-launcher@enginyilmaaz" ] && echo -e "    ${GREEN}✓${NC} Script Launcher"
+            $GNOME_SUB_WAYLAND    && grep -q "^WaylandEnable=false" /etc/gdm3/custom.conf 2>/dev/null && echo -e "    ${GREEN}✓${NC} Wayland Disabled"
+            $GNOME_SUB_SSH        && systemctl is-active ssh &>/dev/null                && echo -e "    ${GREEN}✓${NC} OpenSSH Server"
+            $GNOME_SUB_ALIASES    && grep -q "^# BEGIN smai-aliases" "$HOME/.bashrc" 2>/dev/null && echo -e "    ${GREEN}✓${NC} CLI Aliases"
+            $GNOME_SUB_ENGLISH    && echo -e "    ${GREEN}✓${NC} English Language"
+            $GNOME_SUB_SCREEN     && echo -e "    ${GREEN}✓${NC} Screen Off: Never"
+            $GNOME_SUB_HIDDEN     && echo -e "    ${GREEN}✓${NC} Show Hidden Files"
+            $GNOME_SUB_KB_TR      && echo -e "    ${GREEN}✓${NC} Keyboard: Turkish Q"
+            $GNOME_SUB_KB_EN      && echo -e "    ${GREEN}✓${NC} Keyboard: English Q"
+            $GNOME_SUB_VSCREEN    && virtual_screen_installed && echo -e "    ${GREEN}✓${NC} Virtual Screen 1080p"
+            $GNOME_SUB_AUTOLOGIN  && autologin_enabled        && echo -e "    ${GREEN}✓${NC} GDM Auto-Login"
+            $GNOME_SUB_HOSTNAME   && [ -n "$NEW_HOSTNAME" ]   && echo -e "    ${GREEN}✓${NC} Hostname → $NEW_HOSTNAME"
+        fi
     fi
 
     # DBeaver
@@ -4652,8 +4679,7 @@ print_summary() {
 # Self-update check: compare local SCRIPT_REVISION against latest gist version
 #===============================================================================
 check_for_update() {
-    # Skip if we're running locally from a file (not piped from curl) — git users
-    # don't want auto-overwrite of their working copy.
+    # Skip if running from a git checkout (devs don't want auto-overwrite)
     if [ -t 0 ] && [ -f "$0" ] && [ -d "$(dirname "$0")/.git" ]; then
         return 0
     fi
@@ -4661,21 +4687,70 @@ check_for_update() {
     # Skip if SKIP_UPDATE_CHECK=1
     [ "${SKIP_UPDATE_CHECK:-0}" = "1" ] && return 0
 
-    # Skip if no network
-    command_exists curl || return 0
+    # Need curl or wget
+    local fetcher=""
+    if command_exists curl; then fetcher=curl
+    elif command_exists wget; then fetcher=wget
+    else return 0
+    fi
 
-    local update_url="https://bit.ly/ubuntu-ey?$(date +%s)"
+    # Bit.ly caches for 90s, GitHub Gist raw also has CDN cache. Use the Gist API
+    # which returns the file content + always-fresh metadata. This is the only
+    # reliable way to get the absolute latest revision.
+    local gist_id="deb328012eaa1d74e050724db74d2377"
+    local api_url="https://api.github.com/gists/${gist_id}"
+    local cb="?_=$(date +%s%N)"
 
     echo -e "${CYAN}Checking for script updates...${NC}" >&2
 
-    # Fetch remote revision line only (small download)
-    local remote_rev
-    remote_rev=$(curl -fsSL --max-time 8 "$update_url" 2>/dev/null | \
-                 grep -m1 '^SCRIPT_REVISION=' | \
+    local raw_url remote_rev api_json
+    if [ "$fetcher" = "curl" ]; then
+        api_json=$(curl -fsSL --max-time 10 \
+            -H "Cache-Control: no-cache, no-store" \
+            -H "Pragma: no-cache" \
+            -H "Accept: application/vnd.github+json" \
+            "${api_url}${cb}" 2>/dev/null)
+    else
+        api_json=$(wget -qO- --timeout=10 --no-cache \
+            --header="Cache-Control: no-cache, no-store" \
+            --header="Accept: application/vnd.github+json" \
+            "${api_url}${cb}" 2>/dev/null)
+    fi
+
+    if [ -z "$api_json" ]; then
+        echo -e "${YELLOW}Could not reach gist API, continuing with rev-$SCRIPT_REVISION${NC}" >&2
+        return 0
+    fi
+
+    # Extract raw_url (always points to the latest revision of the file)
+    raw_url=$(echo "$api_json" | python3 -c "
+import sys, json
+try:
+    d = json.load(sys.stdin)
+    print(d['files']['ubuntu-setup.sh']['raw_url'])
+except Exception:
+    pass
+" 2>/dev/null)
+
+    if [ -z "$raw_url" ]; then
+        echo -e "${YELLOW}Could not parse gist API, continuing with rev-$SCRIPT_REVISION${NC}" >&2
+        return 0
+    fi
+
+    # Fetch the file content (raw_url has the commit SHA so no cache issues)
+    local remote_content
+    if [ "$fetcher" = "curl" ]; then
+        remote_content=$(curl -fsSL --max-time 30 \
+            -H "Cache-Control: no-cache, no-store" "$raw_url" 2>/dev/null)
+    else
+        remote_content=$(wget -qO- --timeout=30 --no-cache "$raw_url" 2>/dev/null)
+    fi
+
+    remote_rev=$(echo "$remote_content" | grep -m1 '^SCRIPT_REVISION=' | \
                  sed -E 's/^SCRIPT_REVISION="?([0-9]+)"?.*/\1/')
 
     if [ -z "$remote_rev" ] || ! [[ "$remote_rev" =~ ^[0-9]+$ ]]; then
-        echo -e "${YELLOW}Could not fetch latest revision, continuing with rev-$SCRIPT_REVISION${NC}" >&2
+        echo -e "${YELLOW}Could not detect remote revision, continuing with rev-$SCRIPT_REVISION${NC}" >&2
         return 0
     fi
 
@@ -4686,7 +4761,7 @@ check_for_update() {
 
     echo "" >&2
     echo -e "${YELLOW}╔════════════════════════════════════════════════════════════╗${NC}" >&2
-    echo -e "${YELLOW}║  Update available: rev-${SCRIPT_REVISION} → rev-${remote_rev}                            ║${NC}" >&2
+    echo -e "${YELLOW}║  Update available: rev-${SCRIPT_REVISION} → rev-${remote_rev}${NC}" >&2
     echo -e "${YELLOW}╚════════════════════════════════════════════════════════════╝${NC}" >&2
     echo "" >&2
 
@@ -4696,16 +4771,21 @@ check_for_update() {
         return 0
     fi
 
-    echo -e "${GREEN}Downloading rev-$remote_rev...${NC}" >&2
     local new_script="/tmp/ubuntu-setup-rev${remote_rev}.sh"
-    if curl -fsSL --max-time 60 -o "$new_script" "$update_url" 2>/dev/null && [ -s "$new_script" ]; then
-        chmod +x "$new_script"
-        echo -e "${GREEN}Re-launching with rev-$remote_rev...${NC}" >&2
-        echo "" >&2
-        exec bash "$new_script" "$@"
-    else
-        echo -e "${RED}Download failed, continuing with rev-$SCRIPT_REVISION${NC}" >&2
+    # We already have the content, just write it out
+    echo "$remote_content" > "$new_script"
+
+    if [ ! -s "$new_script" ]; then
+        echo -e "${RED}Failed to save new script, continuing with rev-$SCRIPT_REVISION${NC}" >&2
+        return 0
     fi
+
+    chmod +x "$new_script"
+    # Set SKIP_UPDATE_CHECK so the new run doesn't loop
+    export SKIP_UPDATE_CHECK=1
+    echo -e "${GREEN}Re-launching with rev-$remote_rev...${NC}" >&2
+    echo "" >&2
+    exec bash "$new_script" "$@"
 }
 
 main() {

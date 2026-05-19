@@ -16,7 +16,7 @@
 #===============================================================================
 
 SCRIPT_VERSION="2.5.0"
-SCRIPT_REVISION="116"
+SCRIPT_REVISION="117"
 SCRIPT_DATE="2026-03-27"
 
 # NOTE: We intentionally do NOT use set -e here.
@@ -4627,7 +4627,70 @@ print_summary() {
 #===============================================================================
 # Main
 #===============================================================================
+#===============================================================================
+# Self-update check: compare local SCRIPT_REVISION against latest gist version
+#===============================================================================
+check_for_update() {
+    # Skip if we're running locally from a file (not piped from curl) — git users
+    # don't want auto-overwrite of their working copy.
+    if [ -t 0 ] && [ -f "$0" ] && [ -d "$(dirname "$0")/.git" ]; then
+        return 0
+    fi
+
+    # Skip if SKIP_UPDATE_CHECK=1
+    [ "${SKIP_UPDATE_CHECK:-0}" = "1" ] && return 0
+
+    # Skip if no network
+    command_exists curl || return 0
+
+    local update_url="https://bit.ly/ubuntu-ey?$(date +%s)"
+
+    echo -e "${CYAN}Checking for script updates...${NC}" >&2
+
+    # Fetch remote revision line only (small download)
+    local remote_rev
+    remote_rev=$(curl -fsSL --max-time 8 "$update_url" 2>/dev/null | \
+                 grep -m1 '^SCRIPT_REVISION=' | \
+                 sed -E 's/^SCRIPT_REVISION="?([0-9]+)"?.*/\1/')
+
+    if [ -z "$remote_rev" ] || ! [[ "$remote_rev" =~ ^[0-9]+$ ]]; then
+        echo -e "${YELLOW}Could not fetch latest revision, continuing with rev-$SCRIPT_REVISION${NC}" >&2
+        return 0
+    fi
+
+    if [ "$remote_rev" -le "$SCRIPT_REVISION" ]; then
+        echo -e "${GREEN}You're on the latest rev-$SCRIPT_REVISION${NC}" >&2
+        return 0
+    fi
+
+    echo "" >&2
+    echo -e "${YELLOW}╔════════════════════════════════════════════════════════════╗${NC}" >&2
+    echo -e "${YELLOW}║  Update available: rev-${SCRIPT_REVISION} → rev-${remote_rev}                            ║${NC}" >&2
+    echo -e "${YELLOW}╚════════════════════════════════════════════════════════════╝${NC}" >&2
+    echo "" >&2
+
+    read -p "Download and run the latest version now? (y/n): " upd_choice < /dev/tty
+    if [[ ! "$upd_choice" =~ ^[Yy]$ ]]; then
+        echo -e "${YELLOW}Continuing with rev-$SCRIPT_REVISION${NC}" >&2
+        return 0
+    fi
+
+    echo -e "${GREEN}Downloading rev-$remote_rev...${NC}" >&2
+    local new_script="/tmp/ubuntu-setup-rev${remote_rev}.sh"
+    if curl -fsSL --max-time 60 -o "$new_script" "$update_url" 2>/dev/null && [ -s "$new_script" ]; then
+        chmod +x "$new_script"
+        echo -e "${GREEN}Re-launching with rev-$remote_rev...${NC}" >&2
+        echo "" >&2
+        exec bash "$new_script" "$@"
+    else
+        echo -e "${RED}Download failed, continuing with rev-$SCRIPT_REVISION${NC}" >&2
+    fi
+}
+
 main() {
+    # Self-update check (skipped for git checkouts and when SKIP_UPDATE_CHECK=1)
+    check_for_update "$@"
+
     # Handle special commands first (no root check needed)
     if $SHOW_HELP; then
         show_help

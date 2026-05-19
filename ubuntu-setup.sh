@@ -16,7 +16,7 @@
 #===============================================================================
 
 SCRIPT_VERSION="2.5.0"
-SCRIPT_REVISION="137"
+SCRIPT_REVISION="138"
 SCRIPT_DATE="2026-03-27"
 
 # NOTE: We intentionally do NOT use set -e here.
@@ -475,7 +475,7 @@ GNOME_SUB_SCRIPT=false; GNOME_SUB_WAYLAND=false; GNOME_SUB_SSH=false
 GNOME_SUB_ALIASES=false; GNOME_SUB_ENGLISH=false
 GNOME_SUB_SCREEN=false; GNOME_SUB_HIDDEN=false; GNOME_SUB_KB_TR=false; GNOME_SUB_KB_EN=false
 GNOME_SUB_VSCREEN=false; GNOME_SUB_AUTOLOGIN=false; GNOME_SUB_HOSTNAME=false
-GNOME_SUB_NO_IBUS=false; GNOME_SUB_APPORT=false
+GNOME_SUB_NO_IBUS=false; GNOME_SUB_APPORT=false; GNOME_SUB_CHEESE=false
 # Hostname value collected before install starts (when Tweaks + Change Hostname selected)
 NEW_HOSTNAME=""
 
@@ -505,6 +505,10 @@ show_gnome_submenu() {
     TWEAK_NAMES+=("Keyboard: English Q"); TWEAK_DESCS+=("Add English (US) keyboard layout");                   TWEAK_KEYS+=("GNOME_SUB_KB_EN")
     TWEAK_NAMES+=("IBus Leak Fix");      TWEAK_DESCS+=("Disable ibus-daemon, use XKB only (fix memory leak)");   TWEAK_KEYS+=("GNOME_SUB_NO_IBUS")
     TWEAK_NAMES+=("Activate Apport");    TWEAK_DESCS+=("Install + enable Ubuntu crash reporting (apport)");      TWEAK_KEYS+=("GNOME_SUB_APPORT")
+    # Camera (cheese) - only listed if NOT already installed
+    if ! dpkg -l cheese 2>/dev/null | grep -q "^ii"; then
+        TWEAK_NAMES+=("Install Camera (Cheese)"); TWEAK_DESCS+=("Install cheese webcam app");                       TWEAK_KEYS+=("GNOME_SUB_CHEESE")
+    fi
     # Note: "Restore Desktop Meta" tweak removed by user request. If anyone
     # really needs it: sudo apt install --no-install-recommends ubuntu-desktop
     TWEAK_NAMES+=("Virtual Screen 1080p"); TWEAK_DESCS+=("Create virtual 1920x1080 display (for VNC/RDP/headless)"); TWEAK_KEYS+=("GNOME_SUB_VSCREEN")
@@ -572,7 +576,7 @@ show_gnome_submenu() {
 
         echo -e "${YELLOW}───────────────────────────────────────────────────────────────${NC}"
         echo ""
-        echo -e "  ${CYAN}CONTROLS:${NC}  ${YELLOW}↑↓${NC}=Move  ${YELLOW}SPACE${NC}=Toggle  ${YELLOW}a${NC}=All  ${YELLOW}n${NC}=None  ${GREEN}c${NC}=Confirm  ${RED}q/ESC${NC}=Back"
+        echo -e "  ${CYAN}CONTROLS:${NC}  ${YELLOW}↑↓${NC}=Move  ${YELLOW}SPACE${NC}=Toggle  ${YELLOW}a${NC}=All  ${YELLOW}n${NC}=None  ${GREEN}c/ESC${NC}=Save+Back  ${RED}q${NC}=Discard"
         echo ""
 
         IFS= read -rsn1 tkey < /dev/tty 2>/dev/null || tkey=""
@@ -580,8 +584,9 @@ show_gnome_submenu() {
             read -rsn2 -t 0.1 trest < /dev/tty 2>/dev/null || trest=""
             tkey="${tkey}${trest}"
             if [ "$tkey" = $'\x1b' ]; then
-                tput cnorm 2>/dev/null || true
-                return 1
+                # Lone ESC: save current selections (act like 'c') and return.
+                # Users press ESC expecting "go back without losing data".
+                tkey='c'
             fi
         fi
 
@@ -711,6 +716,11 @@ show_debloat_submenu() {
     # Ubuntu Videos (Totem)
     if dpkg -l totem 2>/dev/null | grep -q "^ii"; then
         BLOAT_NAMES+=("Ubuntu Videos");     BLOAT_DESCS+=("Remove Totem video player (GNOME Videos)");   BLOAT_PKGS+=("totem totem-common totem-plugins")
+    fi
+    # Cheese (camera app) - force-remove because gnome-control-center depends
+    # transitively on libcheese-gtk25 → libcheese8 → cheese
+    if dpkg -l cheese 2>/dev/null | grep -q "^ii"; then
+        BLOAT_NAMES+=("Camera (Cheese)");   BLOAT_DESCS+=("Remove Cheese webcam app (force, keeps Settings)"); BLOAT_PKGS+=("__FORCE__:cheese")
     fi
     # === GNOME tweak rollbacks / removals ===
     # Dash to Dock - restore from backup (only if backup file exists)
@@ -974,7 +984,7 @@ show_debloat_submenu() {
 
         echo -e "${YELLOW}───────────────────────────────────────────────────────────────${NC}"
         echo ""
-        echo -e "  ${CYAN}CONTROLS:${NC}  ${YELLOW}↑↓${NC}=Move  ${YELLOW}SPACE${NC}=Toggle  ${YELLOW}a${NC}=All  ${YELLOW}n${NC}=None  ${GREEN}c${NC}=Confirm  ${RED}q/ESC${NC}=Back"
+        echo -e "  ${CYAN}CONTROLS:${NC}  ${YELLOW}↑↓${NC}=Move  ${YELLOW}SPACE${NC}=Toggle  ${YELLOW}a${NC}=All  ${YELLOW}n${NC}=None  ${GREEN}c/ESC${NC}=Save+Back  ${RED}q${NC}=Discard"
         echo ""
 
         IFS= read -rsn1 bkey < /dev/tty 2>/dev/null || bkey=""
@@ -982,8 +992,8 @@ show_debloat_submenu() {
             read -rsn2 -t 0.1 brest < /dev/tty 2>/dev/null || brest=""
             bkey="${bkey}${brest}"
             if [ "$bkey" = $'\x1b' ]; then
-                tput cnorm 2>/dev/null || true
-                return 1
+                # Lone ESC: save selections (act like 'c') and return
+                bkey='c'
             fi
         fi
 
@@ -1295,6 +1305,7 @@ show_interactive_install_menu() {
                                 $GNOME_SUB_HOSTNAME    && tweaks_list+="Change Hostname → $NEW_HOSTNAME, "
                                 $GNOME_SUB_NO_IBUS     && tweaks_list+="IBus Leak Fix, "
                                 $GNOME_SUB_APPORT      && tweaks_list+="Activate Apport, "
+                                $GNOME_SUB_CHEESE      && tweaks_list+="Install Cheese, "
                                 tweaks_list="${tweaks_list%, }"
                                 if [ -n "$tweaks_list" ]; then
                                     echo -e "  ${GREEN}✓${NC} ${GREEN}Tweaks:${NC}"
@@ -3205,6 +3216,15 @@ ACCOUNTSEOF
         log_success "Apport enabled and started"
     fi
 
+    # 18. Install Cheese (camera app)
+    if $GNOME_SUB_CHEESE; then
+        log_info "Installing Cheese (webcam app)..."
+        _pause_update_notifier
+        sudo apt-get install -y --no-install-recommends cheese 2>&1 | tail -3
+        _resume_update_notifier
+        log_success "Cheese installed"
+    fi
+
 
     log_success "GNOME Tweaks setup completed"
 }
@@ -4605,6 +4625,16 @@ debloat_system() {
                 sudo -H pip3 uninstall -y jetson-stats 2>/dev/null || true
                 log_info "jtop / jetson-stats removed"
                 ;;
+            "__FORCE__:"*)
+                # Force-remove ONLY this package using dpkg, leaving any
+                # dependent packages in a broken-deps state but installed.
+                # Used for packages whose reverse-deps include desktop core
+                # (e.g. cheese ← libcheese-gtk25 ← gnome-control-center).
+                local _force_pkg="${DEBLOAT_SELECTED_PKGS[$bi]#__FORCE__:}"
+                log_info "Force-removing '$_force_pkg' (dependents stay installed)..."
+                sudo dpkg --force-depends --remove "$_force_pkg" 2>/dev/null || true
+                log_success "'$_force_pkg' removed. apt may warn about broken deps - harmless."
+                ;;
             "__DTD_RESTORE__")
                 if [ -f "$BACKUP_DIR/gnome-backup/dash-to-dock.dconf" ]; then
                     log_info "Restoring Dash to Dock settings from backup..."
@@ -4948,6 +4978,7 @@ print_summary() {
         $GNOME_SUB_HOSTNAME   && any_tweak=true
         $GNOME_SUB_NO_IBUS    && any_tweak=true
         $GNOME_SUB_APPORT     && any_tweak=true
+        $GNOME_SUB_CHEESE     && any_tweak=true
 
         if $any_tweak; then
             echo -e "  ${GREEN}✓${NC} Tweaks"
@@ -4969,6 +5000,7 @@ print_summary() {
             $GNOME_SUB_HOSTNAME   && [ -n "$NEW_HOSTNAME" ]   && echo -e "    ${GREEN}✓${NC} Hostname → $NEW_HOSTNAME"
             $GNOME_SUB_NO_IBUS    && echo -e "    ${GREEN}✓${NC} IBus disabled (XKB-only)"
             $GNOME_SUB_APPORT     && systemctl is-active apport &>/dev/null && echo -e "    ${GREEN}✓${NC} Apport activated"
+            $GNOME_SUB_CHEESE     && command_exists cheese && echo -e "    ${GREEN}✓${NC} Cheese installed"
         fi
     fi
 

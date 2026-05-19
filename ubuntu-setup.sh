@@ -16,7 +16,7 @@
 #===============================================================================
 
 SCRIPT_VERSION="2.5.0"
-SCRIPT_REVISION="123"
+SCRIPT_REVISION="124"
 SCRIPT_DATE="2026-03-27"
 
 # NOTE: We intentionally do NOT use set -e here.
@@ -688,18 +688,16 @@ show_debloat_submenu() {
     if dpkg -l rhythmbox 2>/dev/null | grep -q "^ii"; then
         BLOAT_NAMES+=("Rhythmbox");         BLOAT_DESCS+=("Remove Rhythmbox music player");              BLOAT_PKGS+=("rhythmbox rhythmbox-data rhythmbox-plugins")
     fi
-    # Ubuntu Help (yelp) - removed with --force-depends so dependent packages
-    # (ubuntu-docs, gnome-user-docs, ubuntu-desktop) stay installed even though
-    # they have a "Depends: yelp" line that's now unsatisfied. They keep
-    # working; apt will just warn until you reinstall yelp.
-    if dpkg -l yelp 2>/dev/null | grep -q "^ii"; then
-        BLOAT_NAMES+=("Ubuntu Help (yelp)"); BLOAT_DESCS+=("Remove yelp ONLY (force, leaves dependents broken-but-installed)"); BLOAT_PKGS+=("__FORCE__:yelp")
+    # Ubuntu Help (yelp + gnome-user-docs). This cascades to ubuntu-desktop
+    # but ubuntu-desktop is just a meta-package — removing it doesn't break
+    # anything real, just removes the "this machine has ubuntu-desktop" tag.
+    if dpkg -l yelp 2>/dev/null | grep -q "^ii" || dpkg -l gnome-user-docs 2>/dev/null | grep -q "^ii"; then
+        BLOAT_NAMES+=("Ubuntu Help");       BLOAT_DESCS+=("Remove yelp + docs (also drops ubuntu-desktop meta, harmless)"); BLOAT_PKGS+=("yelp gnome-user-docs")
     fi
-    # Language Support GUI - same treatment, force-remove leaves
-    # gnome-control-center installed (Settings app still works)
-    if dpkg -l language-selector-gnome 2>/dev/null | grep -q "^ii"; then
-        BLOAT_NAMES+=("Language Support");  BLOAT_DESCS+=("Force-remove language-selector-gnome ONLY");           BLOAT_PKGS+=("__FORCE__:language-selector-gnome")
-    fi
+    # NOTE: Language Support (language-selector-gnome) is intentionally NOT in
+    # this menu — it has a hard rev-dep from gnome-control-center, so removing
+    # it KILLS the Settings app. If you really want it gone, do it manually:
+    #   sudo dpkg --force-depends --remove language-selector-gnome
     # Power Statistics
     if dpkg -l gnome-power-manager 2>/dev/null | grep -q "^ii"; then
         BLOAT_NAMES+=("Power Statistics");  BLOAT_DESCS+=("Remove GNOME Power Statistics app");         BLOAT_PKGS+=("gnome-power-manager")
@@ -4407,14 +4405,6 @@ debloat_system() {
                 sudo snap remove --purge "$_snap_to_remove" 2>/dev/null || true
                 log_info "Snap '$_snap_to_remove' removed"
                 ;;
-            "__FORCE__:"*)
-                # Force-remove ONLY this package using dpkg, leaving dependents
-                # in place (broken dependency state but functional system).
-                local _force_pkg="${DEBLOAT_SELECTED_PKGS[$bi]#__FORCE__:}"
-                log_info "Force-removing '$_force_pkg' only (dependents left in place)..."
-                sudo dpkg --force-depends --remove "$_force_pkg" 2>/dev/null || true
-                log_success "'$_force_pkg' removed. Note: some packages may show as having missing deps in apt - that's expected."
-                ;;
             "__SNAP_PURGE_ALL__")
                 # Snapshot what we're about to nuke (for the rollback log)
                 local _snap_log="$HOME/Desktop/snap-removal-$(date +%Y%m%d_%H%M%S).txt"
@@ -4475,31 +4465,11 @@ NOSNAPEOF
                 log_success "Snap stack completely removed. Rollback note: $_snap_log"
                 ;;
             *)
-                # Dry-run to detect cascading removals.
-                local _planned_remove
+                # Normal apt-get remove. Truly dangerous items (Language Support
+                # → kills gnome-control-center) are pre-filtered out of the
+                # Debloat list, so this is safe.
                 # shellcheck disable=SC2086
-                _planned_remove=$(LC_ALL=C apt-get -s remove -y ${DEBLOAT_SELECTED_PKGS[$bi]} 2>&1 | \
-                                  awk '/^Remv /{print $2}')
-                local _planned_count
-                _planned_count=$(echo "$_planned_remove" | grep -c .)
-                local _asked_count
-                # shellcheck disable=SC2086
-                _asked_count=$(echo ${DEBLOAT_SELECTED_PKGS[$bi]} | wc -w)
-
-                if [ "$_planned_count" -gt "$_asked_count" ]; then
-                    # apt would cascade. Use dpkg --force-depends per asked
-                    # package — removes ONLY the selected package, dependents
-                    # are left installed with a broken-deps note (functional).
-                    log_info "'${DEBLOAT_SELECTED_NAMES[$bi]}' has reverse-deps; using dpkg --force-depends to keep dependents installed..."
-                    # shellcheck disable=SC2086
-                    for _pkg in ${DEBLOAT_SELECTED_PKGS[$bi]}; do
-                        sudo dpkg --force-depends --remove "$_pkg" 2>/dev/null || true
-                    done
-                else
-                    # No cascade, normal apt-get remove is safe
-                    # shellcheck disable=SC2086
-                    sudo apt-get remove -y ${DEBLOAT_SELECTED_PKGS[$bi]} 2>/dev/null || true
-                fi
+                sudo apt-get remove -y ${DEBLOAT_SELECTED_PKGS[$bi]} 2>/dev/null || true
                 ;;
         esac
         removed_count=$((removed_count + 1))

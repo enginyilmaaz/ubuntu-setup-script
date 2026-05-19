@@ -16,7 +16,7 @@
 #===============================================================================
 
 SCRIPT_VERSION="2.5.0"
-SCRIPT_REVISION="117"
+SCRIPT_REVISION="118"
 SCRIPT_DATE="2026-03-27"
 
 # NOTE: We intentionally do NOT use set -e here.
@@ -780,6 +780,20 @@ show_debloat_submenu() {
     # FileZilla
     if dpkg -l filezilla 2>/dev/null | grep -q "^ii"; then
         BLOAT_NAMES+=("FileZilla");            BLOAT_DESCS+=("Remove FileZilla (FTP/SFTP client)");             BLOAT_PKGS+=("filezilla")
+    fi
+
+    # === Snap packages (auto-detected, system snaps filtered out) ===
+    if command_exists snap; then
+        # Skip these system / base snaps even if installed
+        local _skip_re='^(core|core18|core20|core22|core24|snapd|bare|gtk-common-themes|gnome-3-[0-9]+-[0-9]+|gnome-42-2204|kf5-5-[0-9]+-qt-5-[0-9]+-core[0-9]+|qt-common|firefox-base|snapd-desktop-integration|chromium|postman)$'
+        local _snap_name
+        while read -r _snap_name _; do
+            [ -z "$_snap_name" ] && continue
+            [ "$_snap_name" = "Name" ] && continue
+            if [[ ! "$_snap_name" =~ $_skip_re ]]; then
+                BLOAT_NAMES+=("Snap: $_snap_name"); BLOAT_DESCS+=("Remove snap package '$_snap_name'"); BLOAT_PKGS+=("__SNAP__:$_snap_name")
+            fi
+        done < <(snap list 2>/dev/null | tail -n +2)
     fi
     # NOTE: OpenSSH Server is NOT listed here on purpose — removing it could
     # cut remote access for the user. Use 'sudo apt purge openssh-server' manually
@@ -4363,6 +4377,11 @@ debloat_system() {
             "__POSTMAN_SNAP__")
                 sudo snap remove --purge postman 2>/dev/null || true
                 log_info "Postman snap removed"
+                ;;
+            "__SNAP__:"*)
+                local _snap_to_remove="${DEBLOAT_SELECTED_PKGS[$bi]#__SNAP__:}"
+                sudo snap remove --purge "$_snap_to_remove" 2>/dev/null || true
+                log_info "Snap '$_snap_to_remove' removed"
                 ;;
             *)
                 # shellcheck disable=SC2086

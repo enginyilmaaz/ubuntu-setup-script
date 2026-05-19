@@ -16,7 +16,7 @@
 #===============================================================================
 
 SCRIPT_VERSION="2.5.0"
-SCRIPT_REVISION="108"
+SCRIPT_REVISION="109"
 SCRIPT_DATE="2026-03-27"
 
 # NOTE: We intentionally do NOT use set -e here.
@@ -40,6 +40,7 @@ INSTALL_VLC=false
 INSTALL_CLOUDFLARED=false
 INSTALL_DOCKER=false
 INSTALL_CLAUDE=false
+INSTALL_CODEX=false
 INSTALL_GH=false
 INSTALL_POSTMAN=false
 INSTALL_FILEZILLA=false
@@ -456,9 +457,11 @@ show_system_header() {
 # GNOME Tweaks sub-menu selections (global so install_gnome_extensions can read them)
 GNOME_SUB_EXTENSIONS=true; GNOME_SUB_TWEAKS_APP=true; GNOME_SUB_DOCK=true
 GNOME_SUB_SCRIPT=true; GNOME_SUB_WAYLAND=true; GNOME_SUB_SSH=true
-GNOME_SUB_RDP=true; GNOME_SUB_ALIASES=true; GNOME_SUB_ENGLISH=true
+GNOME_SUB_ALIASES=true; GNOME_SUB_ENGLISH=true
 GNOME_SUB_SCREEN=true; GNOME_SUB_HIDDEN=true; GNOME_SUB_KB_TR=true; GNOME_SUB_KB_EN=true
-GNOME_SUB_VSCREEN=true; GNOME_SUB_AUTOLOGIN=true
+GNOME_SUB_VSCREEN=true; GNOME_SUB_AUTOLOGIN=true; GNOME_SUB_HOSTNAME=true
+# Hostname value collected before install starts (when Tweaks + Change Hostname selected)
+NEW_HOSTNAME=""
 
 # Debloat sub-menu selections (global so debloat_system can read them)
 declare -a DEBLOAT_SELECTED_PKGS=()
@@ -476,7 +479,7 @@ show_gnome_submenu() {
     TWEAK_NAMES+=("Script Launcher");   TWEAK_DESCS+=("Right-click context menu (Claude, Codex, VS Code)");    TWEAK_KEYS+=("GNOME_SUB_SCRIPT")
     TWEAK_NAMES+=("Disable Wayland");   TWEAK_DESCS+=("Switch to X11 (VNC/RDP compatibility)");                TWEAK_KEYS+=("GNOME_SUB_WAYLAND")
     TWEAK_NAMES+=("OpenSSH Server");    TWEAK_DESCS+=("Install + auto-start SSH server (port 22)");            TWEAK_KEYS+=("GNOME_SUB_SSH")
-    TWEAK_NAMES+=("RDP Server");        TWEAK_DESCS+=("Install + auto-start xrdp (port 3389)");                TWEAK_KEYS+=("GNOME_SUB_RDP")
+    TWEAK_NAMES+=("Change Hostname");   TWEAK_DESCS+=("Set computer's hostname (asked before install starts)"); TWEAK_KEYS+=("GNOME_SUB_HOSTNAME")
     TWEAK_NAMES+=("CLI Aliases");       TWEAK_DESCS+=("Bash aliases (claude-skip, codex-skip, etc.)");         TWEAK_KEYS+=("GNOME_SUB_ALIASES")
     TWEAK_NAMES+=("English Language");  TWEAK_DESCS+=("Set system language to English (US)");                   TWEAK_KEYS+=("GNOME_SUB_ENGLISH")
     TWEAK_NAMES+=("Screen Off: Never"); TWEAK_DESCS+=("Disable screen timeout + auto suspend");                TWEAK_KEYS+=("GNOME_SUB_SCREEN")
@@ -590,6 +593,17 @@ show_gnome_submenu() {
                         eval "${TWEAK_KEYS[$ti]}=false"
                     fi
                 done
+                # If hostname change selected, ask for the new name now
+                if $GNOME_SUB_HOSTNAME; then
+                    echo ""
+                    echo -e "${CYAN}Change Hostname selected.${NC}"
+                    echo -e "Current hostname: ${YELLOW}$(hostname)${NC}"
+                    read -p "Enter new hostname (or press Enter to skip): " NEW_HOSTNAME < /dev/tty
+                    if [ -z "$NEW_HOSTNAME" ]; then
+                        GNOME_SUB_HOSTNAME=false
+                        echo "Hostname change skipped."
+                    fi
+                fi
                 return 0
                 ;;
             'q'|'Q')
@@ -673,14 +687,26 @@ show_debloat_submenu() {
     if autologin_enabled; then
         BLOAT_NAMES+=("GDM Auto-Login");       BLOAT_DESCS+=("Disable GDM auto-login (require login screen)"); BLOAT_PKGS+=("__AUTOLOGIN__")
     fi
+    # === Tools the script installs (only listed if currently installed) ===
+    # Claude Code CLI (native install)
+    if command_exists claude || [ -d "$HOME/.claude" ]; then
+        BLOAT_NAMES+=("Claude Code CLI");      BLOAT_DESCS+=("Remove Claude Code CLI + ~/.claude directory");   BLOAT_PKGS+=("__CLAUDE__")
+    fi
+    # Codex CLI (npm install)
+    if command_exists codex; then
+        BLOAT_NAMES+=("Codex CLI");            BLOAT_DESCS+=("Remove Codex CLI (npm uninstall @openai/codex)"); BLOAT_PKGS+=("__CODEX__")
+    fi
+    # VS Code
+    if dpkg -l code 2>/dev/null | grep -q "^ii"; then
+        BLOAT_NAMES+=("VS Code");              BLOAT_DESCS+=("Remove Visual Studio Code");                      BLOAT_PKGS+=("code")
+    fi
     # xrdp RDP Server
     if dpkg -l xrdp 2>/dev/null | grep -q "^ii"; then
         BLOAT_NAMES+=("RDP Server (xrdp)");    BLOAT_DESCS+=("Remove xrdp (port 3389 RDP server)");          BLOAT_PKGS+=("__XRDP__")
     fi
-    # OpenSSH Server
-    if dpkg -l openssh-server 2>/dev/null | grep -q "^ii"; then
-        BLOAT_NAMES+=("OpenSSH Server");       BLOAT_DESCS+=("Remove openssh-server (port 22 SSH server)");  BLOAT_PKGS+=("__SSHD__")
-    fi
+    # NOTE: OpenSSH Server is NOT listed here on purpose — removing it could
+    # cut remote access for the user. Use 'sudo apt purge openssh-server' manually
+    # only if you have physical/console access.
 
     local TOTAL_BLOAT=${#BLOAT_NAMES[@]}
 
@@ -841,18 +867,19 @@ show_interactive_install_menu() {
         APP_NAMES+=("Chromium"); APP_DESCS+=("Chromium Browser (ARM)");               APP_VARS+=("INSTALL_CHROME")
     fi
 
-    APP_NAMES+=("VSCode");      APP_DESCS+=("Visual Studio Code + Extensions");       APP_VARS+=("INSTALL_VSCODE")
+    APP_NAMES+=("VS Code");     APP_DESCS+=("Visual Studio Code (editor)");           APP_VARS+=("INSTALL_VSCODE")
     APP_NAMES+=("Python");      APP_DESCS+=("Python 3 + pip + venv");                 APP_VARS+=("INSTALL_PYTHON")
-    APP_NAMES+=("GNOME");       APP_DESCS+=("Ubuntu (GNOME) Tweaks + Wayland Off");    APP_VARS+=("INSTALL_GNOME")
+    APP_NAMES+=("Tweaks");      APP_DESCS+=("Tweaks (Enter to expand sub-menu)");      APP_VARS+=("INSTALL_GNOME")
     APP_NAMES+=("DBeaver");     APP_DESCS+=("DBeaver CE (Database Tool)");            APP_VARS+=("INSTALL_DBEAVER")
     APP_NAMES+=("VLC");         APP_DESCS+=("VLC Media Player");                      APP_VARS+=("INSTALL_VLC")
     APP_NAMES+=("Cloudflared"); APP_DESCS+=("Cloudflare Tunnel Client");              APP_VARS+=("INSTALL_CLOUDFLARED")
     APP_NAMES+=("Docker");      APP_DESCS+=("Docker Engine + Compose");               APP_VARS+=("INSTALL_DOCKER")
-    APP_NAMES+=("Claude Code"); APP_DESCS+=("Claude Code (AI Coding CLI)");           APP_VARS+=("INSTALL_CLAUDE")
+    APP_NAMES+=("Claude Code"); APP_DESCS+=("Claude Code CLI");                       APP_VARS+=("INSTALL_CLAUDE")
+    APP_NAMES+=("Codex");       APP_DESCS+=("Codex CLI");                             APP_VARS+=("INSTALL_CODEX")
     APP_NAMES+=("Git & GitHub CLI"); APP_DESCS+=("Git + GitHub CLI (gh)");               APP_VARS+=("INSTALL_GH")
     APP_NAMES+=("Postman");     APP_DESCS+=("Postman (API Testing Tool)");             APP_VARS+=("INSTALL_POSTMAN")
     APP_NAMES+=("FileZilla");   APP_DESCS+=("FileZilla (FTP/SFTP Client)");            APP_VARS+=("INSTALL_FILEZILLA")
-    APP_NAMES+=("Debloat");     APP_DESCS+=("Remove Bloatware (LibreOffice, games, etc.)"); APP_VARS+=("DO_DEBLOAT")
+    APP_NAMES+=("Debloat");     APP_DESCS+=("Debloat (Enter to expand sub-menu)");    APP_VARS+=("DO_DEBLOAT")
 
     # ARM Fix - only on Jetson devices (other ARM devices don't need snapd fix)
     if $IS_JETSON && command_exists snap; then
@@ -880,6 +907,16 @@ show_interactive_install_menu() {
         echo -e "${GREEN}═══════════════════════════════════════════════════════════════${NC}"
         echo ""
 
+        # Find VS Code selection state for dynamic Claude/Codex descriptions
+        local vscode_selected=0
+        local _vi
+        for ((_vi=0; _vi<TOTAL_ITEMS; _vi++)); do
+            if [ "${APP_VARS[$_vi]}" = "INSTALL_VSCODE" ] && [ "${SELECTED[$_vi]}" = "1" ]; then
+                vscode_selected=1
+                break
+            fi
+        done
+
         # Draw menu items
         local i
         for ((i=0; i<TOTAL_ITEMS; i++)); do
@@ -888,6 +925,13 @@ show_interactive_install_menu() {
             local num_display=$(printf "%2d" $((i + 1)))
             local checkbox="[ ]"
             local line_start="   "
+
+            # Dynamic descriptions for Claude/Codex based on VS Code selection
+            if [ "${APP_VARS[$i]}" = "INSTALL_CLAUDE" ] && [ "$vscode_selected" = "1" ]; then
+                desc="Claude Code CLI + VS Code Extension"
+            elif [ "${APP_VARS[$i]}" = "INSTALL_CODEX" ] && [ "$vscode_selected" = "1" ]; then
+                desc="Codex CLI + VS Code Extension"
+            fi
 
             if [ "${SELECTED[$i]}" = "1" ]; then
                 checkbox="${GREEN}[✓]${NC}"
@@ -1638,6 +1682,7 @@ run_installations() {
     if $INSTALL_CLOUDFLARED; then install_cloudflared || handle_error "Cloudflared installation failed"; fi
     if $INSTALL_DOCKER; then install_docker || handle_error "Docker installation failed"; fi
     if $INSTALL_CLAUDE; then install_claude_code || handle_error "Claude Code installation failed"; fi
+    if $INSTALL_CODEX; then install_codex || handle_error "Codex installation failed"; fi
     if $INSTALL_GH; then install_gh || handle_error "GitHub CLI installation failed"; fi
     if $INSTALL_POSTMAN; then install_postman || handle_error "Postman installation failed"; fi
     if $INSTALL_FILEZILLA; then install_filezilla || handle_error "FileZilla installation failed"; fi
@@ -2007,8 +2052,24 @@ install_nvm_nodejs() {
         fi
     fi
 
-    # 2.3 Install Codex CLI
-    log_info "2.3 Installing Codex CLI (OpenAI)..."
+}
+
+#===============================================================================
+# Codex CLI Installation (requires Node.js)
+#===============================================================================
+install_codex() {
+    log_step "Installing Codex CLI (OpenAI)"
+
+    # Ensure Node.js + npm available; install NVM Node.js if missing
+    if ! command_exists npm; then
+        log_info "Codex requires Node.js. Installing NVM + Node.js first..."
+        install_nvm_nodejs
+    fi
+
+    # Re-source nvm so npm is available in current shell
+    export NVM_DIR="$HOME/.nvm"
+    [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh" 2>/dev/null || true
+
     if command_exists codex; then
         log_warning "Codex CLI already installed, skipping..."
     else
@@ -2018,7 +2079,6 @@ install_nvm_nodejs() {
             log_warning "Codex CLI installation skipped after 3 failed attempts"
         fi
     fi
-
 }
 
 #===============================================================================
@@ -2417,35 +2477,41 @@ install_vscode() {
 }
 
 install_vscode_extensions() {
-    log_info "6.1-6.4 Installing VS Code Extensions..."
+    log_info "Installing VS Code Extensions for selected tools..."
 
-    # 6.1 Claude Code (Claude Dev)
-    log_info "6.2 Installing Claude Code extension..."
-    if code --list-extensions 2>/dev/null | grep -qi "anthropic.claude-code"; then
-        log_warning "Claude Code already installed, skipping..."
-    else
-        code --install-extension anthropic.claude-code --force 2>/dev/null || \
-        code --install-extension saoudrizwan.claude-dev --force 2>/dev/null || \
-        log_warning "Could not install Claude extension"
+    # Claude Code VS Code extension — only if Claude Code CLI selected
+    if $INSTALL_CLAUDE; then
+        log_info "Installing Claude Code extension..."
+        if code --list-extensions 2>/dev/null | grep -qi "anthropic.claude-code"; then
+            log_warning "Claude Code extension already installed, skipping..."
+        else
+            code --install-extension anthropic.claude-code --force 2>/dev/null || \
+            code --install-extension saoudrizwan.claude-dev --force 2>/dev/null || \
+            log_warning "Could not install Claude extension"
+        fi
     fi
 
-    # 6.3 ChatGPT/Codex Extension
-    log_info "6.3 Installing ChatGPT extension..."
-    if code --list-extensions 2>/dev/null | grep -qi "openai.chatgpt"; then
-        log_warning "ChatGPT extension already installed, skipping..."
-    else
-        code --install-extension openai.chatgpt --force 2>/dev/null || \
-        code --install-extension gencay.vscode-chatgpt --force 2>/dev/null || \
-        log_warning "Could not install ChatGPT extension"
+    # Codex / ChatGPT VS Code extension — only if Codex CLI selected
+    if $INSTALL_CODEX; then
+        log_info "Installing ChatGPT/Codex extension..."
+        if code --list-extensions 2>/dev/null | grep -qi "openai.chatgpt"; then
+            log_warning "ChatGPT extension already installed, skipping..."
+        else
+            code --install-extension openai.chatgpt --force 2>/dev/null || \
+            code --install-extension gencay.vscode-chatgpt --force 2>/dev/null || \
+            log_warning "Could not install ChatGPT extension"
+        fi
     fi
 
-    # 6.4 Python Extension
-    log_info "6.4 Installing Python extension..."
-    if code --list-extensions 2>/dev/null | grep -qi "ms-python.python"; then
-        log_warning "Python extension already installed, skipping..."
-    else
-        code --install-extension ms-python.python --force 2>/dev/null || \
-        log_warning "Could not install Python extension"
+    # Python extension — only if Python selected
+    if $INSTALL_PYTHON; then
+        log_info "Installing Python extension..."
+        if code --list-extensions 2>/dev/null | grep -qi "ms-python.python"; then
+            log_warning "Python extension already installed, skipping..."
+        else
+            code --install-extension ms-python.python --force 2>/dev/null || \
+            log_warning "Could not install Python extension"
+        fi
     fi
 
     log_success "VS Code extensions installation completed"
@@ -2756,24 +2822,27 @@ ACCOUNTSEOF
         enable_ssh_server
     fi
 
-    # 11. RDP Server
-    if $GNOME_SUB_RDP; then
-        enable_rdp_server
-    fi
-
-    # 12. CLI Aliases
+    # 11. CLI Aliases
     if $GNOME_SUB_ALIASES; then
         setup_cli_shortcuts
     fi
 
-    # 13. Virtual Screen 1080p
+    # 12. Virtual Screen 1080p
     if $GNOME_SUB_VSCREEN; then
         setup_virtual_screen
     fi
 
-    # 14. GDM Auto-Login
+    # 13. GDM Auto-Login
     if $GNOME_SUB_AUTOLOGIN; then
         enable_autologin
+    fi
+
+    # 14. Hostname change (uses value collected at confirm time)
+    if $GNOME_SUB_HOSTNAME && [ -n "$NEW_HOSTNAME" ]; then
+        log_info "Setting hostname to: $NEW_HOSTNAME"
+        sudo hostnamectl set-hostname "$NEW_HOSTNAME" 2>/dev/null || true
+        sudo sed -i "s/127.0.1.1.*/127.0.1.1\t$NEW_HOSTNAME/" /etc/hosts 2>/dev/null || true
+        log_success "Hostname set to: $NEW_HOSTNAME (takes effect on next login)"
     fi
 
     log_success "GNOME Tweaks setup completed"
@@ -3531,17 +3600,37 @@ setup_cli_shortcuts() {
     sed -i '/^# Codex aliases/d' "$bashrc" 2>/dev/null
     sed -i '/^# BEGIN smai-aliases/,/^# END smai-aliases/d' "$bashrc" 2>/dev/null
 
-    # Add aliases with markers (safe for repeated runs)
-    cat >> "$bashrc" << 'ALIASES'
+    # Add aliases only for selected tools (Claude / Codex CLIs)
+    # Detect what's actually selected/installed (skip aliases for things not present)
+    local _claude_avail=false _codex_avail=false
+    if $INSTALL_CLAUDE || command_exists claude; then _claude_avail=true; fi
+    if $INSTALL_CODEX  || command_exists codex;  then _codex_avail=true;  fi
 
-# BEGIN smai-aliases
-alias claude-skip='claude --dangerously-skip-permissions --effort max'
-alias ccskip='claude --dangerously-skip-permissions --effort max'
-alias codex-skip='codex --sandbox danger-full-access -c model_reasoning_effort="xhigh"'
-alias cxskip='codex --sandbox danger-full-access -c model_reasoning_effort="xhigh"'
-# END smai-aliases
-ALIASES
-    log_success "Aliases added: claude-skip, ccskip, codex-skip, cxskip"
+    {
+        echo ""
+        echo "# BEGIN smai-aliases"
+        if $_claude_avail; then
+            echo "alias claude-skip='claude --dangerously-skip-permissions --effort max'"
+            echo "alias ccskip='claude --dangerously-skip-permissions --effort max'"
+        fi
+        if $_codex_avail; then
+            echo "alias codex-skip='codex --sandbox danger-full-access -c model_reasoning_effort=\"xhigh\"'"
+            echo "alias cxskip='codex --sandbox danger-full-access -c model_reasoning_effort=\"xhigh\"'"
+        fi
+        echo "# END smai-aliases"
+    } >> "$bashrc"
+
+    local _alias_list=""
+    if $_claude_avail; then _alias_list+="claude-skip, ccskip"; fi
+    if $_codex_avail; then
+        [ -n "$_alias_list" ] && _alias_list+=", "
+        _alias_list+="codex-skip, cxskip"
+    fi
+    if [ -n "$_alias_list" ]; then
+        log_success "Aliases added: $_alias_list"
+    else
+        log_info "No aliases added (neither Claude Code nor Codex selected/installed)"
+    fi
 
     # --- npm/yarn/pnpm package.json scripts tab-completion ---
     # Clean up any leftover node-scripts-completion from previous versions
@@ -3591,11 +3680,26 @@ from gi.repository import Nautilus, GObject  # noqa: E402
 CLAUDE_CMD = 'claude --dangerously-skip-permissions --effort max'
 CODEX_CMD  = 'codex --sandbox danger-full-access -c model_reasoning_effort="xhigh"'
 
-ACTIONS = (
-    ('SmaiOpenClaude', 'Open in Claude Code', CLAUDE_CMD, True),
-    ('SmaiOpenCodex',  'Open in Codex CLI',   CODEX_CMD,  True),
-    ('SmaiOpenVscode', 'Open in VS Code',     'code',     False),
-)
+
+def _have(cmd):
+    """Return True if cmd is available on PATH (check at runtime)."""
+    import shutil
+    return shutil.which(cmd) is not None
+
+
+def _build_actions():
+    """Only include menu items for tools actually installed."""
+    actions = []
+    if _have('claude'):
+        actions.append(('SmaiOpenClaude', 'Open in Claude Code', CLAUDE_CMD, True))
+    if _have('codex'):
+        actions.append(('SmaiOpenCodex',  'Open in Codex CLI',   CODEX_CMD,  True))
+    if _have('code'):
+        actions.append(('SmaiOpenVscode', 'Open in VS Code',     'code',     False))
+    return tuple(actions)
+
+
+ACTIONS = _build_actions()
 
 
 def _run_in_terminal(_mi, cmd, path):
@@ -4075,11 +4179,19 @@ debloat_system() {
                 sudo apt-get remove -y xrdp 2>/dev/null || true
                 log_info "xrdp (RDP server) removed"
                 ;;
-            "__SSHD__")
-                sudo systemctl stop ssh sshd 2>/dev/null || true
-                sudo systemctl disable ssh sshd 2>/dev/null || true
-                sudo apt-get remove -y openssh-server 2>/dev/null || true
-                log_info "openssh-server removed"
+            "__CLAUDE__")
+                # Native installer - remove the binary + ~/.claude dir + PATH entries
+                rm -f "$HOME/.claude/bin/claude" "$HOME/.local/bin/claude" 2>/dev/null
+                rm -rf "$HOME/.claude" 2>/dev/null
+                command_exists npm && npm uninstall -g @anthropic-ai/claude-code 2>/dev/null || true
+                for rcfile in "$HOME/.bashrc" "$HOME/.zshrc" "$HOME/.profile"; do
+                    [ -f "$rcfile" ] && sed -i '/\.claude\/bin/d; /# Added by Claude/d' "$rcfile" 2>/dev/null
+                done
+                log_info "Claude Code CLI removed"
+                ;;
+            "__CODEX__")
+                command_exists npm && npm uninstall -g @openai/codex 2>/dev/null || true
+                log_info "Codex CLI removed"
                 ;;
             *)
                 # shellcheck disable=SC2086

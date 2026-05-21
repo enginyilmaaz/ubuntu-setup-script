@@ -16,7 +16,7 @@
 #===============================================================================
 
 SCRIPT_VERSION="2.5.0"
-SCRIPT_REVISION="138"
+SCRIPT_REVISION="139"
 SCRIPT_DATE="2026-03-27"
 
 # NOTE: We intentionally do NOT use set -e here.
@@ -704,6 +704,14 @@ show_debloat_submenu() {
     fi
     if dpkg -l gnome-calendar 2>/dev/null | grep -q "^ii"; then
         BLOAT_NAMES+=("Calendar");          BLOAT_DESCS+=("GNOME Calendar");                            BLOAT_PKGS+=("gnome-calendar")
+    fi
+    # Calculator (GNOME Calculator)
+    if dpkg -l gnome-calculator 2>/dev/null | grep -q "^ii"; then
+        BLOAT_NAMES+=("Calculator");        BLOAT_DESCS+=("Remove GNOME Calculator");                  BLOAT_PKGS+=("gnome-calculator")
+    fi
+    # Printer stack (CUPS + HPLIP + all printer drivers + system-config-printer)
+    if dpkg -l cups 2>/dev/null | grep -q "^ii" || dpkg -l hplip 2>/dev/null | grep -q "^ii"; then
+        BLOAT_NAMES+=("Printer Stack");     BLOAT_DESCS+=("Remove CUPS + HPLIP + all printer drivers (saves ~200MB)"); BLOAT_PKGS+=("cups cups-bsd cups-client cups-common cups-daemon cups-server-common cups-core-drivers cups-filters cups-filters-core-drivers cups-browsed cups-pk-helper cups-ipp-utils cups-ppdc bluez-cups system-config-printer hplip hplip-data printer-driver-brlaser printer-driver-c2esp printer-driver-foo2zjs printer-driver-m2300w printer-driver-min12xxw printer-driver-pxljr printer-driver-ptouch printer-driver-sag-gdi printer-driver-splix printer-driver-postscript-hp printer-driver-hpcups")
     fi
     # Vim (preinstalled / vim-common)
     if dpkg -l vim 2>/dev/null | grep -q "^ii" || dpkg -l vim-tiny 2>/dev/null | grep -q "^ii"; then

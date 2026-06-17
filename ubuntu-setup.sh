@@ -16,7 +16,7 @@
 #===============================================================================
 
 SCRIPT_VERSION="2.5.0"
-SCRIPT_REVISION="139"
+SCRIPT_REVISION="140"
 SCRIPT_DATE="2026-03-27"
 
 # NOTE: We intentionally do NOT use set -e here.
@@ -41,6 +41,11 @@ INSTALL_CLOUDFLARED=false
 INSTALL_DOCKER=false
 INSTALL_CLAUDE=false
 INSTALL_CODEX=false
+INSTALL_KIMI=false
+INSTALL_GROK=false
+INSTALL_GEMINI=false
+INSTALL_QWEN=false
+INSTALL_AICLI=false
 INSTALL_JTOP=false
 INSTALL_GH=false
 INSTALL_POSTMAN=false
@@ -97,6 +102,21 @@ for arg in "$@"; do
             ;;
         --claude|--claude-code)
             INSTALL_CLAUDE=true
+            ;;
+        --codex)
+            INSTALL_CODEX=true
+            ;;
+        --kimi|--kimi-code)
+            INSTALL_KIMI=true
+            ;;
+        --grok)
+            INSTALL_GROK=true
+            ;;
+        --gemini|--gemini-cli)
+            INSTALL_GEMINI=true
+            ;;
+        --qwen|--qwen-code)
+            INSTALL_QWEN=true
             ;;
         --gh|--github-cli)
             INSTALL_GH=true
@@ -321,6 +341,11 @@ show_help() {
     echo "      - Native installer (no Node.js required)"
     echo "      - Auto-updates in background"
     echo ""
+    echo -e "  ${YELLOW}--codex / --kimi / --grok / --gemini / --qwen${NC}"
+    echo "      Other AI CLI tools (interactive menu groups these under 'AI CLI Tools')"
+    echo "      - Codex (OpenAI), Kimi Code (Moonshot), Grok (xAI),"
+    echo "        Gemini (Google), Qwen Code (Alibaba)"
+    echo ""
     echo -e "  ${YELLOW}--gh${NC}"
     echo "      GitHub CLI (gh)"
     echo "      - Official GitHub apt repository"
@@ -482,6 +507,154 @@ NEW_HOSTNAME=""
 # Debloat sub-menu selections (global so debloat_system can read them)
 declare -a DEBLOAT_SELECTED_PKGS=()
 declare -a DEBLOAT_SELECTED_NAMES=()
+
+# AI CLI Tools sub-menu selections (global, preserved across reopens)
+AICLI_SUB_CLAUDE=false; AICLI_SUB_CODEX=false; AICLI_SUB_KIMI=false
+AICLI_SUB_GROK=false; AICLI_SUB_GEMINI=false; AICLI_SUB_QWEN=false
+
+# AI CLI Tools sub-menu - returns 0 on confirm (save), 1 on discard.
+# Initializes from the global AICLI_SUB_* so reopening keeps prior picks.
+show_aicli_submenu() {
+    local -a AI_NAMES=()
+    local -a AI_DESCS=()
+    local -a AI_KEYS=()
+
+    AI_NAMES+=("Claude Code"); AI_DESCS+=("Anthropic Claude Code CLI (native installer)"); AI_KEYS+=("AICLI_SUB_CLAUDE")
+    AI_NAMES+=("Codex");       AI_DESCS+=("OpenAI Codex CLI (npm @openai/codex)");          AI_KEYS+=("AICLI_SUB_CODEX")
+    AI_NAMES+=("Kimi Code");   AI_DESCS+=("Moonshot AI Kimi Code CLI (npm @moonshot-ai/kimi-code)"); AI_KEYS+=("AICLI_SUB_KIMI")
+    AI_NAMES+=("Grok");        AI_DESCS+=("xAI Grok CLI (official x.ai installer)");        AI_KEYS+=("AICLI_SUB_GROK")
+    AI_NAMES+=("Gemini CLI");  AI_DESCS+=("Google Gemini CLI (npm @google/gemini-cli)");    AI_KEYS+=("AICLI_SUB_GEMINI")
+    AI_NAMES+=("Qwen CLI");    AI_DESCS+=("Alibaba Qwen Code CLI (npm @qwen-code/qwen-code)"); AI_KEYS+=("AICLI_SUB_QWEN")
+
+    local TOTAL_AI=${#AI_NAMES[@]}
+    local -a ASELECTED=()
+    local ai
+    # Restore previous selections from globals (don't forget what user picked)
+    for ((ai=0; ai<TOTAL_AI; ai++)); do
+        if eval "\$${AI_KEYS[$ai]}"; then
+            ASELECTED+=(1)
+        else
+            ASELECTED+=(0)
+        fi
+    done
+    local acursor=0
+
+    tput civis 2>/dev/null || true
+
+    while true; do
+        clear
+        echo -e "${CYAN}╔═══════════════════════════════════════════════════════════════════════════╗${NC}"
+        echo -e "${CYAN}║                    ${GREEN}AI CLI Tools - Select Options${CYAN}                          ║${NC}"
+        echo -e "${CYAN}╚═══════════════════════════════════════════════════════════════════════════╝${NC}"
+        echo ""
+        echo -e "${GREEN}═══════════════════════════════════════════════════════════════${NC}"
+        echo -e "${GREEN}     Use ↑↓ arrows to navigate, SPACE to toggle${NC}"
+        echo -e "${GREEN}═══════════════════════════════════════════════════════════════${NC}"
+        echo ""
+
+        for ((ai=0; ai<TOTAL_AI; ai++)); do
+            local aname="${AI_NAMES[$ai]}"
+            local adesc="${AI_DESCS[$ai]}"
+            local anum=$(printf "%2d" $((ai + 1)))
+            local acheck="[ ]"
+            local aline="   "
+
+            if [ "${ASELECTED[$ai]}" = "1" ]; then
+                acheck="${GREEN}[✓]${NC}"
+            fi
+            if [ "$acursor" = "$ai" ]; then
+                aline=" ${CYAN}▶${NC}"
+            fi
+            if [ "${ASELECTED[$ai]}" = "1" ]; then
+                echo -e "${aline} ${BLUE}[$anum]${NC} $acheck ${GREEN}$aname${NC} - $adesc"
+            else
+                echo -e "${aline} ${BLUE}[$anum]${NC} $acheck $aname - $adesc"
+            fi
+        done
+
+        echo ""
+        echo -e "${YELLOW}───────────────────────────────────────────────────────────────${NC}"
+
+        local acount=0
+        local asel_names=""
+        for ((ai=0; ai<TOTAL_AI; ai++)); do
+            if [ "${ASELECTED[$ai]}" = "1" ]; then
+                acount=$((acount + 1))
+                asel_names="${asel_names}${AI_NAMES[$ai]}, "
+            fi
+        done
+
+        if [ $acount -gt 0 ]; then
+            asel_names="${asel_names%, }"
+            echo -e "  ${GREEN}Selected ($acount):${NC} $asel_names"
+        else
+            echo -e "  ${YELLOW}Selected: None${NC}"
+        fi
+
+        echo -e "${YELLOW}───────────────────────────────────────────────────────────────${NC}"
+        echo ""
+        echo -e "  ${CYAN}CONTROLS:${NC}  ${YELLOW}↑↓${NC}=Move  ${YELLOW}SPACE${NC}=Toggle  ${YELLOW}a${NC}=All  ${YELLOW}n${NC}=None  ${GREEN}c/ESC${NC}=Save+Back  ${RED}q${NC}=Discard"
+        echo ""
+
+        IFS= read -rsn1 akey < /dev/tty 2>/dev/null || akey=""
+        if [ "$akey" = $'\x1b' ]; then
+            read -rsn2 -t 0.1 arest < /dev/tty 2>/dev/null || arest=""
+            akey="${akey}${arest}"
+            if [ "$akey" = $'\x1b' ]; then
+                # Lone ESC: save selections (act like 'c') and return
+                akey='c'
+            fi
+        fi
+
+        case "$akey" in
+            $'\x1b[A'|'k')
+                if [ $acursor -gt 0 ]; then acursor=$((acursor - 1)); fi
+                ;;
+            $'\x1b[B'|'j')
+                if [ $acursor -lt $((TOTAL_AI - 1)) ]; then acursor=$((acursor + 1)); fi
+                ;;
+            ' ')
+                if [ "${ASELECTED[$acursor]}" = "1" ]; then
+                    ASELECTED[$acursor]=0
+                else
+                    ASELECTED[$acursor]=1
+                fi
+                ;;
+            'a'|'A')
+                for ((ai=0; ai<TOTAL_AI; ai++)); do ASELECTED[$ai]=1; done
+                ;;
+            'n'|'N')
+                for ((ai=0; ai<TOTAL_AI; ai++)); do ASELECTED[$ai]=0; done
+                ;;
+            'c'|'C'|'')
+                tput cnorm 2>/dev/null || true
+                for ((ai=0; ai<TOTAL_AI; ai++)); do
+                    if [ "${ASELECTED[$ai]}" = "1" ]; then
+                        eval "${AI_KEYS[$ai]}=true"
+                    else
+                        eval "${AI_KEYS[$ai]}=false"
+                    fi
+                done
+                return 0
+                ;;
+            'q'|'Q')
+                tput cnorm 2>/dev/null || true
+                return 1
+                ;;
+            [1-9])
+                local anum_key=$((akey - 1))
+                if [ $anum_key -lt $TOTAL_AI ]; then
+                    if [ "${ASELECTED[$anum_key]}" = "1" ]; then
+                        ASELECTED[$anum_key]=0
+                    else
+                        ASELECTED[$anum_key]=1
+                    fi
+                    acursor=$anum_key
+                fi
+                ;;
+        esac
+    done
+}
 
 # GNOME Tweaks sub-menu - returns 0 on confirm, 1 on cancel
 show_gnome_submenu() {
@@ -1090,8 +1263,7 @@ show_interactive_install_menu() {
     APP_NAMES+=("VLC");         APP_DESCS+=("VLC Media Player");                      APP_VARS+=("INSTALL_VLC")
     APP_NAMES+=("Cloudflared"); APP_DESCS+=("Cloudflare Tunnel Client");              APP_VARS+=("INSTALL_CLOUDFLARED")
     APP_NAMES+=("Docker");      APP_DESCS+=("Docker Engine + Compose");               APP_VARS+=("INSTALL_DOCKER")
-    APP_NAMES+=("Claude Code"); APP_DESCS+=("Claude Code CLI");                       APP_VARS+=("INSTALL_CLAUDE")
-    APP_NAMES+=("Codex");       APP_DESCS+=("Codex CLI");                             APP_VARS+=("INSTALL_CODEX")
+    APP_NAMES+=("AI CLI Tools"); APP_DESCS+=("AI CLI Tools (Claude/Codex etc. - Enter to expand sub-menu)"); APP_VARS+=("INSTALL_AICLI")
     APP_NAMES+=("Git & GitHub CLI"); APP_DESCS+=("Git + GitHub CLI (gh)");               APP_VARS+=("INSTALL_GH")
     APP_NAMES+=("Postman");     APP_DESCS+=("Postman (API Testing Tool)");             APP_VARS+=("INSTALL_POSTMAN")
     APP_NAMES+=("FileZilla");   APP_DESCS+=("FileZilla (FTP/SFTP Client)");            APP_VARS+=("INSTALL_FILEZILLA")
@@ -1146,11 +1318,9 @@ show_interactive_install_menu() {
             local checkbox="[ ]"
             local line_start="   "
 
-            # Dynamic descriptions for Claude/Codex based on VS Code selection
-            if [ "${APP_VARS[$i]}" = "INSTALL_CLAUDE" ] && [ "$vscode_selected" = "1" ]; then
-                desc="Claude Code CLI + VS Code Extension"
-            elif [ "${APP_VARS[$i]}" = "INSTALL_CODEX" ] && [ "$vscode_selected" = "1" ]; then
-                desc="Codex CLI + VS Code Extension"
+            # Dynamic description for AI CLI Tools based on VS Code selection
+            if [ "${APP_VARS[$i]}" = "INSTALL_AICLI" ] && [ "$vscode_selected" = "1" ]; then
+                desc="AI CLI Tools + VS Code Extensions (Enter to expand sub-menu)"
             fi
 
             if [ "${SELECTED[$i]}" = "1" ]; then
@@ -1247,6 +1417,9 @@ show_interactive_install_menu() {
                 elif [ "${APP_VARS[$cursor]}" = "DO_DEBLOAT" ]; then
                     SELECTED[$cursor]=1
                     show_debloat_submenu || true
+                elif [ "${APP_VARS[$cursor]}" = "INSTALL_AICLI" ]; then
+                    SELECTED[$cursor]=1
+                    show_aicli_submenu || true
                 fi
                 ;;
             'c'|'C') # Confirm and start installation
@@ -1335,6 +1508,26 @@ show_interactive_install_menu() {
                                     done
                                 else
                                     echo -e "  ${YELLOW}!${NC} ${RED}Debloat:${NC} (no items selected - will skip)"
+                                fi
+                                ;;
+                            INSTALL_AICLI)
+                                # List actual AI CLI Tools sub-menu picks
+                                local aicli_list=""
+                                $AICLI_SUB_CLAUDE && aicli_list+="Claude Code, "
+                                $AICLI_SUB_CODEX  && aicli_list+="Codex, "
+                                $AICLI_SUB_KIMI   && aicli_list+="Kimi Code, "
+                                $AICLI_SUB_GROK   && aicli_list+="Grok, "
+                                $AICLI_SUB_GEMINI && aicli_list+="Gemini CLI, "
+                                $AICLI_SUB_QWEN   && aicli_list+="Qwen CLI, "
+                                aicli_list="${aicli_list%, }"
+                                if [ -n "$aicli_list" ]; then
+                                    echo -e "  ${GREEN}✓${NC} ${GREEN}AI CLI Tools:${NC}"
+                                    echo "$aicli_list" | tr ',' '\n' | while IFS= read -r item; do
+                                        item="${item## }"
+                                        [ -n "$item" ] && echo -e "       ${CYAN}•${NC} $item"
+                                    done
+                                else
+                                    echo -e "  ${YELLOW}!${NC} ${GREEN}AI CLI Tools:${NC} (no sub-items selected - will skip)"
                                 fi
                                 ;;
                             *)
@@ -1887,6 +2080,10 @@ check_already_installed() {
         "INSTALL_DOCKER|Docker|command_exists docker"
         "INSTALL_CLAUDE|Claude Code|command_exists claude"
         "INSTALL_CODEX|Codex|command_exists codex"
+        "INSTALL_KIMI|Kimi Code|command_exists kimi"
+        "INSTALL_GROK|Grok|command_exists grok"
+        "INSTALL_GEMINI|Gemini CLI|command_exists gemini"
+        "INSTALL_QWEN|Qwen CLI|command_exists qwen"
         "INSTALL_GH|GitHub CLI|command_exists gh"
         "INSTALL_POSTMAN|Postman|command_exists postman || snap list postman 2>/dev/null | grep -q postman"
         "INSTALL_FILEZILLA|FileZilla|command_exists filezilla"
@@ -1950,6 +2147,18 @@ run_installations() {
         exit 1
     fi
 
+    # Expand AI CLI Tools sub-menu picks into individual install flags.
+    # Done early (before detection/already-installed checks) so those steps
+    # see the real per-tool selections.
+    if $INSTALL_AICLI; then
+        $AICLI_SUB_CLAUDE && INSTALL_CLAUDE=true
+        $AICLI_SUB_CODEX  && INSTALL_CODEX=true
+        $AICLI_SUB_KIMI   && INSTALL_KIMI=true
+        $AICLI_SUB_GROK   && INSTALL_GROK=true
+        $AICLI_SUB_GEMINI && INSTALL_GEMINI=true
+        $AICLI_SUB_QWEN   && INSTALL_QWEN=true
+    fi
+
     # Detect system
     detect_system
 
@@ -1977,6 +2186,10 @@ run_installations() {
     if $INSTALL_DOCKER; then install_docker || handle_error "Docker installation failed"; fi
     if $INSTALL_CLAUDE; then install_claude_code || handle_error "Claude Code installation failed"; fi
     if $INSTALL_CODEX; then install_codex || handle_error "Codex installation failed"; fi
+    if $INSTALL_KIMI; then install_kimi || handle_error "Kimi Code installation failed"; fi
+    if $INSTALL_GROK; then install_grok || handle_error "Grok installation failed"; fi
+    if $INSTALL_GEMINI; then install_gemini || handle_error "Gemini CLI installation failed"; fi
+    if $INSTALL_QWEN; then install_qwen || handle_error "Qwen CLI installation failed"; fi
     if $INSTALL_JTOP; then install_jtop || handle_error "jtop installation failed"; fi
     if $INSTALL_GH; then install_gh || handle_error "GitHub CLI installation failed"; fi
     if $INSTALL_POSTMAN; then install_postman || handle_error "Postman installation failed"; fi
@@ -2372,6 +2585,115 @@ install_codex() {
             log_success "Codex CLI installed successfully"
         else
             log_warning "Codex CLI installation skipped after 3 failed attempts"
+        fi
+    fi
+}
+
+#===============================================================================
+# Kimi Code CLI Installation (Moonshot AI - npm)
+#===============================================================================
+install_kimi() {
+    log_step "Installing Kimi Code CLI (Moonshot AI)"
+
+    if ! command_exists npm; then
+        log_info "Kimi Code requires Node.js. Installing NVM + Node.js first..."
+        install_nvm_nodejs
+    fi
+
+    export NVM_DIR="$HOME/.nvm"
+    [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh" 2>/dev/null || true
+
+    if command_exists kimi; then
+        log_warning "Kimi Code CLI already installed, skipping..."
+    else
+        if retry_npm_install @moonshot-ai/kimi-code; then
+            log_success "Kimi Code CLI installed successfully (run: kimi)"
+        else
+            log_warning "Kimi Code CLI installation skipped after 3 failed attempts"
+        fi
+    fi
+}
+
+#===============================================================================
+# Grok CLI Installation (xAI - official installer)
+#===============================================================================
+install_grok() {
+    log_step "Installing Grok CLI (xAI)"
+
+    if command_exists grok; then
+        log_warning "Grok CLI already installed, skipping..."
+        return 0
+    fi
+
+    log_info "Installing Grok CLI via official xAI installer..."
+    if curl -fsSL https://x.ai/cli/install.sh | bash; then
+        # Installer drops binary into ~/.grok/bin or ~/.local/bin; make sure PATH covers it
+        for gdir in "$HOME/.grok/bin" "$HOME/.local/bin"; do
+            if [ -x "$gdir/grok" ]; then
+                export PATH="$gdir:$PATH"
+                if ! grep -q "$gdir" "$HOME/.bashrc" 2>/dev/null; then
+                    echo "export PATH=\"$gdir:\$PATH\"  # Added by ubuntu-setup-script (grok)" >> "$HOME/.bashrc"
+                fi
+            fi
+        done
+        hash -r 2>/dev/null
+        if command_exists grok; then
+            log_success "Grok CLI installed successfully (run: grok)"
+        else
+            log_warning "Grok CLI installed but 'grok' not found in PATH. Try: source ~/.bashrc"
+        fi
+    else
+        log_warning "Grok CLI installation failed"
+        return 1
+    fi
+}
+
+#===============================================================================
+# Gemini CLI Installation (Google - npm)
+#===============================================================================
+install_gemini() {
+    log_step "Installing Gemini CLI (Google)"
+
+    if ! command_exists npm; then
+        log_info "Gemini CLI requires Node.js. Installing NVM + Node.js first..."
+        install_nvm_nodejs
+    fi
+
+    export NVM_DIR="$HOME/.nvm"
+    [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh" 2>/dev/null || true
+
+    if command_exists gemini; then
+        log_warning "Gemini CLI already installed, skipping..."
+    else
+        if retry_npm_install @google/gemini-cli; then
+            log_success "Gemini CLI installed successfully (run: gemini)"
+        else
+            log_warning "Gemini CLI installation skipped after 3 failed attempts"
+        fi
+    fi
+}
+
+#===============================================================================
+# Qwen Code CLI Installation (Alibaba - npm)
+#===============================================================================
+install_qwen() {
+    log_step "Installing Qwen Code CLI (Alibaba)"
+
+    if ! command_exists npm; then
+        log_info "Qwen CLI requires Node.js. Installing NVM + Node.js first..."
+        install_nvm_nodejs
+    fi
+
+    export NVM_DIR="$HOME/.nvm"
+    [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh" 2>/dev/null || true
+
+    if command_exists qwen; then
+        log_warning "Qwen CLI already installed, skipping..."
+    else
+        if retry_npm_install @qwen-code/qwen-code; then
+            log_success "Qwen Code CLI installed successfully (run: qwen)"
+        else
+            log_warning "Qwen CLI installation skipped after 3 failed attempts"
         fi
     fi
 }
@@ -5036,8 +5358,13 @@ print_summary() {
         fi
     fi
 
-    # Claude Code
+    # AI CLI Tools
     show_selected $INSTALL_CLAUDE "Claude Code" "$(command_exists claude && echo true || echo false)"
+    show_selected $INSTALL_CODEX  "Codex"       "$(command_exists codex && echo true || echo false)"
+    show_selected $INSTALL_KIMI   "Kimi Code"   "$(command_exists kimi && echo true || echo false)"
+    show_selected $INSTALL_GROK   "Grok"        "$(command_exists grok && echo true || echo false)"
+    show_selected $INSTALL_GEMINI "Gemini CLI"  "$(command_exists gemini && echo true || echo false)"
+    show_selected $INSTALL_QWEN   "Qwen CLI"    "$(command_exists qwen && echo true || echo false)"
 
     # Git & GitHub CLI
     if $INSTALL_GH; then

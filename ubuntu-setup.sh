@@ -16,7 +16,7 @@
 #===============================================================================
 
 SCRIPT_VERSION="2.5.0"
-SCRIPT_REVISION="140"
+SCRIPT_REVISION="141"
 SCRIPT_DATE="2026-03-27"
 
 # NOTE: We intentionally do NOT use set -e here.
@@ -500,7 +500,7 @@ GNOME_SUB_SCRIPT=false; GNOME_SUB_WAYLAND=false; GNOME_SUB_SSH=false
 GNOME_SUB_ALIASES=false; GNOME_SUB_ENGLISH=false
 GNOME_SUB_SCREEN=false; GNOME_SUB_HIDDEN=false; GNOME_SUB_KB_TR=false; GNOME_SUB_KB_EN=false
 GNOME_SUB_VSCREEN=false; GNOME_SUB_AUTOLOGIN=false; GNOME_SUB_HOSTNAME=false
-GNOME_SUB_NO_IBUS=false; GNOME_SUB_APPORT=false; GNOME_SUB_CHEESE=false
+GNOME_SUB_NO_IBUS=false; GNOME_SUB_APPORT=false; GNOME_SUB_CHEESE=false; GNOME_SUB_CLEANUP2Y=false
 # Hostname value collected before install starts (when Tweaks + Change Hostname selected)
 NEW_HOSTNAME=""
 
@@ -685,6 +685,7 @@ show_gnome_submenu() {
     # Note: "Restore Desktop Meta" tweak removed by user request. If anyone
     # really needs it: sudo apt install --no-install-recommends ubuntu-desktop
     TWEAK_NAMES+=("Virtual Screen 1080p"); TWEAK_DESCS+=("Create virtual 1920x1080 display (for VNC/RDP/headless)"); TWEAK_KEYS+=("GNOME_SUB_VSCREEN")
+    TWEAK_NAMES+=("Cleanup Period: 2Y");   TWEAK_DESCS+=("Extend auto-cleanup to 730 days (default 30 days)");      TWEAK_KEYS+=("GNOME_SUB_CLEANUP2Y")
     TWEAK_NAMES+=("GDM Auto-Login");       TWEAK_DESCS+=("Auto-login to GUI on boot (needed for VNC tray icon)");   TWEAK_KEYS+=("GNOME_SUB_AUTOLOGIN")
 
     local TOTAL_TWEAKS=${#TWEAK_NAMES[@]}
@@ -1487,6 +1488,7 @@ show_interactive_install_menu() {
                                 $GNOME_SUB_NO_IBUS     && tweaks_list+="IBus Leak Fix, "
                                 $GNOME_SUB_APPORT      && tweaks_list+="Activate Apport, "
                                 $GNOME_SUB_CHEESE      && tweaks_list+="Install Cheese, "
+                                $GNOME_SUB_CLEANUP2Y   && tweaks_list+="Cleanup Period: 2Y, "
                                 tweaks_list="${tweaks_list%, }"
                                 if [ -n "$tweaks_list" ]; then
                                     echo -e "  ${GREEN}✓${NC} ${GREEN}Tweaks:${NC}"
@@ -3555,6 +3557,15 @@ ACCOUNTSEOF
         log_success "Cheese installed"
     fi
 
+    # 19. Extend auto-cleanup period to 2 years (730 days)
+    if $GNOME_SUB_CLEANUP2Y; then
+        log_info "Setting auto-cleanup period to 2 years (730 days)..."
+        gsettings set org.gnome.desktop.privacy old-files-age 730 2>/dev/null || true
+        gsettings set org.gnome.desktop.privacy remove-old-temp-files true 2>/dev/null || true
+        gsettings set org.gnome.desktop.privacy remove-old-trash-files true 2>/dev/null || true
+        log_success "Cleanup period set to 730 days (2 years)"
+    fi
+
 
     log_success "GNOME Tweaks setup completed"
 }
@@ -5309,6 +5320,7 @@ print_summary() {
         $GNOME_SUB_NO_IBUS    && any_tweak=true
         $GNOME_SUB_APPORT     && any_tweak=true
         $GNOME_SUB_CHEESE     && any_tweak=true
+        $GNOME_SUB_CLEANUP2Y && any_tweak=true
 
         if $any_tweak; then
             echo -e "  ${GREEN}✓${NC} Tweaks"
@@ -5331,6 +5343,7 @@ print_summary() {
             $GNOME_SUB_NO_IBUS    && echo -e "    ${GREEN}✓${NC} IBus disabled (XKB-only)"
             $GNOME_SUB_APPORT     && systemctl is-active apport &>/dev/null && echo -e "    ${GREEN}✓${NC} Apport activated"
             $GNOME_SUB_CHEESE     && command_exists cheese && echo -e "    ${GREEN}✓${NC} Cheese installed"
+            $GNOME_SUB_CLEANUP2Y  && echo -e "    ${GREEN}✓${NC} Cleanup Period: 2 years (730 days)"
         fi
     fi
 

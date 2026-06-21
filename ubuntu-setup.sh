@@ -16,7 +16,7 @@
 #===============================================================================
 
 SCRIPT_VERSION="2.5.0"
-SCRIPT_REVISION="146"
+SCRIPT_REVISION="147"
 SCRIPT_DATE="2026-03-27"
 
 # NOTE: We intentionally do NOT use set -e here.
@@ -548,7 +548,9 @@ gnome_tweak_applied() {
 # Returns 0 if the given Remote sub-menu key's tool is installed.
 remote_installed() {
     case "$1" in
-        REMOTE_SUB_VNC)        command_exists vncserver-x11 || command_exists vncserver || package_installed realvnc-connect ;;
+        REMOTE_SUB_VNC)        command_exists vncserver-x11 || command_exists vncserver || \
+                               package_installed realvnc-connect || package_installed realvnc-vnc-server || \
+                               [ -f /usr/bin/vncserver-x11 ] || [ -d /usr/share/vnc ] ;;
         REMOTE_SUB_ANYDESK)    command_exists anydesk || package_installed anydesk ;;
         REMOTE_SUB_RUSTDESK)   command_exists rustdesk ;;
         REMOTE_SUB_TEAMVIEWER) command_exists teamviewer || package_installed teamviewer ;;
@@ -2495,7 +2497,7 @@ check_already_installed() {
     # NOTE: INSTALL_GNOME (Tweaks) is intentionally NOT here - its sub-menu
     # handles per-item idempotency itself.
     local -a CHECKS=(
-        "INSTALL_VNC|RealVNC|command_exists vncserver-x11 || command_exists vncserver || package_installed realvnc-connect"
+        "INSTALL_VNC|RealVNC|command_exists vncserver-x11 || command_exists vncserver || package_installed realvnc-connect || package_installed realvnc-vnc-server || [ -f /usr/bin/vncserver-x11 ]"
         "INSTALL_RUSTDESK|RustDesk|command_exists rustdesk"
         "INSTALL_ANYDESK|AnyDesk|command_exists anydesk || package_installed anydesk"
         "INSTALL_TEAMVIEWER|TeamViewer|command_exists teamviewer || package_installed teamviewer"

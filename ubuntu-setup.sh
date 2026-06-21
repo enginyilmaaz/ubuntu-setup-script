@@ -16,7 +16,7 @@
 #===============================================================================
 
 SCRIPT_VERSION="2.5.0"
-SCRIPT_REVISION="144"
+SCRIPT_REVISION="145"
 SCRIPT_DATE="2026-03-27"
 
 # NOTE: We intentionally do NOT use set -e here.
@@ -30,6 +30,9 @@ BACKUP_DIR="$HOME/.gnome_desktop_conf_backup"
 INSTALL_ALL=false
 INSTALL_VNC=false
 INSTALL_RUSTDESK=false
+INSTALL_ANYDESK=false
+INSTALL_TEAMVIEWER=false
+INSTALL_REMOTE=false
 INSTALL_NODEJS=false
 INSTALL_CHROME=false
 INSTALL_VSCODE=false
@@ -68,11 +71,17 @@ for arg in "$@"; do
         --all)
             INSTALL_ALL=true
             ;;
-        --vnc)
+        --vnc|--realvnc)
             INSTALL_VNC=true
             ;;
         --rustdesk)
             INSTALL_RUSTDESK=true
+            ;;
+        --anydesk)
+            INSTALL_ANYDESK=true
+            ;;
+        --teamviewer)
+            INSTALL_TEAMVIEWER=true
             ;;
         --nodejs)
             INSTALL_NODEJS=true
@@ -171,6 +180,8 @@ done
 if $INSTALL_ALL; then
     INSTALL_VNC=true
     INSTALL_RUSTDESK=true
+    INSTALL_ANYDESK=true
+    INSTALL_TEAMVIEWER=true
     INSTALL_NODEJS=true
     INSTALL_CHROME=true
     INSTALL_VSCODE=true
@@ -534,6 +545,17 @@ gnome_tweak_applied() {
     esac
 }
 
+# Returns 0 if the given Remote sub-menu key's tool is installed.
+remote_installed() {
+    case "$1" in
+        REMOTE_SUB_VNC)        command_exists vncserver-x11 || command_exists vncserver || package_installed realvnc-connect ;;
+        REMOTE_SUB_ANYDESK)    command_exists anydesk || package_installed anydesk ;;
+        REMOTE_SUB_RUSTDESK)   command_exists rustdesk ;;
+        REMOTE_SUB_TEAMVIEWER) command_exists teamviewer || package_installed teamviewer ;;
+        *) return 1 ;;
+    esac
+}
+
 # Returns 0 if the given AI CLI sub-menu key's tool is installed.
 aicli_installed() {
     case "$1" in
@@ -584,8 +606,102 @@ declare -a DEBLOAT_SELECTED_PKGS=()
 declare -a DEBLOAT_SELECTED_NAMES=()
 
 # AI CLI Tools sub-menu selections (global, preserved across reopens)
+# Remote Support Tools sub-menu selections (global, preserved across reopens)
+REMOTE_SUB_VNC=false; REMOTE_SUB_ANYDESK=false; REMOTE_SUB_RUSTDESK=false; REMOTE_SUB_TEAMVIEWER=false
+
+# AI CLI Tools sub-menu selections (global, preserved across reopens)
 AICLI_SUB_CLAUDE=false; AICLI_SUB_CODEX=false; AICLI_SUB_KIMI=false
 AICLI_SUB_GROK=false; AICLI_SUB_GEMINI=false; AICLI_SUB_QWEN=false; AICLI_SUB_GLM=false
+
+# Remote Support Tools sub-menu
+show_remote_submenu() {
+    local -a R_NAMES=() R_DESCS=() R_KEYS=()
+    R_NAMES+=("RealVNC Connect"); R_DESCS+=("RealVNC Connect (commercial, free plan)"); R_KEYS+=("REMOTE_SUB_VNC")
+    R_NAMES+=("AnyDesk");         R_DESCS+=("AnyDesk (fast, lightweight)");             R_KEYS+=("REMOTE_SUB_ANYDESK")
+    R_NAMES+=("RustDesk");        R_DESCS+=("RustDesk (open source, self-host)");       R_KEYS+=("REMOTE_SUB_RUSTDESK")
+    R_NAMES+=("TeamViewer");      R_DESCS+=("TeamViewer (commercial, free personal)");  R_KEYS+=("REMOTE_SUB_TEAMVIEWER")
+
+    local TOTAL_R=${#R_NAMES[@]}
+    local -a RSELECTED=() RINSTALLED=()
+    local ri
+    for ((ri=0; ri<TOTAL_R; ri++)); do
+        if eval "\$${R_KEYS[$ri]}"; then RSELECTED+=(1); else RSELECTED+=(0); fi
+        if remote_installed "${R_KEYS[$ri]}" 2>/dev/null; then RINSTALLED+=(1); else RINSTALLED+=(0); fi
+    done
+    local rcursor=0
+    tput civis 2>/dev/null || true
+
+    while true; do
+        clear
+        echo -e "${CYAN}╔═══════════════════════════════════════════════════════════════════════════╗${NC}"
+        echo -e "${CYAN}║                 ${GREEN}Remote Support Tools - Select Options${CYAN}                     ║${NC}"
+        echo -e "${CYAN}╚═══════════════════════════════════════════════════════════════════════════╝${NC}"
+        echo ""
+        echo -e "${GREEN}═══════════════════════════════════════════════════════════════${NC}"
+        echo -e "${GREEN}     Use ↑↓ arrows to navigate, SPACE to toggle${NC}"
+        echo -e "${GREEN}═══════════════════════════════════════════════════════════════${NC}"
+        echo ""
+
+        for ((ri=0; ri<TOTAL_R; ri++)); do
+            local rname="${R_NAMES[$ri]}" rdesc="${R_DESCS[$ri]}"
+            local rnum=$(printf "%2d" $((ri + 1)))
+            local rcheck="[ ]" rline="   "
+            [ "${RSELECTED[$ri]}" = "1" ] && rcheck="${GREEN}[✓]${NC}"
+            [ "$rcursor" = "$ri" ] && rline=" ${CYAN}▶${NC}"
+            local rmark=""
+            [ "${RINSTALLED[$ri]}" = "1" ] && rmark="  ${YELLOW}**installed${NC}"
+            if [ "${RSELECTED[$ri]}" = "1" ]; then
+                echo -e "${rline} ${BLUE}[$rnum]${NC} $rcheck ${GREEN}$rname${NC} - $rdesc$rmark"
+            else
+                echo -e "${rline} ${BLUE}[$rnum]${NC} $rcheck $rname - $rdesc$rmark"
+            fi
+        done
+
+        echo ""
+        echo -e "${YELLOW}───────────────────────────────────────────────────────────────${NC}"
+        local rcount=0 rsel_names=""
+        for ((ri=0; ri<TOTAL_R; ri++)); do
+            [ "${RSELECTED[$ri]}" = "1" ] && { rcount=$((rcount+1)); rsel_names+="${R_NAMES[$ri]}, "; }
+        done
+        if [ $rcount -gt 0 ]; then
+            echo -e "  ${GREEN}Selected ($rcount):${NC} ${rsel_names%, }"
+        else
+            echo -e "  ${YELLOW}Selected: None${NC}"
+        fi
+        echo -e "${YELLOW}───────────────────────────────────────────────────────────────${NC}"
+        echo ""
+        echo -e "  ${CYAN}CONTROLS:${NC}  ${YELLOW}↑↓${NC}=Move  ${YELLOW}SPACE${NC}=Toggle  ${YELLOW}a${NC}=All  ${YELLOW}n${NC}=None  ${GREEN}c/ESC${NC}=Save+Back  ${RED}q${NC}=Discard"
+        echo ""
+
+        IFS= read -rsn1 rkey < /dev/tty 2>/dev/null || rkey=""
+        if [ "$rkey" = $'\x1b' ]; then
+            read -rsn2 -t 0.1 rrest < /dev/tty 2>/dev/null || rrest=""
+            rkey="${rkey}${rrest}"
+            if [ "$rkey" = $'\x1b' ]; then rkey='c'; fi
+        fi
+
+        case "$rkey" in
+            $'\x1b[A'|'k') [ $rcursor -gt 0 ] && rcursor=$((rcursor - 1)) ;;
+            $'\x1b[B'|'j') [ $rcursor -lt $((TOTAL_R - 1)) ] && rcursor=$((rcursor + 1)) ;;
+            ' ')
+                if [ "${RSELECTED[$rcursor]}" = "1" ]; then RSELECTED[$rcursor]=0; else RSELECTED[$rcursor]=1; fi
+                ;;
+            'a'|'A') for ((ri=0; ri<TOTAL_R; ri++)); do RSELECTED[$ri]=1; done ;;
+            'n'|'N') for ((ri=0; ri<TOTAL_R; ri++)); do RSELECTED[$ri]=0; done ;;
+            'c'|'C'|'')
+                tput cnorm 2>/dev/null || true
+                for ((ri=0; ri<TOTAL_R; ri++)); do
+                    if [ "${RSELECTED[$ri]}" = "1" ]; then eval "${R_KEYS[$ri]}=true"; else eval "${R_KEYS[$ri]}=false"; fi
+                done
+                return 0
+                ;;
+            'q'|'Q')
+                tput cnorm 2>/dev/null || true
+                return 1
+                ;;
+        esac
+    done
+}
 
 # AI CLI Tools sub-menu - returns 0 on confirm (save), 1 on discard.
 # Initializes from the global AICLI_SUB_* so reopening keeps prior picks.
@@ -1096,9 +1212,17 @@ show_debloat_submenu() {
     if dpkg -l realvnc-vnc-server 2>/dev/null | grep -q "^ii" || command_exists vncserver-x11; then
         BLOAT_NAMES+=("RealVNC");              BLOAT_DESCS+=("Remove RealVNC Connect (Remote Desktop)");        BLOAT_PKGS+=("__REALVNC__")
     fi
+    # AnyDesk
+    if dpkg -l anydesk 2>/dev/null | grep -q "^ii" || command_exists anydesk; then
+        BLOAT_NAMES+=("AnyDesk");              BLOAT_DESCS+=("Remove AnyDesk (Remote Desktop)");                BLOAT_PKGS+=("anydesk")
+    fi
     # RustDesk
     if dpkg -l rustdesk 2>/dev/null | grep -q "^ii" || command_exists rustdesk; then
         BLOAT_NAMES+=("RustDesk");             BLOAT_DESCS+=("Remove RustDesk (Open Source Remote Desktop)");   BLOAT_PKGS+=("rustdesk")
+    fi
+    # TeamViewer
+    if dpkg -l teamviewer 2>/dev/null | grep -q "^ii" || command_exists teamviewer; then
+        BLOAT_NAMES+=("TeamViewer");           BLOAT_DESCS+=("Remove TeamViewer");                              BLOAT_PKGS+=("teamviewer")
     fi
     # NodeJS (NVM)
     if [ -d "$HOME/.nvm" ] || command_exists node; then
@@ -1214,6 +1338,8 @@ show_debloat_submenu() {
         "Power Statistics|GNOME Power Statistics app|gnome-power-manager|gnome-power-manager"
         "VS Code|Visual Studio Code|code|code"
         "RustDesk|RustDesk (Open Source Remote Desktop)|rustdesk|rustdesk"
+        "AnyDesk|AnyDesk (Remote Desktop)|anydesk|anydesk"
+        "TeamViewer|TeamViewer|teamviewer|teamviewer"
         "Google Chrome|Google Chrome browser|google-chrome-stable|google-chrome-stable"
         "Python 3 pip|python3-pip + python3-venv|python3-pip python3-venv|python3-pip"
         "DBeaver CE|DBeaver CE (database tool)|dbeaver-ce|dbeaver-ce"
@@ -1389,8 +1515,7 @@ show_interactive_install_menu() {
     local idx=0
 
     # Always available apps
-    APP_NAMES+=("VNC");         APP_DESCS+=("RealVNC Connect (Remote Desktop)");      APP_VARS+=("INSTALL_VNC")
-    APP_NAMES+=("RustDesk");    APP_DESCS+=("RustDesk (Open Source Remote Desktop)"); APP_VARS+=("INSTALL_RUSTDESK")
+    APP_NAMES+=("Remote Support"); APP_DESCS+=("Remote Support Tools (Enter to expand sub-menu)"); APP_VARS+=("INSTALL_REMOTE")
     APP_NAMES+=("NodeJS");      APP_DESCS+=("NVM + Node.js 22 + Yarn + CLI Tools");  APP_VARS+=("INSTALL_NODEJS")
 
     # Chrome only on amd64, Chromium on ARM
@@ -1436,9 +1561,13 @@ show_interactive_install_menu() {
     local key=""
     local count=0
 
-    # Pre-compute group aggregate states (Tweaks / AI CLI / Debloat) so the
-    # main menu can show "some applied", "all installed", "some debloated", etc.
+    # Pre-compute group aggregate states (Remote / Tweaks / AI CLI / Debloat)
     local _gk
+    local _rm_inst=0 _rm_total=0
+    for _gk in REMOTE_SUB_VNC REMOTE_SUB_ANYDESK REMOTE_SUB_RUSTDESK REMOTE_SUB_TEAMVIEWER; do
+        _rm_total=$((_rm_total + 1))
+        remote_installed "$_gk" 2>/dev/null && _rm_inst=$((_rm_inst + 1))
+    done
     local _tw_applied=0 _tw_total=0
     for _gk in GNOME_SUB_EXTENSIONS GNOME_SUB_TWEAKS_APP GNOME_SUB_SCRIPT GNOME_SUB_WAYLAND \
                GNOME_SUB_SSH GNOME_SUB_ALIASES GNOME_SUB_SCREEN GNOME_SUB_HIDDEN \
@@ -1462,7 +1591,8 @@ show_interactive_install_menu() {
                 gnome-todo remmina cups xterm gnome-font-viewer gucharmap \
                 gnome-characters gnome-calendar gnome-calculator vim \
                 gnome-power-manager code google-chrome-stable chromium python3-pip \
-                dbeaver-ce vlc cloudflared docker-ce gh filezilla firefox rustdesk; do
+                dbeaver-ce vlc cloudflared docker-ce gh filezilla firefox \
+                rustdesk anydesk teamviewer; do
         _db_total=$((_db_total + 1))
         dpkg -l "$_dbp" 2>/dev/null | grep -q "^ii" || _db_gone=$((_db_gone + 1))
     done
@@ -1474,8 +1604,7 @@ show_interactive_install_menu() {
     for ((_mi=0; _mi<TOTAL_ITEMS; _mi++)); do
         ITEM_MARK+=("")
         case "${APP_VARS[$_mi]}" in
-            INSTALL_VNC)        { command_exists vncserver-x11 || command_exists vncserver || package_installed realvnc-connect; } 2>/dev/null && ITEM_MARK[$_mi]="installed" ;;
-            INSTALL_RUSTDESK)   command_exists rustdesk 2>/dev/null && ITEM_MARK[$_mi]="installed" ;;
+            INSTALL_REMOTE)     ITEM_MARK[$_mi]="$(group_marker "$_rm_inst" "$_rm_total" "installed")" ;;
             INSTALL_NODEJS)     { [ -d "$HOME/.nvm" ] && command_exists node; } 2>/dev/null && ITEM_MARK[$_mi]="installed" ;;
             INSTALL_CHROME)     { command_exists google-chrome || command_exists google-chrome-stable || command_exists chromium-browser || command_exists chromium; } 2>/dev/null && ITEM_MARK[$_mi]="installed" ;;
             INSTALL_VSCODE)     command_exists code 2>/dev/null && ITEM_MARK[$_mi]="installed" ;;
@@ -1553,13 +1682,77 @@ show_interactive_install_menu() {
         echo ""
         echo -e "${YELLOW}───────────────────────────────────────────────────────────────${NC}"
 
-        # Count selected
+        # Count selected and build descriptive string showing sub-picks
         count=0
         local selected_names=""
         for ((i=0; i<TOTAL_ITEMS; i++)); do
             if [ "${SELECTED[$i]}" = "1" ]; then
                 count=$((count + 1))
-                selected_names="${selected_names}${APP_NAMES[$i]}, "
+                case "${APP_VARS[$i]}" in
+                    INSTALL_REMOTE)
+                        local _rm=""
+                        $REMOTE_SUB_VNC && _rm+="VNC,"
+                        $REMOTE_SUB_ANYDESK && _rm+="AnyDesk,"
+                        $REMOTE_SUB_RUSTDESK && _rm+="RustDesk,"
+                        $REMOTE_SUB_TEAMVIEWER && _rm+="TV,"
+                        _rm="${_rm%,}"
+                        if [ -n "$_rm" ]; then
+                            selected_names+="Remote[$_rm], "
+                        else
+                            selected_names+="Remote[none], "
+                        fi
+                        ;;
+                    INSTALL_GNOME)
+                        local _tw=""
+                        $GNOME_SUB_EXTENSIONS && _tw+="Extensions,"
+                        $GNOME_SUB_UPDATE && _tw+="Update,"
+                        $GNOME_SUB_TWEAKS_APP && _tw+="Tweaks App,"
+                        $GNOME_SUB_DOCK && _tw+="Dock,"
+                        $GNOME_SUB_SCRIPT && _tw+="Script,"
+                        $GNOME_SUB_WAYLAND && _tw+="Wayland,"
+                        $GNOME_SUB_SSH && _tw+="SSH,"
+                        $GNOME_SUB_ALIASES && _tw+="Aliases,"
+                        $GNOME_SUB_SCREEN && _tw+="Screen,"
+                        $GNOME_SUB_KB_TR && _tw+="KB:TR,"
+                        $GNOME_SUB_KB_EN && _tw+="KB:EN,"
+                        $GNOME_SUB_VSCREEN && _tw+="VScreen,"
+                        $GNOME_SUB_AUTOLOGIN && _tw+="AutoLogin,"
+                        $GNOME_SUB_CLEANUP2Y && _tw+="2Y,"
+                        _tw="${_tw%,}"
+                        if [ -n "$_tw" ]; then
+                            selected_names+="Tweaks[$_tw], "
+                        else
+                            selected_names+="Tweaks[none], "
+                        fi
+                        ;;
+                    INSTALL_AICLI)
+                        local _ai=""
+                        $AICLI_SUB_CLAUDE && _ai+="Claude,"
+                        $AICLI_SUB_CODEX && _ai+="Codex,"
+                        $AICLI_SUB_KIMI && _ai+="Kimi,"
+                        $AICLI_SUB_GROK && _ai+="Grok,"
+                        $AICLI_SUB_GEMINI && _ai+="Gemini,"
+                        $AICLI_SUB_QWEN && _ai+="Qwen,"
+                        $AICLI_SUB_GLM && _ai+="GLM,"
+                        _ai="${_ai%,}"
+                        if [ -n "$_ai" ]; then
+                            selected_names+="AI[$_ai], "
+                        else
+                            selected_names+="AI[none], "
+                        fi
+                        ;;
+                    DO_DEBLOAT)
+                        local _dbc=${#DEBLOAT_SELECTED_NAMES[@]}
+                        if [ "$_dbc" -gt 0 ]; then
+                            selected_names+="Debloat[${_dbc} items], "
+                        else
+                            selected_names+="Debloat[none], "
+                        fi
+                        ;;
+                    *)
+                        selected_names+="${APP_NAMES[$i]}, "
+                        ;;
+                esac
             fi
         done
 
@@ -1602,7 +1795,7 @@ show_interactive_install_menu() {
                 else
                     SELECTED[$cursor]=1
                     # Auto-select ARM Fix when VNC is selected (only on Jetson)
-                    if [ "${APP_VARS[$cursor]}" = "INSTALL_VNC" ] && $IS_JETSON; then
+                    if [ "${APP_VARS[$cursor]}" = "INSTALL_REMOTE" ] && $IS_JETSON; then
                         for ((ai=0; ai<TOTAL_ITEMS; ai++)); do
                             if [ "${APP_VARS[$ai]}" = "APPLY_JETSON_FIX" ]; then
                                 SELECTED[$ai]=1
@@ -1623,7 +1816,10 @@ show_interactive_install_menu() {
                 done
                 ;;
             '') # Enter - open sub-menu for current item (if it has one)
-                if [ "${APP_VARS[$cursor]}" = "INSTALL_GNOME" ]; then
+                if [ "${APP_VARS[$cursor]}" = "INSTALL_REMOTE" ]; then
+                    SELECTED[$cursor]=1
+                    show_remote_submenu || true
+                elif [ "${APP_VARS[$cursor]}" = "INSTALL_GNOME" ]; then
                     SELECTED[$cursor]=1
                     show_gnome_submenu || true
                 elif [ "${APP_VARS[$cursor]}" = "DO_DEBLOAT" ]; then
@@ -1677,6 +1873,23 @@ show_interactive_install_menu() {
                 for ((i=0; i<TOTAL_ITEMS; i++)); do
                     if [ "${SELECTED[$i]}" = "1" ]; then
                         case "${APP_VARS[$i]}" in
+                            INSTALL_REMOTE)
+                                local remote_list=""
+                                $REMOTE_SUB_VNC && remote_list+="RealVNC, "
+                                $REMOTE_SUB_ANYDESK && remote_list+="AnyDesk, "
+                                $REMOTE_SUB_RUSTDESK && remote_list+="RustDesk, "
+                                $REMOTE_SUB_TEAMVIEWER && remote_list+="TeamViewer, "
+                                remote_list="${remote_list%, }"
+                                if [ -n "$remote_list" ]; then
+                                    echo -e "  ${GREEN}✓${NC} ${GREEN}Remote Support:${NC}"
+                                    echo "$remote_list" | tr ',' '\n' | while IFS= read -r item; do
+                                        item="${item## }"
+                                        [ -n "$item" ] && echo -e "       ${CYAN}•${NC} $item"
+                                    done
+                                else
+                                    echo -e "  ${YELLOW}!${NC} ${GREEN}Remote Support:${NC} (no sub-items selected - will skip)"
+                                fi
+                                ;;
                             INSTALL_GNOME)
                                 # List actual Tweaks sub-menu picks
                                 local tweaks_list=""
@@ -2284,6 +2497,8 @@ check_already_installed() {
     local -a CHECKS=(
         "INSTALL_VNC|RealVNC|command_exists vncserver-x11 || command_exists vncserver || package_installed realvnc-connect"
         "INSTALL_RUSTDESK|RustDesk|command_exists rustdesk"
+        "INSTALL_ANYDESK|AnyDesk|command_exists anydesk || package_installed anydesk"
+        "INSTALL_TEAMVIEWER|TeamViewer|command_exists teamviewer || package_installed teamviewer"
         "INSTALL_NODEJS|Node.js + NVM|[ -d \"\$HOME/.nvm\" ] && command_exists node"
         "INSTALL_CHROME|Chrome/Chromium|command_exists google-chrome || command_exists google-chrome-stable || command_exists chromium-browser || command_exists chromium"
         "INSTALL_VSCODE|VS Code|command_exists code"
@@ -2362,9 +2577,15 @@ run_installations() {
         exit 1
     fi
 
+    # Expand Remote Support sub-menu picks into individual install flags.
+    if $INSTALL_REMOTE; then
+        $REMOTE_SUB_VNC        && INSTALL_VNC=true
+        $REMOTE_SUB_ANYDESK    && INSTALL_ANYDESK=true
+        $REMOTE_SUB_RUSTDESK   && INSTALL_RUSTDESK=true
+        $REMOTE_SUB_TEAMVIEWER && INSTALL_TEAMVIEWER=true
+    fi
+
     # Expand AI CLI Tools sub-menu picks into individual install flags.
-    # Done early (before detection/already-installed checks) so those steps
-    # see the real per-tool selections.
     if $INSTALL_AICLI; then
         $AICLI_SUB_CLAUDE && INSTALL_CLAUDE=true
         $AICLI_SUB_CODEX  && INSTALL_CODEX=true
@@ -2412,6 +2633,8 @@ run_installations() {
     if $INSTALL_POSTMAN; then install_postman || handle_error "Postman installation failed"; fi
     if $INSTALL_FILEZILLA; then install_filezilla || handle_error "FileZilla installation failed"; fi
     if $INSTALL_RUSTDESK; then install_rustdesk || handle_error "RustDesk installation failed"; fi
+    if $INSTALL_ANYDESK; then install_anydesk || handle_error "AnyDesk installation failed"; fi
+    if $INSTALL_TEAMVIEWER; then install_teamviewer || handle_error "TeamViewer installation failed"; fi
 
     # CLI logins (requires nodejs to be installed)
     if $DO_CLI_LOGIN; then
@@ -2659,16 +2882,30 @@ install_rustdesk() {
     log_info "Installing RustDesk..."
 
     local temp_file="/tmp/rustdesk.deb"
-    local download_url=""
+    local download_url="" arch_suffix=""
+    local fallback_ver="1.4.7"
 
-    # Determine download URL based on architecture
     if [ "$DEB_ARCH" == "amd64" ]; then
-        download_url="https://github.com/rustdesk/rustdesk/releases/download/1.3.6/rustdesk-1.3.6-x86_64.deb"
+        arch_suffix="x86_64"
     else
-        download_url="https://github.com/rustdesk/rustdesk/releases/download/1.3.6/rustdesk-1.3.6-aarch64.deb"
+        arch_suffix="aarch64"
     fi
 
+    # Try to get latest version from GitHub API
+    local latest_ver
+    latest_ver=$(curl -fsSL -m 10 https://api.github.com/repos/rustdesk/rustdesk/releases/latest 2>/dev/null | grep -oP '"tag_name":\s*"\K[^"]+')
+    [ -z "$latest_ver" ] && latest_ver="$fallback_ver"
+
+    download_url="https://github.com/rustdesk/rustdesk/releases/download/${latest_ver}/rustdesk-${latest_ver}-${arch_suffix}.deb"
+    log_info "Downloading RustDesk ${latest_ver} (${arch_suffix})..."
+
     if ! retry_curl_download "$download_url" "$temp_file" "Downloading RustDesk"; then
+        # Fallback to known-good version
+        download_url="https://github.com/rustdesk/rustdesk/releases/download/${fallback_ver}/rustdesk-${fallback_ver}-${arch_suffix}.deb"
+        retry_curl_download "$download_url" "$temp_file" "Downloading RustDesk (fallback)"
+    fi
+
+    if [ ! -f "$temp_file" ]; then
         log_warning "RustDesk download failed after 3 attempts"
         return
     fi
@@ -2732,6 +2969,88 @@ install_rustdesk() {
         log_info "Skipping password setup"
         log_info "You can set a password later with: rustdesk --password YOUR_PASSWORD"
     fi
+}
+
+#===============================================================================
+# 1.6 AnyDesk Installation
+#===============================================================================
+install_anydesk() {
+    log_step "1.6 Installing AnyDesk"
+
+    if command_exists anydesk || package_installed anydesk; then
+        log_warning "AnyDesk already installed, skipping..."
+        return 0
+    fi
+
+    local temp_file="/tmp/anydesk.deb"
+
+    # AnyDesk provides latest at a stable URL per arch
+    local download_url
+    if [ "$DEB_ARCH" == "amd64" ]; then
+        download_url="https://download.anydesk.com/linux/anydesk_6.4.0-1_amd64.deb"
+    elif [ "$DEB_ARCH" == "arm64" ]; then
+        download_url="https://download.anydesk.com/linux/anydesk_6.4.0-1_arm64.deb"
+    else
+        log_warning "Unsupported architecture ($DEB_ARCH) for AnyDesk."
+        return 1
+    fi
+
+    # Try latest generic URL first (resolves to newest), fall back to versioned
+    if retry_curl_download "https://download.anydesk.com/linux/anydesk_${DEB_ARCH}.deb" "$temp_file" "Downloading AnyDesk (latest)"; then
+        log_info "Got latest AnyDesk build"
+    elif retry_curl_download "$download_url" "$temp_file" "Downloading AnyDesk (fallback)"; then
+        log_info "Using fallback AnyDesk build"
+    else
+        log_warning "AnyDesk download failed after all attempts"
+        return 1
+    fi
+
+    log_info "Installing AnyDesk deb package..."
+    sudo DEBIAN_FRONTEND=noninteractive dpkg -i "$temp_file" 2>/dev/null || \
+        sudo DEBIAN_FRONTEND=noninteractive apt-get install -f -y
+    rm -f "$temp_file"
+
+    log_success "AnyDesk installed successfully"
+}
+
+#===============================================================================
+# 1.7 TeamViewer Installation
+#===============================================================================
+install_teamviewer() {
+    log_step "1.7 Installing TeamViewer"
+
+    if command_exists teamviewer || package_installed teamviewer; then
+        log_warning "TeamViewer already installed, skipping..."
+        return 0
+    fi
+
+    local temp_file="/tmp/teamviewer.deb"
+
+    # TeamViewer provides latest at a stable URL per arch
+    local download_url
+    if [ "$DEB_ARCH" == "amd64" ]; then
+        download_url="https://download.teamviewer.com/download/linux/teamviewer_amd64.deb"
+    elif [ "$DEB_ARCH" == "arm64" ]; then
+        download_url="https://download.teamviewer.com/download/linux/teamviewer_arm64.deb"
+    else
+        log_warning "Unsupported architecture ($DEB_ARCH) for TeamViewer."
+        return 1
+    fi
+
+    if ! retry_curl_download "$download_url" "$temp_file" "Downloading TeamViewer"; then
+        log_warning "TeamViewer download failed after all attempts"
+        return 1
+    fi
+
+    log_info "Installing TeamViewer deb package..."
+    sudo DEBIAN_FRONTEND=noninteractive dpkg -i "$temp_file" 2>/dev/null || \
+        sudo DEBIAN_FRONTEND=noninteractive apt-get install -f -y
+    rm -f "$temp_file"
+
+    sudo systemctl enable teamviewerd.service 2>/dev/null || true
+    sudo systemctl start teamviewerd.service 2>/dev/null || true
+
+    log_success "TeamViewer installed successfully"
 }
 
 #===============================================================================
@@ -5499,7 +5818,10 @@ print_summary() {
     [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
 
     # VNC
+    # Remote Support Tools
     show_selected $INSTALL_VNC "RealVNC Connect" "$(package_installed realvnc-connect || command_exists vncserver-x11 && echo true || echo false)"
+    show_selected $INSTALL_ANYDESK "AnyDesk" "$({ command_exists anydesk || package_installed anydesk; } && echo true || echo false)"
+    show_selected $INSTALL_TEAMVIEWER "TeamViewer" "$({ command_exists teamviewer || package_installed teamviewer; } && echo true || echo false)"
 
     # Node.js
     if $INSTALL_NODEJS; then
@@ -5850,7 +6172,8 @@ main() {
        $INSTALL_VSCODE || $INSTALL_PYTHON || $INSTALL_GNOME || \
        $INSTALL_DBEAVER || $INSTALL_VLC || $INSTALL_CLOUDFLARED || $INSTALL_DOCKER || \
        $INSTALL_CLAUDE || $INSTALL_GH || $INSTALL_POSTMAN || $INSTALL_FILEZILLA || \
-       $INSTALL_RUSTDESK || $DO_CLI_LOGIN || $DO_REMOVE_FIREFOX || $APPLY_JETSON_FIX || $DO_DEBLOAT; then
+       $INSTALL_RUSTDESK || $INSTALL_ANYDESK || $INSTALL_TEAMVIEWER || \
+       $DO_CLI_LOGIN || $DO_REMOVE_FIREFOX || $APPLY_JETSON_FIX || $DO_DEBLOAT; then
         has_install=true
     fi
 

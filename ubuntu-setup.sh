@@ -16,7 +16,7 @@
 #===============================================================================
 
 SCRIPT_VERSION="2.5.0"
-SCRIPT_REVISION="145"
+SCRIPT_REVISION="146"
 SCRIPT_DATE="2026-03-27"
 
 # NOTE: We intentionally do NOT use set -e here.
@@ -643,7 +643,7 @@ show_remote_submenu() {
         echo ""
 
         for ((ri=0; ri<TOTAL_R; ri++)); do
-            local rname="${R_NAMES[$ri]}" rdesc="${R_DESCS[$ri]}"
+            local rname="${R_NAMES[$ri]}"
             local rnum=$(printf "%2d" $((ri + 1)))
             local rcheck="[ ]" rline="   "
             [ "${RSELECTED[$ri]}" = "1" ] && rcheck="${GREEN}[✓]${NC}"
@@ -651,9 +651,9 @@ show_remote_submenu() {
             local rmark=""
             [ "${RINSTALLED[$ri]}" = "1" ] && rmark="  ${YELLOW}**installed${NC}"
             if [ "${RSELECTED[$ri]}" = "1" ]; then
-                echo -e "${rline} ${BLUE}[$rnum]${NC} $rcheck ${GREEN}$rname${NC} - $rdesc$rmark"
+                echo -e "${rline} ${BLUE}[$rnum]${NC} $rcheck ${GREEN}$rname${NC}$rmark"
             else
-                echo -e "${rline} ${BLUE}[$rnum]${NC} $rcheck $rname - $rdesc$rmark"
+                echo -e "${rline} ${BLUE}[$rnum]${NC} $rcheck $rname$rmark"
             fi
         done
 
@@ -1515,7 +1515,7 @@ show_interactive_install_menu() {
     local idx=0
 
     # Always available apps
-    APP_NAMES+=("Remote Support"); APP_DESCS+=("Remote Support Tools (Enter to expand sub-menu)"); APP_VARS+=("INSTALL_REMOTE")
+    APP_NAMES+=("Remote Support Tools"); APP_DESCS+=("RealVNC, AnyDesk, RustDesk, TeamViewer (Enter to expand sub-menu)"); APP_VARS+=("INSTALL_REMOTE")
     APP_NAMES+=("NodeJS");      APP_DESCS+=("NVM + Node.js 22 + Yarn + CLI Tools");  APP_VARS+=("INSTALL_NODEJS")
 
     # Chrome only on amd64, Chromium on ARM

@@ -16,7 +16,7 @@
 #===============================================================================
 
 SCRIPT_VERSION="2.5.0"
-SCRIPT_REVISION="147"
+SCRIPT_REVISION="148"
 SCRIPT_DATE="2026-03-27"
 
 # NOTE: We intentionally do NOT use set -e here.
@@ -549,7 +549,8 @@ gnome_tweak_applied() {
 remote_installed() {
     case "$1" in
         REMOTE_SUB_VNC)        command_exists vncserver-x11 || command_exists vncserver || \
-                               package_installed realvnc-connect || package_installed realvnc-vnc-server || \
+                               package_installed realvnc-rvncconnect || package_installed realvnc-connect || \
+                               package_installed realvnc-vnc-server || \
                                [ -f /usr/bin/vncserver-x11 ] || [ -d /usr/share/vnc ] ;;
         REMOTE_SUB_ANYDESK)    command_exists anydesk || package_installed anydesk ;;
         REMOTE_SUB_RUSTDESK)   command_exists rustdesk ;;
@@ -1211,7 +1212,7 @@ show_debloat_submenu() {
     fi
     # === Other apps the script installs (only listed if currently installed) ===
     # RealVNC
-    if dpkg -l realvnc-vnc-server 2>/dev/null | grep -q "^ii" || command_exists vncserver-x11; then
+    if dpkg -l realvnc-vnc-server 2>/dev/null | grep -q "^ii" || dpkg -l realvnc-rvncconnect 2>/dev/null | grep -q "^ii" || command_exists vncserver-x11; then
         BLOAT_NAMES+=("RealVNC");              BLOAT_DESCS+=("Remove RealVNC Connect (Remote Desktop)");        BLOAT_PKGS+=("__REALVNC__")
     fi
     # AnyDesk
@@ -2063,7 +2064,7 @@ menu_remove_apps() {
         declare -A REMOVABLE
 
         # Check installed apps
-        if command_exists vncserver-x11 || package_installed realvnc-connect; then
+        if command_exists vncserver-x11 || package_installed realvnc-rvncconnect || package_installed realvnc-connect || package_installed realvnc-vnc-server; then
             echo -e "  ${BLUE}[$idx]${NC}  RealVNC Connect"
             REMOVABLE[$idx]="realvnc"
             ((idx++))
@@ -2465,7 +2466,7 @@ menu_system_info() {
     echo -e "${GREEN}Installed Applications:${NC}"
     echo ""
 
-    command_exists vncserver-x11 && echo -e "  ${GREEN}✓${NC} RealVNC"
+    { command_exists vncserver-x11 || package_installed realvnc-rvncconnect || package_installed realvnc-connect; } && echo -e "  ${GREEN}✓${NC} RealVNC"
     [ -d "$HOME/.nvm" ] && echo -e "  ${GREEN}✓${NC} NVM"
     command_exists node && echo -e "  ${GREEN}✓${NC} Node.js $(node -v 2>/dev/null)"
     command_exists yarn && echo -e "  ${GREEN}✓${NC} Yarn"
@@ -2497,7 +2498,7 @@ check_already_installed() {
     # NOTE: INSTALL_GNOME (Tweaks) is intentionally NOT here - its sub-menu
     # handles per-item idempotency itself.
     local -a CHECKS=(
-        "INSTALL_VNC|RealVNC|command_exists vncserver-x11 || command_exists vncserver || package_installed realvnc-connect || package_installed realvnc-vnc-server || [ -f /usr/bin/vncserver-x11 ]"
+        "INSTALL_VNC|RealVNC|command_exists vncserver-x11 || command_exists vncserver || package_installed realvnc-rvncconnect || package_installed realvnc-connect || package_installed realvnc-vnc-server || [ -f /usr/bin/vncserver-x11 ]"
         "INSTALL_RUSTDESK|RustDesk|command_exists rustdesk"
         "INSTALL_ANYDESK|AnyDesk|command_exists anydesk || package_installed anydesk"
         "INSTALL_TEAMVIEWER|TeamViewer|command_exists teamviewer || package_installed teamviewer"
@@ -5055,7 +5056,8 @@ install_realvnc() {
     log_step "1. Installing RealVNC Connect"
 
     # Check multiple ways if RealVNC is already installed
-    if package_installed realvnc-connect || \
+    if package_installed realvnc-rvncconnect || \
+       package_installed realvnc-connect || \
        package_installed realvnc-vnc-server || \
        command_exists vncserver-x11 || \
        command_exists vncserver || \
@@ -5065,7 +5067,7 @@ install_realvnc() {
         read -p "Reinstall from scratch? (y/n): " reinstall_choice < /dev/tty
         if [[ "$reinstall_choice" =~ ^[Yy]$ ]]; then
             log_info "Removing existing RealVNC installation..."
-            sudo apt-get remove -y realvnc-connect realvnc-vnc-server 2>/dev/null
+            sudo apt-get remove -y realvnc-rvncconnect realvnc-connect realvnc-vnc-server 2>/dev/null
             sudo rm -f /etc/apt/sources.list.d/*realvnc* /etc/apt/sources.list.d/*vnc*
             sudo rm -f /usr/share/keyrings/*realvnc* /etc/apt/trusted.gpg.d/*realvnc*
             sudo rm -rf /usr/share/vnc /usr/bin/vncserver-x11 /usr/bin/vncserver
@@ -5121,9 +5123,11 @@ install_realvnc() {
         fi
         rm -f "$temp_file"
 
-        # Enable and start VNC service
+        # Enable and start VNC service (7.x: vncserver-x11-serviced, 8.x: rvncserver-x11-serviced)
         sudo systemctl enable vncserver-x11-serviced.service 2>/dev/null || true
         sudo systemctl start vncserver-x11-serviced.service 2>/dev/null || true
+        sudo systemctl enable rvncserver-x11-serviced.service 2>/dev/null || true
+        sudo systemctl start rvncserver-x11-serviced.service 2>/dev/null || true
 
         log_success "RealVNC Connect installed successfully"
     fi
@@ -5493,10 +5497,10 @@ debloat_system() {
                 log_info "Codex CLI removed (npm package, aliases, VS Code extension)"
                 ;;
             "__REALVNC__")
-                sudo systemctl stop vncserver-x11-serviced 2>/dev/null || true
-                sudo systemctl disable vncserver-x11-serviced 2>/dev/null || true
-                sudo apt-mark unhold realvnc-vnc-server realvnc-connect realvnc-vnc-viewer 2>/dev/null || true
-                sudo apt-get remove -y realvnc-vnc-server realvnc-connect realvnc-vnc-viewer 2>/dev/null || true
+                sudo systemctl stop vncserver-x11-serviced rvncserver-x11-serviced 2>/dev/null || true
+                sudo systemctl disable vncserver-x11-serviced rvncserver-x11-serviced 2>/dev/null || true
+                sudo apt-mark unhold realvnc-vnc-server realvnc-connect realvnc-rvncconnect realvnc-vnc-viewer 2>/dev/null || true
+                sudo apt-get remove -y realvnc-vnc-server realvnc-connect realvnc-rvncconnect realvnc-vnc-viewer 2>/dev/null || true
                 log_info "RealVNC removed"
                 ;;
             "__NVM__")
@@ -5821,7 +5825,7 @@ print_summary() {
 
     # VNC
     # Remote Support Tools
-    show_selected $INSTALL_VNC "RealVNC Connect" "$(package_installed realvnc-connect || command_exists vncserver-x11 && echo true || echo false)"
+    show_selected $INSTALL_VNC "RealVNC Connect" "$({ package_installed realvnc-rvncconnect || package_installed realvnc-connect || command_exists vncserver-x11; } && echo true || echo false)"
     show_selected $INSTALL_ANYDESK "AnyDesk" "$({ command_exists anydesk || package_installed anydesk; } && echo true || echo false)"
     show_selected $INSTALL_TEAMVIEWER "TeamViewer" "$({ command_exists teamviewer || package_installed teamviewer; } && echo true || echo false)"
 

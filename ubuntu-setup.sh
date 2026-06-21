@@ -16,7 +16,7 @@
 #===============================================================================
 
 SCRIPT_VERSION="2.5.0"
-SCRIPT_REVISION="143"
+SCRIPT_REVISION="144"
 SCRIPT_DATE="2026-03-27"
 
 # NOTE: We intentionally do NOT use set -e here.
@@ -1228,7 +1228,7 @@ show_debloat_submenu() {
     for _ga in "${_gone_apps[@]}"; do
         IFS='|' read -r _gan _gad _gap _gadet <<< "$_ga"
         if ! dpkg -l "$_gadet" 2>/dev/null | grep -q "^ii"; then
-            BLOAT_NAMES+=("$_gan"); BLOAT_DESCS+=("$_gad (already removed)"); BLOAT_PKGS+=("$_gap")
+            BLOAT_NAMES+=("$_gan"); BLOAT_DESCS+=("$_gad"); BLOAT_PKGS+=("$_gap")
         fi
     done
 
@@ -1453,11 +1453,16 @@ show_interactive_install_menu() {
         _ai_total=$((_ai_total + 1))
         aicli_installed "$_gk" 2>/dev/null && _ai_inst=$((_ai_inst + 1))
     done
-    # Debloat: count how many common bloat packages are already removed.
+    # Debloat: count how many known bloat/app packages are already removed.
+    # The universe includes the apps the script can install too, so "all
+    # debloated" only shows when literally nothing removable is left.
     local _db_gone=0 _db_total=0 _dbp
     for _dbp in libreoffice-common gnome-mahjongg aisleriot gnome-mines gnome-sudoku \
                 thunderbird transmission-gtk shotwell simple-scan rhythmbox totem \
-                gnome-todo remmina cups; do
+                gnome-todo remmina cups xterm gnome-font-viewer gucharmap \
+                gnome-characters gnome-calendar gnome-calculator vim \
+                gnome-power-manager code google-chrome-stable chromium python3-pip \
+                dbeaver-ce vlc cloudflared docker-ce gh filezilla firefox rustdesk; do
         _db_total=$((_db_total + 1))
         dpkg -l "$_dbp" 2>/dev/null | grep -q "^ii" || _db_gone=$((_db_gone + 1))
     done

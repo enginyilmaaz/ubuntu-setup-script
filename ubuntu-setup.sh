@@ -16,7 +16,7 @@
 #===============================================================================
 
 SCRIPT_VERSION="2.5.0"
-SCRIPT_REVISION="148"
+SCRIPT_REVISION="149"
 SCRIPT_DATE="2026-03-27"
 
 # NOTE: We intentionally do NOT use set -e here.
@@ -559,6 +559,45 @@ remote_installed() {
     esac
 }
 
+# Version the script would install for RealVNC on THIS system (arch/OS aware).
+# Must mirror the URLs in install_realvnc().
+realvnc_target_version() {
+    if [ "$DEB_ARCH" = "amd64" ]; then
+        if [ "$OS_VERSION" = "22.04" ] || [ "$OS_CODENAME" = "jammy" ]; then echo "7.13.1"; else echo "8.2.2"; fi
+    elif [ "$DEB_ARCH" = "arm64" ]; then
+        if [ "$OS_VERSION" = "22.04" ] || [ "$OS_CODENAME" = "jammy" ]; then echo "7.13.1"; else echo "7.17.0"; fi
+    elif [ "$DEB_ARCH" = "armhf" ]; then echo "7.17.0"
+    else echo ""; fi
+}
+
+# Returns 0 if an apt-managed package has a newer candidate than installed.
+# Uses the local apt cache only (no network), so it reflects the last apt update.
+_apt_upgradable() {
+    local pkg="$1" inst cand
+    inst=$(apt-cache policy "$pkg" 2>/dev/null | awk '/Installed:/{print $2}')
+    cand=$(apt-cache policy "$pkg" 2>/dev/null | awk '/Candidate:/{print $2}')
+    [ -n "$inst" ] && [ "$inst" != "(none)" ] && [ -n "$cand" ] && [ "$cand" != "(none)" ] && \
+        dpkg --compare-versions "$inst" lt "$cand"
+}
+
+# Returns 0 if the tool is installed AND a newer version is available.
+# RealVNC: compare installed deb version vs arch-aware target.
+# AnyDesk/TeamViewer: apt candidate vs installed. RustDesk always installs
+# GitHub-latest at run time, so we can't know offline -> never flagged.
+remote_update_available() {
+    case "$1" in
+        REMOTE_SUB_VNC)
+            local cur tgt
+            cur=$(dpkg-query -W -f='${Version}' realvnc-rvncconnect 2>/dev/null)
+            [ -z "$cur" ] && cur=$(dpkg-query -W -f='${Version}' realvnc-vnc-server 2>/dev/null)
+            tgt=$(realvnc_target_version)
+            [ -n "$cur" ] && [ -n "$tgt" ] && dpkg --compare-versions "$cur" lt "$tgt" ;;
+        REMOTE_SUB_ANYDESK)    _apt_upgradable anydesk ;;
+        REMOTE_SUB_TEAMVIEWER) _apt_upgradable teamviewer ;;
+        *) return 1 ;;
+    esac
+}
+
 # Returns 0 if the given AI CLI sub-menu key's tool is installed.
 aicli_installed() {
     case "$1" in
@@ -625,11 +664,12 @@ show_remote_submenu() {
     R_NAMES+=("TeamViewer");      R_DESCS+=("TeamViewer (commercial, free personal)");  R_KEYS+=("REMOTE_SUB_TEAMVIEWER")
 
     local TOTAL_R=${#R_NAMES[@]}
-    local -a RSELECTED=() RINSTALLED=()
+    local -a RSELECTED=() RINSTALLED=() RUPDATE=()
     local ri
     for ((ri=0; ri<TOTAL_R; ri++)); do
         if eval "\$${R_KEYS[$ri]}"; then RSELECTED+=(1); else RSELECTED+=(0); fi
         if remote_installed "${R_KEYS[$ri]}" 2>/dev/null; then RINSTALLED+=(1); else RINSTALLED+=(0); fi
+        if remote_update_available "${R_KEYS[$ri]}" 2>/dev/null; then RUPDATE+=(1); else RUPDATE+=(0); fi
     done
     local rcursor=0
     tput civis 2>/dev/null || true
@@ -652,7 +692,11 @@ show_remote_submenu() {
             [ "${RSELECTED[$ri]}" = "1" ] && rcheck="${GREEN}[✓]${NC}"
             [ "$rcursor" = "$ri" ] && rline=" ${CYAN}▶${NC}"
             local rmark=""
-            [ "${RINSTALLED[$ri]}" = "1" ] && rmark="  ${YELLOW}**installed${NC}"
+            if [ "${RUPDATE[$ri]}" = "1" ]; then
+                rmark="  ${RED}**update available${NC}"
+            elif [ "${RINSTALLED[$ri]}" = "1" ]; then
+                rmark="  ${YELLOW}**installed${NC}"
+            fi
             if [ "${RSELECTED[$ri]}" = "1" ]; then
                 echo -e "${rline} ${BLUE}[$rnum]${NC} $rcheck ${GREEN}$rname${NC}$rmark"
             else

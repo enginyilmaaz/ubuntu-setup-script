@@ -16,7 +16,7 @@
 #===============================================================================
 
 SCRIPT_VERSION="2.5.0"
-SCRIPT_REVISION="142"
+SCRIPT_REVISION="143"
 SCRIPT_DATE="2026-03-27"
 
 # NOTE: We intentionally do NOT use set -e here.
@@ -508,6 +508,77 @@ GNOME_SUB_NO_IBUS=false; GNOME_SUB_APPORT=false; GNOME_SUB_CHEESE=false; GNOME_S
 # Hostname value collected before install starts (when Tweaks + Change Hostname selected)
 NEW_HOSTNAME=""
 
+# ---- Status detection helpers (shared by main menu + sub-menus) -------------
+# Returns 0 if the given GNOME tweak key is currently APPLIED on the system.
+# Keys that can't be reliably detected (Update System, Change Hostname,
+# English Language, Dash to Dock) always return 1 (unknown / not-applied).
+gnome_tweak_applied() {
+    case "$1" in
+        GNOME_SUB_EXTENSIONS) package_installed gnome-shell-extension-manager || package_installed gnome-shell-extensions ;;
+        GNOME_SUB_TWEAKS_APP) package_installed gnome-tweaks ;;
+        GNOME_SUB_SCRIPT)     [ -d "$HOME/.local/share/gnome-shell/extensions/script-launcher@enginyilmaaz" ] ;;
+        GNOME_SUB_WAYLAND)    grep -q "^WaylandEnable=false" /etc/gdm3/custom.conf 2>/dev/null ;;
+        GNOME_SUB_SSH)        systemctl is-active ssh &>/dev/null ;;
+        GNOME_SUB_ALIASES)    grep -q "^# BEGIN smai-aliases" "$HOME/.bashrc" 2>/dev/null ;;
+        GNOME_SUB_SCREEN)     [ "$(gsettings get org.gnome.desktop.session idle-delay 2>/dev/null)" = "uint32 0" ] ;;
+        GNOME_SUB_HIDDEN)     [ "$(gsettings get org.gtk.Settings.FileChooser show-hidden 2>/dev/null)" = "true" ] ;;
+        GNOME_SUB_KB_TR)      gsettings get org.gnome.desktop.input-sources sources 2>/dev/null | grep -q "'tr'" ;;
+        GNOME_SUB_KB_EN)      gsettings get org.gnome.desktop.input-sources sources 2>/dev/null | grep -q "'us'" ;;
+        GNOME_SUB_NO_IBUS)    systemctl --user is-enabled org.freedesktop.IBus.session.GNOME 2>/dev/null | grep -q "masked" ;;
+        GNOME_SUB_APPORT)     systemctl is-active apport &>/dev/null ;;
+        GNOME_SUB_CHEESE)     command_exists cheese ;;
+        GNOME_SUB_CLEANUP2Y)  [ "$(gsettings get org.gnome.desktop.privacy old-files-age 2>/dev/null)" = "uint32 730" ] ;;
+        GNOME_SUB_VSCREEN)    virtual_screen_installed ;;
+        GNOME_SUB_AUTOLOGIN)  autologin_enabled ;;
+        *) return 1 ;;
+    esac
+}
+
+# Returns 0 if the given AI CLI sub-menu key's tool is installed.
+aicli_installed() {
+    case "$1" in
+        AICLI_SUB_CLAUDE) command_exists claude ;;
+        AICLI_SUB_CODEX)  command_exists codex ;;
+        AICLI_SUB_KIMI)   command_exists kimi ;;
+        AICLI_SUB_GROK)   command_exists grok ;;
+        AICLI_SUB_GEMINI) command_exists gemini ;;
+        AICLI_SUB_QWEN)   command_exists qwen ;;
+        AICLI_SUB_GLM)    command_exists chelper ;;
+        *) return 1 ;;
+    esac
+}
+
+# Returns 0 if a debloat item is already removed (debloated).
+# Special-marker items (__...__) are contextual actions, never "done".
+bloat_is_done() {
+    local pkgs="$1"
+    case "$pkgs" in
+        __*) return 1 ;;
+    esac
+    local p base
+    for p in $pkgs; do
+        base="${p%\*}"
+        if dpkg -l "$p" 2>/dev/null | grep -q "^ii" || \
+           dpkg -l "${base}*" 2>/dev/null | grep -q "^ii"; then
+            return 1   # at least one package still installed → not done
+        fi
+    done
+    return 0           # none installed → already debloated
+}
+
+# Aggregate marker for the main menu group items: prints "", "some <word>" or
+# "all <word>" based on how many sub-items are in the given state.
+group_marker() {
+    local done_n="$1" total_n="$2" word="$3"
+    if [ "$done_n" -le 0 ]; then
+        echo ""
+    elif [ "$done_n" -ge "$total_n" ]; then
+        echo "all $word"
+    else
+        echo "some $word"
+    fi
+}
+
 # Debloat sub-menu selections (global so debloat_system can read them)
 declare -a DEBLOAT_SELECTED_PKGS=()
 declare -a DEBLOAT_SELECTED_NAMES=()
@@ -533,6 +604,7 @@ show_aicli_submenu() {
 
     local TOTAL_AI=${#AI_NAMES[@]}
     local -a ASELECTED=()
+    local -a AINSTALLED=()
     local ai
     # Restore previous selections from globals (don't forget what user picked)
     for ((ai=0; ai<TOTAL_AI; ai++)); do
@@ -540,6 +612,11 @@ show_aicli_submenu() {
             ASELECTED+=(1)
         else
             ASELECTED+=(0)
+        fi
+        if aicli_installed "${AI_KEYS[$ai]}" 2>/dev/null; then
+            AINSTALLED+=(1)
+        else
+            AINSTALLED+=(0)
         fi
     done
     local acursor=0
@@ -570,10 +647,12 @@ show_aicli_submenu() {
             if [ "$acursor" = "$ai" ]; then
                 aline=" ${CYAN}▶${NC}"
             fi
+            local amark=""
+            [ "${AINSTALLED[$ai]}" = "1" ] && amark="  ${YELLOW}**installed${NC}"
             if [ "${ASELECTED[$ai]}" = "1" ]; then
-                echo -e "${aline} ${BLUE}[$anum]${NC} $acheck ${GREEN}$aname${NC} - $adesc"
+                echo -e "${aline} ${BLUE}[$anum]${NC} $acheck ${GREEN}$aname${NC} - $adesc$amark"
             else
-                echo -e "${aline} ${BLUE}[$anum]${NC} $acheck $aname - $adesc"
+                echo -e "${aline} ${BLUE}[$anum]${NC} $acheck $aname - $adesc$amark"
             fi
         done
 
@@ -695,8 +774,14 @@ show_gnome_submenu() {
 
     local TOTAL_TWEAKS=${#TWEAK_NAMES[@]}
     local -a TSELECTED=()
+    local -a TAPPLIED=()
     for ((ti=0; ti<TOTAL_TWEAKS; ti++)); do
         TSELECTED+=(0)
+        if gnome_tweak_applied "${TWEAK_KEYS[$ti]}" 2>/dev/null; then
+            TAPPLIED+=(1)
+        else
+            TAPPLIED+=(0)
+        fi
     done
     local tcursor=0
 
@@ -727,10 +812,12 @@ show_gnome_submenu() {
             if [ "$tcursor" = "$ti" ]; then
                 tline=" ${CYAN}▶${NC}"
             fi
+            local tmark=""
+            [ "${TAPPLIED[$ti]}" = "1" ] && tmark="  ${YELLOW}**applied${NC}"
             if [ "${TSELECTED[$ti]}" = "1" ]; then
-                echo -e "${tline} ${BLUE}[$tnum]${NC} $tcheck ${GREEN}$tname${NC} - $tdesc"
+                echo -e "${tline} ${BLUE}[$tnum]${NC} $tcheck ${GREEN}$tname${NC} - $tdesc$tmark"
             else
-                echo -e "${tline} ${BLUE}[$tnum]${NC} $tcheck $tname - $tdesc"
+                echo -e "${tline} ${BLUE}[$tnum]${NC} $tcheck $tname - $tdesc$tmark"
             fi
         done
 
@@ -1098,6 +1185,53 @@ show_debloat_submenu() {
     # cut remote access for the user. Use 'sudo apt purge openssh-server' manually
     # only if you have physical/console access.
 
+    # === Already-debloated known apps ===
+    # List well-known apps that are NOT installed so the user can SEE what's
+    # already gone (shown with **debloated). Only added when not installed, so
+    # there's no overlap with the removable items listed above.
+    # Format: name|desc|pkgs|detect-pkg
+    local -a _gone_apps=(
+        "LibreOffice|Office Suite (Writer, Calc, Impress, etc.)|libreoffice-*|libreoffice-common"
+        "Mahjongg|GNOME Mahjongg Game|gnome-mahjongg|gnome-mahjongg"
+        "Solitaire|AisleRiot Solitaire|aisleriot|aisleriot"
+        "Mines|GNOME Mines Game|gnome-mines|gnome-mines"
+        "Sudoku|GNOME Sudoku Game|gnome-sudoku|gnome-sudoku"
+        "XTerm|Legacy X Terminal Emulator|xterm|xterm"
+        "Thunderbird|Mozilla Thunderbird Email Client|thunderbird thunderbird-*|thunderbird"
+        "Remmina|Remmina Remote Desktop Client|remmina remmina-*|remmina"
+        "GNOME To Do|GNOME To Do App|gnome-todo|gnome-todo"
+        "Transmission|Transmission BitTorrent Client|transmission-gtk transmission-common|transmission-gtk"
+        "Shotwell|Shotwell Photo Manager|shotwell shotwell-common|shotwell"
+        "Document Scanner|Simple Scan Document Scanner|simple-scan|simple-scan"
+        "Fonts|GNOME Font Viewer|gnome-font-viewer|gnome-font-viewer"
+        "Characters|Character Map (gucharmap)|gucharmap|gucharmap"
+        "GNOME Characters|GNOME Characters App|gnome-characters|gnome-characters"
+        "Calendar|GNOME Calendar|gnome-calendar|gnome-calendar"
+        "Calculator|GNOME Calculator|gnome-calculator|gnome-calculator"
+        "Vim|vim/vim-tiny editor|vim vim-tiny vim-common vim-runtime|vim"
+        "Rhythmbox|Rhythmbox music player|rhythmbox rhythmbox-data rhythmbox-plugins|rhythmbox"
+        "Ubuntu Videos|Totem video player (GNOME Videos)|totem totem-common totem-plugins|totem"
+        "Power Statistics|GNOME Power Statistics app|gnome-power-manager|gnome-power-manager"
+        "VS Code|Visual Studio Code|code|code"
+        "RustDesk|RustDesk (Open Source Remote Desktop)|rustdesk|rustdesk"
+        "Google Chrome|Google Chrome browser|google-chrome-stable|google-chrome-stable"
+        "Python 3 pip|python3-pip + python3-venv|python3-pip python3-venv|python3-pip"
+        "DBeaver CE|DBeaver CE (database tool)|dbeaver-ce|dbeaver-ce"
+        "VLC|VLC media player|vlc|vlc"
+        "Cloudflared|Cloudflare Tunnel client|cloudflared|cloudflared"
+        "Docker Engine|Docker Engine + Compose plugin|docker-ce docker-ce-cli containerd.io docker-compose-plugin docker-buildx-plugin|docker-ce"
+        "GitHub CLI (gh)|GitHub CLI (gh)|gh|gh"
+        "FileZilla|FileZilla (FTP/SFTP client)|filezilla|filezilla"
+        "Firefox|Firefox APT (deb / xtradeb PPA)|firefox|firefox"
+    )
+    local _ga _gan _gad _gap _gadet
+    for _ga in "${_gone_apps[@]}"; do
+        IFS='|' read -r _gan _gad _gap _gadet <<< "$_ga"
+        if ! dpkg -l "$_gadet" 2>/dev/null | grep -q "^ii"; then
+            BLOAT_NAMES+=("$_gan"); BLOAT_DESCS+=("$_gad (already removed)"); BLOAT_PKGS+=("$_gap")
+        fi
+    done
+
     local TOTAL_BLOAT=${#BLOAT_NAMES[@]}
 
     if [ "$TOTAL_BLOAT" -eq 0 ]; then
@@ -1109,8 +1243,14 @@ show_debloat_submenu() {
     fi
 
     local -a BSELECTED=()
+    local -a BLOAT_DONE=()
     for ((bi=0; bi<TOTAL_BLOAT; bi++)); do
         BSELECTED+=(0)
+        if bloat_is_done "${BLOAT_PKGS[$bi]}"; then
+            BLOAT_DONE+=(1)
+        else
+            BLOAT_DONE+=(0)
+        fi
     done
     local bcursor=0
 
@@ -1122,7 +1262,8 @@ show_debloat_submenu() {
         echo -e "${CYAN}║                    ${RED}Debloat - Remove Bloatware${CYAN}                             ║${NC}"
         echo -e "${CYAN}╚═══════════════════════════════════════════════════════════════════════════╝${NC}"
         echo ""
-        echo -e "${YELLOW}  Found ${TOTAL_BLOAT} removable item(s). Select what you want to remove (nothing selected by default).${NC}"
+        echo -e "${YELLOW}  ${TOTAL_BLOAT} item(s) listed (items marked **debloated are already removed).${NC}"
+        echo -e "${YELLOW}  Select what you want to remove (nothing selected by default).${NC}"
         echo ""
         echo -e "${GREEN}═══════════════════════════════════════════════════════════════${NC}"
         echo -e "${GREEN}     Use ↑↓ arrows to navigate, SPACE to toggle${NC}"
@@ -1143,10 +1284,12 @@ show_debloat_submenu() {
             if [ "$bcursor" = "$bi" ]; then
                 bline=" ${CYAN}▶${NC}"
             fi
+            local bmark=""
+            [ "${BLOAT_DONE[$bi]}" = "1" ] && bmark="  ${YELLOW}**debloated${NC}"
             if [ "${BSELECTED[$bi]}" = "1" ]; then
-                echo -e "${bline} ${BLUE}[$bnum]${NC} $bcheck ${RED}$bname${NC} - $bdesc"
+                echo -e "${bline} ${BLUE}[$bnum]${NC} $bcheck ${RED}$bname${NC} - $bdesc$bmark"
             else
-                echo -e "${bline} ${BLUE}[$bnum]${NC} $bcheck $bname - $bdesc"
+                echo -e "${bline} ${BLUE}[$bnum]${NC} $bcheck $bname - $bdesc$bmark"
             fi
         done
 
@@ -1293,6 +1436,32 @@ show_interactive_install_menu() {
     local key=""
     local count=0
 
+    # Pre-compute group aggregate states (Tweaks / AI CLI / Debloat) so the
+    # main menu can show "some applied", "all installed", "some debloated", etc.
+    local _gk
+    local _tw_applied=0 _tw_total=0
+    for _gk in GNOME_SUB_EXTENSIONS GNOME_SUB_TWEAKS_APP GNOME_SUB_SCRIPT GNOME_SUB_WAYLAND \
+               GNOME_SUB_SSH GNOME_SUB_ALIASES GNOME_SUB_SCREEN GNOME_SUB_HIDDEN \
+               GNOME_SUB_KB_TR GNOME_SUB_KB_EN GNOME_SUB_NO_IBUS GNOME_SUB_APPORT \
+               GNOME_SUB_CHEESE GNOME_SUB_CLEANUP2Y GNOME_SUB_VSCREEN GNOME_SUB_AUTOLOGIN; do
+        _tw_total=$((_tw_total + 1))
+        gnome_tweak_applied "$_gk" 2>/dev/null && _tw_applied=$((_tw_applied + 1))
+    done
+    local _ai_inst=0 _ai_total=0
+    for _gk in AICLI_SUB_CLAUDE AICLI_SUB_CODEX AICLI_SUB_KIMI AICLI_SUB_GROK \
+               AICLI_SUB_GEMINI AICLI_SUB_QWEN AICLI_SUB_GLM; do
+        _ai_total=$((_ai_total + 1))
+        aicli_installed "$_gk" 2>/dev/null && _ai_inst=$((_ai_inst + 1))
+    done
+    # Debloat: count how many common bloat packages are already removed.
+    local _db_gone=0 _db_total=0 _dbp
+    for _dbp in libreoffice-common gnome-mahjongg aisleriot gnome-mines gnome-sudoku \
+                thunderbird transmission-gtk shotwell simple-scan rhythmbox totem \
+                gnome-todo remmina cups; do
+        _db_total=$((_db_total + 1))
+        dpkg -l "$_dbp" 2>/dev/null | grep -q "^ii" || _db_gone=$((_db_gone + 1))
+    done
+
     # Pre-compute "installed"/"applied" status markers for each item (once).
     # Shown in the menu so the user sees what's already on the system.
     local -a ITEM_MARK=()
@@ -1306,12 +1475,13 @@ show_interactive_install_menu() {
             INSTALL_CHROME)     { command_exists google-chrome || command_exists google-chrome-stable || command_exists chromium-browser || command_exists chromium; } 2>/dev/null && ITEM_MARK[$_mi]="installed" ;;
             INSTALL_VSCODE)     command_exists code 2>/dev/null && ITEM_MARK[$_mi]="installed" ;;
             INSTALL_PYTHON)     command_exists python3 2>/dev/null && ITEM_MARK[$_mi]="installed" ;;
-            INSTALL_GNOME)      package_installed gnome-tweaks 2>/dev/null && ITEM_MARK[$_mi]="applied" ;;
+            INSTALL_GNOME)      ITEM_MARK[$_mi]="$(group_marker "$_tw_applied" "$_tw_total" "applied")" ;;
             INSTALL_DBEAVER)    { package_installed dbeaver-ce || command_exists dbeaver; } 2>/dev/null && ITEM_MARK[$_mi]="installed" ;;
             INSTALL_VLC)        command_exists vlc 2>/dev/null && ITEM_MARK[$_mi]="installed" ;;
             INSTALL_CLOUDFLARED) command_exists cloudflared 2>/dev/null && ITEM_MARK[$_mi]="installed" ;;
             INSTALL_DOCKER)     command_exists docker 2>/dev/null && ITEM_MARK[$_mi]="installed" ;;
-            INSTALL_AICLI)      { command_exists claude || command_exists codex || command_exists kimi || command_exists grok || command_exists gemini || command_exists qwen || command_exists chelper; } 2>/dev/null && ITEM_MARK[$_mi]="installed" ;;
+            INSTALL_AICLI)      ITEM_MARK[$_mi]="$(group_marker "$_ai_inst" "$_ai_total" "installed")" ;;
+            DO_DEBLOAT)         ITEM_MARK[$_mi]="$(group_marker "$_db_gone" "$_db_total" "debloated")" ;;
             INSTALL_GH)         command_exists gh 2>/dev/null && ITEM_MARK[$_mi]="installed" ;;
             INSTALL_POSTMAN)    { command_exists postman || snap list postman 2>/dev/null | grep -q postman; } 2>/dev/null && ITEM_MARK[$_mi]="installed" ;;
             INSTALL_FILEZILLA)  command_exists filezilla 2>/dev/null && ITEM_MARK[$_mi]="installed" ;;

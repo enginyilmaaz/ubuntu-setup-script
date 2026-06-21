@@ -16,7 +16,7 @@
 #===============================================================================
 
 SCRIPT_VERSION="2.5.0"
-SCRIPT_REVISION="141"
+SCRIPT_REVISION="142"
 SCRIPT_DATE="2026-03-27"
 
 # NOTE: We intentionally do NOT use set -e here.
@@ -45,6 +45,7 @@ INSTALL_KIMI=false
 INSTALL_GROK=false
 INSTALL_GEMINI=false
 INSTALL_QWEN=false
+INSTALL_GLM=false
 INSTALL_AICLI=false
 INSTALL_JTOP=false
 INSTALL_GH=false
@@ -117,6 +118,9 @@ for arg in "$@"; do
             ;;
         --qwen|--qwen-code)
             INSTALL_QWEN=true
+            ;;
+        --glm|--glm-code|--zai)
+            INSTALL_GLM=true
             ;;
         --gh|--github-cli)
             INSTALL_GH=true
@@ -341,10 +345,10 @@ show_help() {
     echo "      - Native installer (no Node.js required)"
     echo "      - Auto-updates in background"
     echo ""
-    echo -e "  ${YELLOW}--codex / --kimi / --grok / --gemini / --qwen${NC}"
+    echo -e "  ${YELLOW}--codex / --kimi / --grok / --gemini / --qwen / --glm${NC}"
     echo "      Other AI CLI tools (interactive menu groups these under 'AI CLI Tools')"
     echo "      - Codex (OpenAI), Kimi Code (Moonshot), Grok (xAI),"
-    echo "        Gemini (Google), Qwen Code (Alibaba)"
+    echo "        Gemini (Google), Qwen Code (Alibaba), GLM Code (z.ai)"
     echo ""
     echo -e "  ${YELLOW}--gh${NC}"
     echo "      GitHub CLI (gh)"
@@ -510,7 +514,7 @@ declare -a DEBLOAT_SELECTED_NAMES=()
 
 # AI CLI Tools sub-menu selections (global, preserved across reopens)
 AICLI_SUB_CLAUDE=false; AICLI_SUB_CODEX=false; AICLI_SUB_KIMI=false
-AICLI_SUB_GROK=false; AICLI_SUB_GEMINI=false; AICLI_SUB_QWEN=false
+AICLI_SUB_GROK=false; AICLI_SUB_GEMINI=false; AICLI_SUB_QWEN=false; AICLI_SUB_GLM=false
 
 # AI CLI Tools sub-menu - returns 0 on confirm (save), 1 on discard.
 # Initializes from the global AICLI_SUB_* so reopening keeps prior picks.
@@ -525,6 +529,7 @@ show_aicli_submenu() {
     AI_NAMES+=("Grok");        AI_DESCS+=("xAI Grok CLI (official x.ai installer)");        AI_KEYS+=("AICLI_SUB_GROK")
     AI_NAMES+=("Gemini CLI");  AI_DESCS+=("Google Gemini CLI (npm @google/gemini-cli)");    AI_KEYS+=("AICLI_SUB_GEMINI")
     AI_NAMES+=("Qwen CLI");    AI_DESCS+=("Alibaba Qwen Code CLI (npm @qwen-code/qwen-code)"); AI_KEYS+=("AICLI_SUB_QWEN")
+    AI_NAMES+=("GLM Code");    AI_DESCS+=("z.ai GLM Coding helper (npm @z_ai/coding-helper → chelper)"); AI_KEYS+=("AICLI_SUB_GLM")
 
     local TOTAL_AI=${#AI_NAMES[@]}
     local -a ASELECTED=()
@@ -685,7 +690,7 @@ show_gnome_submenu() {
     # Note: "Restore Desktop Meta" tweak removed by user request. If anyone
     # really needs it: sudo apt install --no-install-recommends ubuntu-desktop
     TWEAK_NAMES+=("Virtual Screen 1080p"); TWEAK_DESCS+=("Create virtual 1920x1080 display (for VNC/RDP/headless)"); TWEAK_KEYS+=("GNOME_SUB_VSCREEN")
-    TWEAK_NAMES+=("Cleanup Period: 2Y");   TWEAK_DESCS+=("Extend auto-cleanup to 730 days (default 30 days)");      TWEAK_KEYS+=("GNOME_SUB_CLEANUP2Y")
+    TWEAK_NAMES+=("Cleanup Period: 2Y");   TWEAK_DESCS+=("Auto-cleanup 730 days (2Y); Tweaks default is 365 days/1Y"); TWEAK_KEYS+=("GNOME_SUB_CLEANUP2Y")
     TWEAK_NAMES+=("GDM Auto-Login");       TWEAK_DESCS+=("Auto-login to GUI on boot (needed for VNC tray icon)");   TWEAK_KEYS+=("GNOME_SUB_AUTOLOGIN")
 
     local TOTAL_TWEAKS=${#TWEAK_NAMES[@]}
@@ -1288,6 +1293,32 @@ show_interactive_install_menu() {
     local key=""
     local count=0
 
+    # Pre-compute "installed"/"applied" status markers for each item (once).
+    # Shown in the menu so the user sees what's already on the system.
+    local -a ITEM_MARK=()
+    local _mi
+    for ((_mi=0; _mi<TOTAL_ITEMS; _mi++)); do
+        ITEM_MARK+=("")
+        case "${APP_VARS[$_mi]}" in
+            INSTALL_VNC)        { command_exists vncserver-x11 || command_exists vncserver || package_installed realvnc-connect; } 2>/dev/null && ITEM_MARK[$_mi]="installed" ;;
+            INSTALL_RUSTDESK)   command_exists rustdesk 2>/dev/null && ITEM_MARK[$_mi]="installed" ;;
+            INSTALL_NODEJS)     { [ -d "$HOME/.nvm" ] && command_exists node; } 2>/dev/null && ITEM_MARK[$_mi]="installed" ;;
+            INSTALL_CHROME)     { command_exists google-chrome || command_exists google-chrome-stable || command_exists chromium-browser || command_exists chromium; } 2>/dev/null && ITEM_MARK[$_mi]="installed" ;;
+            INSTALL_VSCODE)     command_exists code 2>/dev/null && ITEM_MARK[$_mi]="installed" ;;
+            INSTALL_PYTHON)     command_exists python3 2>/dev/null && ITEM_MARK[$_mi]="installed" ;;
+            INSTALL_GNOME)      package_installed gnome-tweaks 2>/dev/null && ITEM_MARK[$_mi]="applied" ;;
+            INSTALL_DBEAVER)    { package_installed dbeaver-ce || command_exists dbeaver; } 2>/dev/null && ITEM_MARK[$_mi]="installed" ;;
+            INSTALL_VLC)        command_exists vlc 2>/dev/null && ITEM_MARK[$_mi]="installed" ;;
+            INSTALL_CLOUDFLARED) command_exists cloudflared 2>/dev/null && ITEM_MARK[$_mi]="installed" ;;
+            INSTALL_DOCKER)     command_exists docker 2>/dev/null && ITEM_MARK[$_mi]="installed" ;;
+            INSTALL_AICLI)      { command_exists claude || command_exists codex || command_exists kimi || command_exists grok || command_exists gemini || command_exists qwen || command_exists chelper; } 2>/dev/null && ITEM_MARK[$_mi]="installed" ;;
+            INSTALL_GH)         command_exists gh 2>/dev/null && ITEM_MARK[$_mi]="installed" ;;
+            INSTALL_POSTMAN)    { command_exists postman || snap list postman 2>/dev/null | grep -q postman; } 2>/dev/null && ITEM_MARK[$_mi]="installed" ;;
+            INSTALL_FILEZILLA)  command_exists filezilla 2>/dev/null && ITEM_MARK[$_mi]="installed" ;;
+            INSTALL_JTOP)       command_exists jtop 2>/dev/null && ITEM_MARK[$_mi]="installed" ;;
+        esac
+    done
+
     # Hide cursor
     tput civis 2>/dev/null || true
 
@@ -1332,10 +1363,15 @@ show_interactive_install_menu() {
                 line_start=" ${CYAN}▶${NC}"
             fi
 
+            local mark_str=""
+            if [ -n "${ITEM_MARK[$i]}" ]; then
+                mark_str="  ${YELLOW}**${ITEM_MARK[$i]}${NC}"
+            fi
+
             if [ "${SELECTED[$i]}" = "1" ]; then
-                echo -e "${line_start} ${BLUE}[$num_display]${NC} $checkbox ${GREEN}$name${NC} - $desc"
+                echo -e "${line_start} ${BLUE}[$num_display]${NC} $checkbox ${GREEN}$name${NC} - $desc$mark_str"
             else
-                echo -e "${line_start} ${BLUE}[$num_display]${NC} $checkbox $name - $desc"
+                echo -e "${line_start} ${BLUE}[$num_display]${NC} $checkbox $name - $desc$mark_str"
             fi
         done
 
@@ -1521,6 +1557,7 @@ show_interactive_install_menu() {
                                 $AICLI_SUB_GROK   && aicli_list+="Grok, "
                                 $AICLI_SUB_GEMINI && aicli_list+="Gemini CLI, "
                                 $AICLI_SUB_QWEN   && aicli_list+="Qwen CLI, "
+                                $AICLI_SUB_GLM    && aicli_list+="GLM Code, "
                                 aicli_list="${aicli_list%, }"
                                 if [ -n "$aicli_list" ]; then
                                     echo -e "  ${GREEN}✓${NC} ${GREEN}AI CLI Tools:${NC}"
@@ -2086,6 +2123,7 @@ check_already_installed() {
         "INSTALL_GROK|Grok|command_exists grok"
         "INSTALL_GEMINI|Gemini CLI|command_exists gemini"
         "INSTALL_QWEN|Qwen CLI|command_exists qwen"
+        "INSTALL_GLM|GLM Code (z.ai)|command_exists chelper"
         "INSTALL_GH|GitHub CLI|command_exists gh"
         "INSTALL_POSTMAN|Postman|command_exists postman || snap list postman 2>/dev/null | grep -q postman"
         "INSTALL_FILEZILLA|FileZilla|command_exists filezilla"
@@ -2159,6 +2197,7 @@ run_installations() {
         $AICLI_SUB_GROK   && INSTALL_GROK=true
         $AICLI_SUB_GEMINI && INSTALL_GEMINI=true
         $AICLI_SUB_QWEN   && INSTALL_QWEN=true
+        $AICLI_SUB_GLM    && INSTALL_GLM=true
     fi
 
     # Detect system
@@ -2192,6 +2231,7 @@ run_installations() {
     if $INSTALL_GROK; then install_grok || handle_error "Grok installation failed"; fi
     if $INSTALL_GEMINI; then install_gemini || handle_error "Gemini CLI installation failed"; fi
     if $INSTALL_QWEN; then install_qwen || handle_error "Qwen CLI installation failed"; fi
+    if $INSTALL_GLM; then install_glm || handle_error "GLM Code installation failed"; fi
     if $INSTALL_JTOP; then install_jtop || handle_error "jtop installation failed"; fi
     if $INSTALL_GH; then install_gh || handle_error "GitHub CLI installation failed"; fi
     if $INSTALL_POSTMAN; then install_postman || handle_error "Postman installation failed"; fi
@@ -2696,6 +2736,29 @@ install_qwen() {
             log_success "Qwen Code CLI installed successfully (run: qwen)"
         else
             log_warning "Qwen CLI installation skipped after 3 failed attempts"
+        fi
+    fi
+}
+
+install_glm() {
+    log_step "Installing GLM Code helper (z.ai)"
+
+    if ! command_exists npm; then
+        log_info "GLM Code requires Node.js. Installing NVM + Node.js first..."
+        install_nvm_nodejs
+    fi
+
+    export NVM_DIR="$HOME/.nvm"
+    [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh" 2>/dev/null || true
+
+    if command_exists chelper; then
+        log_warning "GLM Code helper already installed, skipping..."
+    else
+        if retry_npm_install @z_ai/coding-helper; then
+            log_success "GLM Code helper installed (run: chelper)"
+            log_info "  Subscribe + get API key: https://z.ai/subscribe"
+        else
+            log_warning "GLM Code installation skipped after 3 failed attempts"
         fi
     fi
 }
@@ -3557,14 +3620,15 @@ ACCOUNTSEOF
         log_success "Cheese installed"
     fi
 
-    # 19. Extend auto-cleanup period to 2 years (730 days)
-    if $GNOME_SUB_CLEANUP2Y; then
-        log_info "Setting auto-cleanup period to 2 years (730 days)..."
-        gsettings set org.gnome.desktop.privacy old-files-age 730 2>/dev/null || true
-        gsettings set org.gnome.desktop.privacy remove-old-temp-files true 2>/dev/null || true
-        gsettings set org.gnome.desktop.privacy remove-old-trash-files true 2>/dev/null || true
-        log_success "Cleanup period set to 730 days (2 years)"
-    fi
+    # 19. Cleanup period: default 365 days (1 year), or 730 (2 years) if 2Y selected.
+    # Always applied when Tweaks runs so the system baseline is 1 year, not 30 days.
+    local _cleanup_age=365
+    $GNOME_SUB_CLEANUP2Y && _cleanup_age=730
+    log_info "Setting auto-cleanup period to $_cleanup_age days..."
+    gsettings set org.gnome.desktop.privacy old-files-age "$_cleanup_age" 2>/dev/null || true
+    gsettings set org.gnome.desktop.privacy remove-old-temp-files true 2>/dev/null || true
+    gsettings set org.gnome.desktop.privacy remove-old-trash-files true 2>/dev/null || true
+    log_success "Cleanup period set to $_cleanup_age days"
 
 
     log_success "GNOME Tweaks setup completed"
@@ -5378,6 +5442,7 @@ print_summary() {
     show_selected $INSTALL_GROK   "Grok"        "$(command_exists grok && echo true || echo false)"
     show_selected $INSTALL_GEMINI "Gemini CLI"  "$(command_exists gemini && echo true || echo false)"
     show_selected $INSTALL_QWEN   "Qwen CLI"    "$(command_exists qwen && echo true || echo false)"
+    show_selected $INSTALL_GLM    "GLM Code"    "$(command_exists chelper && echo true || echo false)"
 
     # Git & GitHub CLI
     if $INSTALL_GH; then

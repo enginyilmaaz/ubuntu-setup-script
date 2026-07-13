@@ -16,7 +16,7 @@
 #===============================================================================
 
 SCRIPT_VERSION="2.5.0"
-SCRIPT_REVISION="149"
+SCRIPT_REVISION="150"
 SCRIPT_DATE="2026-03-27"
 
 # NOTE: We intentionally do NOT use set -e here.
@@ -739,6 +739,121 @@ show_remote_submenu() {
                 tput cnorm 2>/dev/null || true
                 for ((ri=0; ri<TOTAL_R; ri++)); do
                     if [ "${RSELECTED[$ri]}" = "1" ]; then eval "${R_KEYS[$ri]}=true"; else eval "${R_KEYS[$ri]}=false"; fi
+                done
+                return 0
+                ;;
+            'q'|'Q')
+                tput cnorm 2>/dev/null || true
+                return 1
+                ;;
+        esac
+    done
+}
+
+# VS Code sub-menu selections (extensions + settings tweak). Settings on by
+# default to preserve the previous "auto-apply settings" behavior.
+VSCODE_SUB_CLAUDE=false; VSCODE_SUB_CODEX=false; VSCODE_SUB_PYTHON=false
+VSCODE_SUB_PYLANCE=false; VSCODE_SUB_GITLENS=false; VSCODE_SUB_PRETTIER=false
+VSCODE_SUB_ESLINT=false; VSCODE_SUB_DOCKER=false; VSCODE_SUB_ICONS=false
+VSCODE_SUB_SETTINGS=true
+
+# Returns 0 if a VS Code extension id is installed (or, for __SETTINGS__, if
+# our recommended settings.json has already been written).
+vscode_ext_installed() {
+    if [ "$1" = "__SETTINGS__" ]; then
+        [ -f "$HOME/.config/Code/User/settings.json" ] && \
+            grep -q '"editor.fontSize"' "$HOME/.config/Code/User/settings.json" 2>/dev/null
+        return
+    fi
+    command_exists code || return 1
+    code --list-extensions 2>/dev/null | grep -qix "$1"
+}
+
+# VS Code sub-menu - returns 0 on confirm (save), 1 on discard.
+show_vscode_submenu() {
+    local -a V_NAMES=() V_IDS=() V_KEYS=()
+    V_NAMES+=("Claude Code");         V_IDS+=("anthropic.claude-code");       V_KEYS+=("VSCODE_SUB_CLAUDE")
+    V_NAMES+=("Codex / ChatGPT");     V_IDS+=("openai.chatgpt");              V_KEYS+=("VSCODE_SUB_CODEX")
+    V_NAMES+=("Python");              V_IDS+=("ms-python.python");            V_KEYS+=("VSCODE_SUB_PYTHON")
+    V_NAMES+=("Pylance");             V_IDS+=("ms-python.vscode-pylance");    V_KEYS+=("VSCODE_SUB_PYLANCE")
+    V_NAMES+=("GitLens");             V_IDS+=("eamodio.gitlens");             V_KEYS+=("VSCODE_SUB_GITLENS")
+    V_NAMES+=("Prettier");            V_IDS+=("esbenp.prettier-vscode");      V_KEYS+=("VSCODE_SUB_PRETTIER")
+    V_NAMES+=("ESLint");              V_IDS+=("dbaeumer.vscode-eslint");      V_KEYS+=("VSCODE_SUB_ESLINT")
+    V_NAMES+=("Docker");              V_IDS+=("ms-azuretools.vscode-docker"); V_KEYS+=("VSCODE_SUB_DOCKER")
+    V_NAMES+=("Material Icon Theme"); V_IDS+=("pkief.material-icon-theme");   V_KEYS+=("VSCODE_SUB_ICONS")
+    V_NAMES+=("Apply Settings/Tweaks"); V_IDS+=("__SETTINGS__");             V_KEYS+=("VSCODE_SUB_SETTINGS")
+
+    local TOTAL_V=${#V_NAMES[@]}
+    local -a VSELECTED=() VINSTALLED=()
+    local vi
+    for ((vi=0; vi<TOTAL_V; vi++)); do
+        if eval "\$${V_KEYS[$vi]}"; then VSELECTED+=(1); else VSELECTED+=(0); fi
+        if vscode_ext_installed "${V_IDS[$vi]}" 2>/dev/null; then VINSTALLED+=(1); else VINSTALLED+=(0); fi
+    done
+    local vcursor=0
+    tput civis 2>/dev/null || true
+
+    while true; do
+        clear
+        echo -e "${CYAN}╔═══════════════════════════════════════════════════════════════════════════╗${NC}"
+        echo -e "${CYAN}║                 ${GREEN}VS Code - Extensions & Tweaks${CYAN}                             ║${NC}"
+        echo -e "${CYAN}╚═══════════════════════════════════════════════════════════════════════════╝${NC}"
+        echo ""
+        echo -e "${GREEN}═══════════════════════════════════════════════════════════════${NC}"
+        echo -e "${GREEN}     Use ↑↓ arrows to navigate, SPACE to toggle${NC}"
+        echo -e "${GREEN}═══════════════════════════════════════════════════════════════${NC}"
+        echo ""
+
+        for ((vi=0; vi<TOTAL_V; vi++)); do
+            local vname="${V_NAMES[$vi]}"
+            local vnum=$(printf "%2d" $((vi + 1)))
+            local vcheck="[ ]" vline="   "
+            [ "${VSELECTED[$vi]}" = "1" ] && vcheck="${GREEN}[✓]${NC}"
+            [ "$vcursor" = "$vi" ] && vline=" ${CYAN}▶${NC}"
+            local vmark=""
+            [ "${VINSTALLED[$vi]}" = "1" ] && vmark="  ${YELLOW}**installed${NC}"
+            if [ "${VSELECTED[$vi]}" = "1" ]; then
+                echo -e "${vline} ${BLUE}[$vnum]${NC} $vcheck ${GREEN}$vname${NC}$vmark"
+            else
+                echo -e "${vline} ${BLUE}[$vnum]${NC} $vcheck $vname$vmark"
+            fi
+        done
+
+        echo ""
+        echo -e "${YELLOW}───────────────────────────────────────────────────────────────${NC}"
+        local vcount=0 vsel_names=""
+        for ((vi=0; vi<TOTAL_V; vi++)); do
+            [ "${VSELECTED[$vi]}" = "1" ] && { vcount=$((vcount+1)); vsel_names+="${V_NAMES[$vi]}, "; }
+        done
+        if [ $vcount -gt 0 ]; then
+            echo -e "  ${GREEN}Selected ($vcount):${NC} ${vsel_names%, }"
+        else
+            echo -e "  ${YELLOW}Selected: None${NC}"
+        fi
+        echo -e "${YELLOW}───────────────────────────────────────────────────────────────${NC}"
+        echo ""
+        echo -e "  ${CYAN}CONTROLS:${NC}  ${YELLOW}↑↓${NC}=Move  ${YELLOW}SPACE${NC}=Toggle  ${YELLOW}a${NC}=All  ${YELLOW}n${NC}=None  ${GREEN}c/ESC${NC}=Save+Back  ${RED}q${NC}=Discard"
+        echo ""
+
+        IFS= read -rsn1 vkey < /dev/tty 2>/dev/null || vkey=""
+        if [ "$vkey" = $'\x1b' ]; then
+            read -rsn2 -t 0.1 vrest < /dev/tty 2>/dev/null || vrest=""
+            vkey="${vkey}${vrest}"
+            if [ "$vkey" = $'\x1b' ]; then vkey='c'; fi
+        fi
+
+        case "$vkey" in
+            $'\x1b[A'|'k') [ $vcursor -gt 0 ] && vcursor=$((vcursor - 1)) ;;
+            $'\x1b[B'|'j') [ $vcursor -lt $((TOTAL_V - 1)) ] && vcursor=$((vcursor + 1)) ;;
+            ' ')
+                if [ "${VSELECTED[$vcursor]}" = "1" ]; then VSELECTED[$vcursor]=0; else VSELECTED[$vcursor]=1; fi
+                ;;
+            'a'|'A') for ((vi=0; vi<TOTAL_V; vi++)); do VSELECTED[$vi]=1; done ;;
+            'n'|'N') for ((vi=0; vi<TOTAL_V; vi++)); do VSELECTED[$vi]=0; done ;;
+            'c'|'C'|'')
+                tput cnorm 2>/dev/null || true
+                for ((vi=0; vi<TOTAL_V; vi++)); do
+                    if [ "${VSELECTED[$vi]}" = "1" ]; then eval "${V_KEYS[$vi]}=true"; else eval "${V_KEYS[$vi]}=false"; fi
                 done
                 return 0
                 ;;
@@ -1577,7 +1692,7 @@ show_interactive_install_menu() {
         fi
     fi
 
-    APP_NAMES+=("VS Code");     APP_DESCS+=("Visual Studio Code (editor)");           APP_VARS+=("INSTALL_VSCODE")
+    APP_NAMES+=("VS Code");     APP_DESCS+=("Visual Studio Code (Enter: extensions & tweaks)"); APP_VARS+=("INSTALL_VSCODE")
     APP_NAMES+=("Python");      APP_DESCS+=("Python 3 + pip + venv");                 APP_VARS+=("INSTALL_PYTHON")
     APP_NAMES+=("Tweaks");      APP_DESCS+=("Tweaks (Enter to expand sub-menu)");      APP_VARS+=("INSTALL_GNOME")
     APP_NAMES+=("DBeaver");     APP_DESCS+=("DBeaver CE (Database Tool)");            APP_VARS+=("INSTALL_DBEAVER")
@@ -1875,6 +1990,9 @@ show_interactive_install_menu() {
                 elif [ "${APP_VARS[$cursor]}" = "INSTALL_AICLI" ]; then
                     SELECTED[$cursor]=1
                     show_aicli_submenu || true
+                elif [ "${APP_VARS[$cursor]}" = "INSTALL_VSCODE" ]; then
+                    SELECTED[$cursor]=1
+                    show_vscode_submenu || true
                 fi
                 ;;
             'c'|'C') # Confirm and start installation
@@ -1935,6 +2053,27 @@ show_interactive_install_menu() {
                                     done
                                 else
                                     echo -e "  ${YELLOW}!${NC} ${GREEN}Remote Support:${NC} (no sub-items selected - will skip)"
+                                fi
+                                ;;
+                            INSTALL_VSCODE)
+                                echo -e "  ${GREEN}✓${NC} ${GREEN}VS Code${NC}"
+                                local vsc_list=""
+                                $VSCODE_SUB_CLAUDE   && vsc_list+="Claude Code ext, "
+                                $VSCODE_SUB_CODEX    && vsc_list+="Codex/ChatGPT ext, "
+                                $VSCODE_SUB_PYTHON   && vsc_list+="Python ext, "
+                                $VSCODE_SUB_PYLANCE  && vsc_list+="Pylance ext, "
+                                $VSCODE_SUB_GITLENS  && vsc_list+="GitLens ext, "
+                                $VSCODE_SUB_PRETTIER && vsc_list+="Prettier ext, "
+                                $VSCODE_SUB_ESLINT   && vsc_list+="ESLint ext, "
+                                $VSCODE_SUB_DOCKER   && vsc_list+="Docker ext, "
+                                $VSCODE_SUB_ICONS    && vsc_list+="Material Icons, "
+                                $VSCODE_SUB_SETTINGS && vsc_list+="Settings/Tweaks, "
+                                vsc_list="${vsc_list%, }"
+                                if [ -n "$vsc_list" ]; then
+                                    echo "$vsc_list" | tr ',' '\n' | while IFS= read -r item; do
+                                        item="${item## }"
+                                        [ -n "$item" ] && echo -e "       ${CYAN}•${NC} $item"
+                                    done
                                 fi
                                 ;;
                             INSTALL_GNOME)
@@ -2661,7 +2800,14 @@ run_installations() {
     if $INSTALL_VNC; then install_realvnc || handle_error "RealVNC installation failed"; fi
     if $INSTALL_NODEJS; then install_nvm_nodejs || handle_error "Node.js installation failed"; fi
     if $INSTALL_CHROME; then install_chrome || handle_error "Chrome/Chromium installation failed"; fi
-    if $INSTALL_VSCODE; then install_vscode || handle_error "VS Code installation failed"; fi
+    if $INSTALL_VSCODE; then
+        install_vscode || handle_error "VS Code installation failed"
+    elif command_exists code && { $VSCODE_SUB_CLAUDE || $VSCODE_SUB_CODEX || $VSCODE_SUB_PYTHON || \
+         $VSCODE_SUB_PYLANCE || $VSCODE_SUB_GITLENS || $VSCODE_SUB_PRETTIER || $VSCODE_SUB_ESLINT || \
+         $VSCODE_SUB_DOCKER || $VSCODE_SUB_ICONS; }; then
+        # VS Code already installed and user picked extensions/tweaks only
+        install_vscode_extensions || true
+    fi
     if $INSTALL_PYTHON; then install_python || handle_error "Python installation failed"; fi
     if $INSTALL_GNOME; then install_gnome_extensions || handle_error "GNOME extensions installation failed"; fi
     if $INSTALL_DBEAVER; then install_dbeaver || handle_error "DBeaver installation failed"; fi
@@ -3742,45 +3888,41 @@ install_vscode() {
 install_vscode_extensions() {
     log_info "Installing VS Code Extensions for selected tools..."
 
-    # Claude Code VS Code extension — only if Claude Code CLI selected
-    if $INSTALL_CLAUDE; then
-        log_info "Installing Claude Code extension..."
-        if code --list-extensions 2>/dev/null | grep -qi "anthropic.claude-code"; then
-            log_warning "Claude Code extension already installed, skipping..."
-        else
-            code --install-extension anthropic.claude-code --force 2>/dev/null || \
-            code --install-extension saoudrizwan.claude-dev --force 2>/dev/null || \
-            log_warning "Could not install Claude extension"
-        fi
+    if ! command_exists code; then
+        log_warning "VS Code not installed, skipping extensions"
+        return
     fi
 
-    # Codex / ChatGPT VS Code extension — only if Codex CLI selected
-    if $INSTALL_CODEX; then
-        log_info "Installing ChatGPT/Codex extension..."
-        if code --list-extensions 2>/dev/null | grep -qi "openai.chatgpt"; then
-            log_warning "ChatGPT extension already installed, skipping..."
+    # Helper: install one extension id (idempotent) if not already present.
+    _vscode_install_ext() {
+        local id="$1" label="$2"
+        if code --list-extensions 2>/dev/null | grep -qix "$id"; then
+            log_warning "$label extension already installed, skipping..."
         else
-            code --install-extension openai.chatgpt --force 2>/dev/null || \
-            code --install-extension gencay.vscode-chatgpt --force 2>/dev/null || \
-            log_warning "Could not install ChatGPT extension"
+            log_info "Installing $label extension..."
+            code --install-extension "$id" --force 2>/dev/null || \
+                log_warning "Could not install $label extension"
         fi
-    fi
+    }
 
-    # Python extension — only if Python selected
-    if $INSTALL_PYTHON; then
-        log_info "Installing Python extension..."
-        if code --list-extensions 2>/dev/null | grep -qi "ms-python.python"; then
-            log_warning "Python extension already installed, skipping..."
-        else
-            code --install-extension ms-python.python --force 2>/dev/null || \
-            log_warning "Could not install Python extension"
-        fi
-    fi
+    # Each extension installs when picked in the VS Code sub-menu OR (for the
+    # AI/Python ones) when the matching CLI/tool was selected (backward compat).
+    { $VSCODE_SUB_CLAUDE   || $INSTALL_CLAUDE; } && _vscode_install_ext "anthropic.claude-code"       "Claude Code"
+    { $VSCODE_SUB_CODEX    || $INSTALL_CODEX;  } && _vscode_install_ext "openai.chatgpt"              "Codex / ChatGPT"
+    { $VSCODE_SUB_PYTHON   || $INSTALL_PYTHON; } && _vscode_install_ext "ms-python.python"            "Python"
+    $VSCODE_SUB_PYLANCE   && _vscode_install_ext "ms-python.vscode-pylance"    "Pylance"
+    $VSCODE_SUB_GITLENS   && _vscode_install_ext "eamodio.gitlens"             "GitLens"
+    $VSCODE_SUB_PRETTIER  && _vscode_install_ext "esbenp.prettier-vscode"      "Prettier"
+    $VSCODE_SUB_ESLINT    && _vscode_install_ext "dbaeumer.vscode-eslint"      "ESLint"
+    $VSCODE_SUB_DOCKER    && _vscode_install_ext "ms-azuretools.vscode-docker" "Docker"
+    $VSCODE_SUB_ICONS     && _vscode_install_ext "pkief.material-icon-theme"   "Material Icon Theme"
 
     log_success "VS Code extensions installation completed"
 
-    # Configure VS Code user settings
-    configure_vscode_settings
+    # Configure VS Code user settings (only if the tweak is selected)
+    if $VSCODE_SUB_SETTINGS; then
+        configure_vscode_settings
+    fi
 }
 
 configure_vscode_settings() {

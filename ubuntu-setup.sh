@@ -16,7 +16,7 @@
 #===============================================================================
 
 SCRIPT_VERSION="2.5.0"
-SCRIPT_REVISION="150"
+SCRIPT_REVISION="151"
 SCRIPT_DATE="2026-03-27"
 
 # NOTE: We intentionally do NOT use set -e here.
@@ -49,6 +49,7 @@ INSTALL_GROK=false
 INSTALL_GEMINI=false
 INSTALL_QWEN=false
 INSTALL_GLM=false
+INSTALL_OPENCODE=false
 INSTALL_AICLI=false
 INSTALL_JTOP=false
 INSTALL_GH=false
@@ -130,6 +131,9 @@ for arg in "$@"; do
             ;;
         --glm|--glm-code|--zai)
             INSTALL_GLM=true
+            ;;
+        --glm-opencode|--opencode)
+            INSTALL_OPENCODE=true
             ;;
         --gh|--github-cli)
             INSTALL_GH=true
@@ -356,10 +360,11 @@ show_help() {
     echo "      - Native installer (no Node.js required)"
     echo "      - Auto-updates in background"
     echo ""
-    echo -e "  ${YELLOW}--codex / --kimi / --grok / --gemini / --qwen / --glm${NC}"
+    echo -e "  ${YELLOW}--codex / --kimi / --grok / --gemini / --qwen / --glm / --glm-opencode${NC}"
     echo "      Other AI CLI tools (interactive menu groups these under 'AI CLI Tools')"
     echo "      - Codex (OpenAI), Kimi Code (Moonshot), Grok (xAI),"
-    echo "        Gemini (Google), Qwen Code (Alibaba), GLM Code (z.ai)"
+    echo "        Gemini (Google), Qwen Code (Alibaba), GLM Code (z.ai),"
+    echo "        GLM With OpenCode (OpenCode + z.ai GLM-5.2)"
     echo ""
     echo -e "  ${YELLOW}--gh${NC}"
     echo "      GitHub CLI (gh)"
@@ -608,6 +613,7 @@ aicli_installed() {
         AICLI_SUB_GEMINI) command_exists gemini ;;
         AICLI_SUB_QWEN)   command_exists qwen ;;
         AICLI_SUB_GLM)    command_exists chelper ;;
+        AICLI_SUB_OPENCODE) command_exists opencode ;;
         *) return 1 ;;
     esac
 }
@@ -654,6 +660,7 @@ REMOTE_SUB_VNC=false; REMOTE_SUB_ANYDESK=false; REMOTE_SUB_RUSTDESK=false; REMOT
 # AI CLI Tools sub-menu selections (global, preserved across reopens)
 AICLI_SUB_CLAUDE=false; AICLI_SUB_CODEX=false; AICLI_SUB_KIMI=false
 AICLI_SUB_GROK=false; AICLI_SUB_GEMINI=false; AICLI_SUB_QWEN=false; AICLI_SUB_GLM=false
+AICLI_SUB_OPENCODE=false
 
 # Remote Support Tools sub-menu
 show_remote_submenu() {
@@ -879,6 +886,7 @@ show_aicli_submenu() {
     AI_NAMES+=("Gemini CLI");  AI_DESCS+=("Google Gemini CLI (npm @google/gemini-cli)");    AI_KEYS+=("AICLI_SUB_GEMINI")
     AI_NAMES+=("Qwen CLI");    AI_DESCS+=("Alibaba Qwen Code CLI (npm @qwen-code/qwen-code)"); AI_KEYS+=("AICLI_SUB_QWEN")
     AI_NAMES+=("GLM Code");    AI_DESCS+=("z.ai GLM Coding helper (npm @z_ai/coding-helper → chelper)"); AI_KEYS+=("AICLI_SUB_GLM")
+    AI_NAMES+=("GLM With OpenCode"); AI_DESCS+=("OpenCode agent, z.ai GLM-5.2 default (npm opencode-ai)"); AI_KEYS+=("AICLI_SUB_OPENCODE")
 
     local TOTAL_AI=${#AI_NAMES[@]}
     local -a ASELECTED=()
@@ -1740,7 +1748,7 @@ show_interactive_install_menu() {
     done
     local _ai_inst=0 _ai_total=0
     for _gk in AICLI_SUB_CLAUDE AICLI_SUB_CODEX AICLI_SUB_KIMI AICLI_SUB_GROK \
-               AICLI_SUB_GEMINI AICLI_SUB_QWEN AICLI_SUB_GLM; do
+               AICLI_SUB_GEMINI AICLI_SUB_QWEN AICLI_SUB_GLM AICLI_SUB_OPENCODE; do
         _ai_total=$((_ai_total + 1))
         aicli_installed "$_gk" 2>/dev/null && _ai_inst=$((_ai_inst + 1))
     done
@@ -1896,6 +1904,7 @@ show_interactive_install_menu() {
                         $AICLI_SUB_GEMINI && _ai+="Gemini,"
                         $AICLI_SUB_QWEN && _ai+="Qwen,"
                         $AICLI_SUB_GLM && _ai+="GLM,"
+                        $AICLI_SUB_OPENCODE && _ai+="OpenCode,"
                         _ai="${_ai%,}"
                         if [ -n "$_ai" ]; then
                             selected_names+="AI[$_ai], "
@@ -2132,6 +2141,7 @@ show_interactive_install_menu() {
                                 $AICLI_SUB_GEMINI && aicli_list+="Gemini CLI, "
                                 $AICLI_SUB_QWEN   && aicli_list+="Qwen CLI, "
                                 $AICLI_SUB_GLM    && aicli_list+="GLM Code, "
+                                $AICLI_SUB_OPENCODE && aicli_list+="GLM With OpenCode, "
                                 aicli_list="${aicli_list%, }"
                                 if [ -n "$aicli_list" ]; then
                                     echo -e "  ${GREEN}✓${NC} ${GREEN}AI CLI Tools:${NC}"
@@ -2700,6 +2710,7 @@ check_already_installed() {
         "INSTALL_GEMINI|Gemini CLI|command_exists gemini"
         "INSTALL_QWEN|Qwen CLI|command_exists qwen"
         "INSTALL_GLM|GLM Code (z.ai)|command_exists chelper"
+        "INSTALL_OPENCODE|GLM With OpenCode|command_exists opencode"
         "INSTALL_GH|GitHub CLI|command_exists gh"
         "INSTALL_POSTMAN|Postman|command_exists postman || snap list postman 2>/dev/null | grep -q postman"
         "INSTALL_FILEZILLA|FileZilla|command_exists filezilla"
@@ -2780,6 +2791,7 @@ run_installations() {
         $AICLI_SUB_GEMINI && INSTALL_GEMINI=true
         $AICLI_SUB_QWEN   && INSTALL_QWEN=true
         $AICLI_SUB_GLM    && INSTALL_GLM=true
+        $AICLI_SUB_OPENCODE && INSTALL_OPENCODE=true
     fi
 
     # Detect system
@@ -2821,6 +2833,7 @@ run_installations() {
     if $INSTALL_GEMINI; then install_gemini || handle_error "Gemini CLI installation failed"; fi
     if $INSTALL_QWEN; then install_qwen || handle_error "Qwen CLI installation failed"; fi
     if $INSTALL_GLM; then install_glm || handle_error "GLM Code installation failed"; fi
+    if $INSTALL_OPENCODE; then install_glm_opencode || handle_error "GLM With OpenCode installation failed"; fi
     if $INSTALL_JTOP; then install_jtop || handle_error "jtop installation failed"; fi
     if $INSTALL_GH; then install_gh || handle_error "GitHub CLI installation failed"; fi
     if $INSTALL_POSTMAN; then install_postman || handle_error "Postman installation failed"; fi
@@ -3448,6 +3461,78 @@ install_glm() {
             log_warning "GLM Code installation skipped after 3 failed attempts"
         fi
     fi
+}
+
+install_glm_opencode() {
+    log_step "Installing GLM With OpenCode (z.ai GLM-5.2)"
+
+    if ! command_exists npm; then
+        log_info "OpenCode requires Node.js. Installing NVM + Node.js first..."
+        install_nvm_nodejs
+    fi
+
+    export NVM_DIR="$HOME/.nvm"
+    [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh" 2>/dev/null || true
+
+    # 1) Install OpenCode (npm preferred, official installer as fallback)
+    if command_exists opencode; then
+        log_warning "OpenCode already installed, skipping install..."
+    else
+        if retry_npm_install opencode-ai; then
+            log_success "OpenCode installed (run: opencode)"
+        else
+            log_warning "npm install failed, trying official installer..."
+            if curl -fsSL https://opencode.ai/install | bash; then
+                export PATH="$HOME/.opencode/bin:$PATH"
+                log_success "OpenCode installed via official installer"
+            else
+                log_warning "GLM With OpenCode installation skipped after all attempts"
+                return 0
+            fi
+        fi
+    fi
+
+    # 2) Preconfigure z.ai GLM-5.2 as the default model (no API key stored here)
+    local oc_dir="$HOME/.config/opencode"
+    local oc_cfg="$oc_dir/opencode.json"
+    mkdir -p "$oc_dir"
+    if [ -f "$oc_cfg" ]; then
+        if grep -q '"zai"' "$oc_cfg" 2>/dev/null; then
+            log_info "OpenCode already has a z.ai provider configured, leaving it as-is."
+        else
+            log_warning "Existing opencode.json found - not overwriting it."
+            log_info "  To default to GLM-5.2, add a 'zai' provider: https://docs.z.ai/scenario-example/develop-tools/opencode"
+        fi
+    else
+        cat > "$oc_cfg" <<'OPENCODE_JSON'
+{
+  "$schema": "https://opencode.ai/config.json",
+  "provider": {
+    "zai": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "Z.ai (GLM)",
+      "options": {
+        "baseURL": "https://api.z.ai/api/coding/paas/v4",
+        "apiKey": "{env:ZAI_API_KEY}"
+      },
+      "models": {
+        "glm-5.2": { "name": "GLM-5.2" },
+        "glm-5-turbo": { "name": "GLM-5-Turbo" }
+      }
+    }
+  },
+  "model": "zai/glm-5.2"
+}
+OPENCODE_JSON
+        log_success "OpenCode configured: default model = z.ai GLM-5.2"
+    fi
+
+    # 3) Auth is left to the user at runtime - this script stores no secret
+    log_info "  Set your z.ai key (GLM Coding Plan) to start:"
+    log_info "    export ZAI_API_KEY=<your-key>    (add to ~/.bashrc to persist)"
+    log_info "  Subscribe + get API key: https://z.ai/subscribe"
+    log_info "  Then run: opencode   (defaults to GLM-5.2; use /models to switch)"
+    log_info "  Note: general (non-Coding-Plan) keys use baseURL .../api/paas/v4"
 }
 
 #===============================================================================
@@ -6132,6 +6217,7 @@ print_summary() {
     show_selected $INSTALL_GEMINI "Gemini CLI"  "$(command_exists gemini && echo true || echo false)"
     show_selected $INSTALL_QWEN   "Qwen CLI"    "$(command_exists qwen && echo true || echo false)"
     show_selected $INSTALL_GLM    "GLM Code"    "$(command_exists chelper && echo true || echo false)"
+    show_selected $INSTALL_OPENCODE "GLM With OpenCode" "$(command_exists opencode && echo true || echo false)"
 
     # Git & GitHub CLI
     if $INSTALL_GH; then

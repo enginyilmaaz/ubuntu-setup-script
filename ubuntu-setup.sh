@@ -16,7 +16,7 @@
 #===============================================================================
 
 SCRIPT_VERSION="2.5.0"
-SCRIPT_REVISION="152"
+SCRIPT_REVISION="153"
 SCRIPT_DATE="2026-03-27"
 
 # NOTE: We intentionally do NOT use set -e here.
@@ -4628,8 +4628,24 @@ install_gnome_script_launcher() {
 
     local ext_uuid="script-launcher@enginyilmaaz"
     local ext_dir="$HOME/.local/share/gnome-shell/extensions/$ext_uuid"
-    local zip_url="https://extensions.gnome.org/download-extension/${ext_uuid}.shell-extension.zip?shell_version=${gnome_version}"
     local temp_zip="/tmp/script-launcher.zip"
+
+    # Resolve the compatible version from extensions.gnome.org (same method as
+    # install_tray_icons_reloaded): info API -> shell_version_map -> pk -> version_tag
+    local ext_info version_pk
+    ext_info=$(curl -fsSL "https://extensions.gnome.org/extension-info/?uuid=${ext_uuid}&shell_version=${gnome_version}" 2>/dev/null)
+    version_pk=$(echo "$ext_info" | python3 -c "
+import sys, json
+data = json.load(sys.stdin)
+for ver, info in data.get('shell_version_map', {}).items():
+    print(info.get('pk', ''))
+    break
+" 2>/dev/null)
+    if [ -z "$version_pk" ]; then
+        log_warning "No compatible Script Launcher version for GNOME $gnome_version, skipping..."
+        return
+    fi
+    local zip_url="https://extensions.gnome.org/download-extension/${ext_uuid}.shell-extension.zip?version_tag=${version_pk}"
 
     # Check if already installed
     if [ -d "$ext_dir" ]; then

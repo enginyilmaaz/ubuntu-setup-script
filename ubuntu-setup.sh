@@ -16,7 +16,7 @@
 #===============================================================================
 
 SCRIPT_VERSION="2.5.0"
-SCRIPT_REVISION="151"
+SCRIPT_REVISION="152"
 SCRIPT_DATE="2026-03-27"
 
 # NOTE: We intentionally do NOT use set -e here.
@@ -4607,10 +4607,10 @@ for ver, info in data.get('shell_version_map', {}).items():
 }
 
 #===============================================================================
-# Script Launcher GNOME Extension (custom fork)
+# Script Launcher GNOME Extension (from extensions.gnome.org)
 #===============================================================================
 install_gnome_script_launcher() {
-    log_info "Installing Script Launcher GNOME extension..."
+    log_info "Installing Script Launcher GNOME extension (extensions.gnome.org)..."
 
     local gnome_version
     gnome_version=$(gnome-shell --version 2>/dev/null | awk '{print $3}' | cut -d. -f1)
@@ -4628,7 +4628,7 @@ install_gnome_script_launcher() {
 
     local ext_uuid="script-launcher@enginyilmaaz"
     local ext_dir="$HOME/.local/share/gnome-shell/extensions/$ext_uuid"
-    local zip_url="https://github.com/enginyilmaaz/gnome_extension_script_launcher/releases/latest/download/script-launcher.zip"
+    local zip_url="https://extensions.gnome.org/download-extension/${ext_uuid}.shell-extension.zip?shell_version=${gnome_version}"
     local temp_zip="/tmp/script-launcher.zip"
 
     # Check if already installed
@@ -4638,7 +4638,7 @@ install_gnome_script_launcher() {
     fi
 
     # Download latest release
-    if ! retry_curl_download "$zip_url" "$temp_zip" "Downloading Script Launcher extension"; then
+    if ! retry_curl_download "$zip_url" "$temp_zip" "Downloading Script Launcher from extensions.gnome.org"; then
         log_warning "Script Launcher download failed, skipping..."
         return
     fi

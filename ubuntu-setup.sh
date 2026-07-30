@@ -16,7 +16,7 @@
 #===============================================================================
 
 SCRIPT_VERSION="2.5.0"
-SCRIPT_REVISION="157"
+SCRIPT_REVISION="158"
 SCRIPT_DATE="2026-03-27"
 
 # NOTE: We intentionally do NOT use set -e here.
@@ -5118,31 +5118,6 @@ virtual_screen_installed() {
     return 1
 }
 
-# Prompt for and securely store a cc* backend token during setup (skips if
-# already set, blank, or no terminal). Writes with umask 177 + chmod 600 so
-# cckimi/ccglm work right after installation.
-_cc_setup_token() {
-    local label="$1" token_file="$2" setter="$3" key=""
-    if [ -s "$token_file" ]; then
-        log_info "$label token already present, keeping it ($token_file)"
-        return 0
-    fi
-    if [ ! -r /dev/tty ]; then
-        log_info "$label: no terminal to prompt; set later with '$setter <key>'"
-        return 0
-    fi
-    printf '  Enter %s API key (leave blank to skip): ' "$label" > /dev/tty
-    read -rs key < /dev/tty
-    printf '\n' > /dev/tty
-    key="$(printf '%s' "$key" | tr -d '[:space:]')"
-    if [ -z "$key" ]; then
-        log_info "$label: skipped; set later with '$setter <key>'"
-        return 0
-    fi
-    ( umask 177; printf '%s\n' "$key" > "$token_file" ) && chmod 600 "$token_file"
-    log_success "$label token saved to $token_file (mode 600)"
-}
-
 #===============================================================================
 # CLI Shortcuts: Bash Aliases + Nautilus Right-Click Actions
 #===============================================================================
@@ -5278,12 +5253,6 @@ CCFUNCS
         log_success "Aliases added: $_alias_list"
     else
         log_info "No aliases added (neither Claude Code nor Codex selected/installed)"
-    fi
-
-    # --- cckimi/ccglm backend tokens: prompt now so they work right after setup ---
-    if $_claude_avail; then
-        _cc_setup_token "Kimi (cckimi)"    "$HOME/.kimi_token" "cckimi-token"
-        _cc_setup_token "Z.AI GLM (ccglm)" "$HOME/.zai_token"  "ccglm-token"
     fi
 
     # --- npm/yarn/pnpm package.json scripts tab-completion ---

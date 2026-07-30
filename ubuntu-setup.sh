@@ -16,7 +16,7 @@
 #===============================================================================
 
 SCRIPT_VERSION="2.5.0"
-SCRIPT_REVISION="156"
+SCRIPT_REVISION="157"
 SCRIPT_DATE="2026-03-27"
 
 # NOTE: We intentionally do NOT use set -e here.
@@ -48,7 +48,6 @@ INSTALL_KIMI=false
 INSTALL_GROK=false
 INSTALL_GEMINI=false
 INSTALL_QWEN=false
-INSTALL_GLM=false
 INSTALL_OPENCODE=false
 INSTALL_AICLI=false
 INSTALL_JTOP=false
@@ -128,9 +127,6 @@ for arg in "$@"; do
             ;;
         --qwen|--qwen-code)
             INSTALL_QWEN=true
-            ;;
-        --glm|--glm-code|--zai)
-            INSTALL_GLM=true
             ;;
         --glm-opencode|--opencode)
             INSTALL_OPENCODE=true
@@ -360,10 +356,10 @@ show_help() {
     echo "      - Native installer (no Node.js required)"
     echo "      - Auto-updates in background"
     echo ""
-    echo -e "  ${YELLOW}--codex / --kimi / --grok / --gemini / --qwen / --glm / --glm-opencode${NC}"
+    echo -e "  ${YELLOW}--codex / --kimi / --grok / --gemini / --qwen / --glm-opencode${NC}"
     echo "      Other AI CLI tools (interactive menu groups these under 'AI CLI Tools')"
     echo "      - Codex (OpenAI), Kimi Code (Moonshot), Grok (xAI),"
-    echo "        Gemini (Google), Qwen Code (Alibaba), GLM Code (z.ai),"
+    echo "        Gemini (Google), Qwen Code (Alibaba),"
     echo "        GLM With OpenCode (OpenCode + z.ai GLM-5.2)"
     echo ""
     echo -e "  ${YELLOW}--gh${NC}"
@@ -612,7 +608,6 @@ aicli_installed() {
         AICLI_SUB_GROK)   command_exists grok ;;
         AICLI_SUB_GEMINI) command_exists gemini ;;
         AICLI_SUB_QWEN)   command_exists qwen ;;
-        AICLI_SUB_GLM)    command_exists chelper ;;
         AICLI_SUB_OPENCODE) command_exists opencode ;;
         *) return 1 ;;
     esac
@@ -659,7 +654,7 @@ REMOTE_SUB_VNC=false; REMOTE_SUB_ANYDESK=false; REMOTE_SUB_RUSTDESK=false; REMOT
 
 # AI CLI Tools sub-menu selections (global, preserved across reopens)
 AICLI_SUB_CLAUDE=false; AICLI_SUB_CODEX=false; AICLI_SUB_KIMI=false
-AICLI_SUB_GROK=false; AICLI_SUB_GEMINI=false; AICLI_SUB_QWEN=false; AICLI_SUB_GLM=false
+AICLI_SUB_GROK=false; AICLI_SUB_GEMINI=false; AICLI_SUB_QWEN=false
 AICLI_SUB_OPENCODE=false
 
 # Remote Support Tools sub-menu
@@ -885,7 +880,6 @@ show_aicli_submenu() {
     AI_NAMES+=("Grok");        AI_DESCS+=("xAI Grok CLI (official x.ai installer)");        AI_KEYS+=("AICLI_SUB_GROK")
     AI_NAMES+=("Gemini CLI");  AI_DESCS+=("Google Gemini CLI (npm @google/gemini-cli)");    AI_KEYS+=("AICLI_SUB_GEMINI")
     AI_NAMES+=("Qwen CLI");    AI_DESCS+=("Alibaba Qwen Code CLI (npm @qwen-code/qwen-code)"); AI_KEYS+=("AICLI_SUB_QWEN")
-    AI_NAMES+=("GLM Code");    AI_DESCS+=("z.ai GLM Coding helper (npm @z_ai/coding-helper → chelper)"); AI_KEYS+=("AICLI_SUB_GLM")
     AI_NAMES+=("GLM With OpenCode"); AI_DESCS+=("OpenCode agent, z.ai GLM-5.2 default (npm opencode-ai)"); AI_KEYS+=("AICLI_SUB_OPENCODE")
 
     local TOTAL_AI=${#AI_NAMES[@]}
@@ -1748,7 +1742,7 @@ show_interactive_install_menu() {
     done
     local _ai_inst=0 _ai_total=0
     for _gk in AICLI_SUB_CLAUDE AICLI_SUB_CODEX AICLI_SUB_KIMI AICLI_SUB_GROK \
-               AICLI_SUB_GEMINI AICLI_SUB_QWEN AICLI_SUB_GLM AICLI_SUB_OPENCODE; do
+               AICLI_SUB_GEMINI AICLI_SUB_QWEN AICLI_SUB_OPENCODE; do
         _ai_total=$((_ai_total + 1))
         aicli_installed "$_gk" 2>/dev/null && _ai_inst=$((_ai_inst + 1))
     done
@@ -1903,7 +1897,6 @@ show_interactive_install_menu() {
                         $AICLI_SUB_GROK && _ai+="Grok,"
                         $AICLI_SUB_GEMINI && _ai+="Gemini,"
                         $AICLI_SUB_QWEN && _ai+="Qwen,"
-                        $AICLI_SUB_GLM && _ai+="GLM,"
                         $AICLI_SUB_OPENCODE && _ai+="OpenCode,"
                         _ai="${_ai%,}"
                         if [ -n "$_ai" ]; then
@@ -2140,7 +2133,6 @@ show_interactive_install_menu() {
                                 $AICLI_SUB_GROK   && aicli_list+="Grok, "
                                 $AICLI_SUB_GEMINI && aicli_list+="Gemini CLI, "
                                 $AICLI_SUB_QWEN   && aicli_list+="Qwen CLI, "
-                                $AICLI_SUB_GLM    && aicli_list+="GLM Code, "
                                 $AICLI_SUB_OPENCODE && aicli_list+="GLM With OpenCode, "
                                 aicli_list="${aicli_list%, }"
                                 if [ -n "$aicli_list" ]; then
@@ -2709,7 +2701,6 @@ check_already_installed() {
         "INSTALL_GROK|Grok|command_exists grok"
         "INSTALL_GEMINI|Gemini CLI|command_exists gemini"
         "INSTALL_QWEN|Qwen CLI|command_exists qwen"
-        "INSTALL_GLM|GLM Code (z.ai)|command_exists chelper"
         "INSTALL_OPENCODE|GLM With OpenCode|command_exists opencode"
         "INSTALL_GH|GitHub CLI|command_exists gh"
         "INSTALL_POSTMAN|Postman|command_exists postman || snap list postman 2>/dev/null | grep -q postman"
@@ -2790,7 +2781,6 @@ run_installations() {
         $AICLI_SUB_GROK   && INSTALL_GROK=true
         $AICLI_SUB_GEMINI && INSTALL_GEMINI=true
         $AICLI_SUB_QWEN   && INSTALL_QWEN=true
-        $AICLI_SUB_GLM    && INSTALL_GLM=true
         $AICLI_SUB_OPENCODE && INSTALL_OPENCODE=true
     fi
 
@@ -2832,7 +2822,6 @@ run_installations() {
     if $INSTALL_GROK; then install_grok || handle_error "Grok installation failed"; fi
     if $INSTALL_GEMINI; then install_gemini || handle_error "Gemini CLI installation failed"; fi
     if $INSTALL_QWEN; then install_qwen || handle_error "Qwen CLI installation failed"; fi
-    if $INSTALL_GLM; then install_glm || handle_error "GLM Code installation failed"; fi
     if $INSTALL_OPENCODE; then install_glm_opencode || handle_error "GLM With OpenCode installation failed"; fi
     if $INSTALL_JTOP; then install_jtop || handle_error "jtop installation failed"; fi
     if $INSTALL_GH; then install_gh || handle_error "GitHub CLI installation failed"; fi
@@ -3436,29 +3425,6 @@ install_qwen() {
             log_success "Qwen Code CLI installed successfully (run: qwen)"
         else
             log_warning "Qwen CLI installation skipped after 3 failed attempts"
-        fi
-    fi
-}
-
-install_glm() {
-    log_step "Installing GLM Code helper (z.ai)"
-
-    if ! command_exists npm; then
-        log_info "GLM Code requires Node.js. Installing NVM + Node.js first..."
-        install_nvm_nodejs
-    fi
-
-    export NVM_DIR="$HOME/.nvm"
-    [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh" 2>/dev/null || true
-
-    if command_exists chelper; then
-        log_warning "GLM Code helper already installed, skipping..."
-    else
-        if retry_npm_install @z_ai/coding-helper; then
-            log_success "GLM Code helper installed (run: chelper)"
-            log_info "  Subscribe + get API key: https://z.ai/subscribe"
-        else
-            log_warning "GLM Code installation skipped after 3 failed attempts"
         fi
     fi
 }
@@ -6351,7 +6317,6 @@ print_summary() {
     show_selected $INSTALL_GROK   "Grok"        "$(command_exists grok && echo true || echo false)"
     show_selected $INSTALL_GEMINI "Gemini CLI"  "$(command_exists gemini && echo true || echo false)"
     show_selected $INSTALL_QWEN   "Qwen CLI"    "$(command_exists qwen && echo true || echo false)"
-    show_selected $INSTALL_GLM    "GLM Code"    "$(command_exists chelper && echo true || echo false)"
     show_selected $INSTALL_OPENCODE "GLM With OpenCode" "$(command_exists opencode && echo true || echo false)"
 
     # Git & GitHub CLI

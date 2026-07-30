@@ -79,7 +79,6 @@ Grouped under **AI CLI Tools** in the interactive menu, or install directly:
 | `--grok` | **Grok** — xAI CLI |
 | `--gemini` | **Gemini CLI** — Google |
 | `--qwen` | **Qwen Code** — Alibaba |
-| `--glm` | **GLM Code** — z.ai coding helper (`chelper`) |
 | `--glm-opencode` | **GLM With OpenCode** — OpenCode agent pre-configured for z.ai **GLM-5.2** |
 
 > **GLM With OpenCode** installs [OpenCode](https://opencode.ai) and writes `~/.config/opencode/opencode.json` with z.ai **GLM-5.2** as the default model. Set your key with `export ZAI_API_KEY=<key>` (get one at https://z.ai/subscribe), then run `opencode`.

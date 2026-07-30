@@ -16,7 +16,7 @@
 #===============================================================================
 
 SCRIPT_VERSION="2.5.0"
-SCRIPT_REVISION="153"
+SCRIPT_REVISION="154"
 SCRIPT_DATE="2026-03-27"
 
 # NOTE: We intentionally do NOT use set -e here.
@@ -1040,7 +1040,7 @@ show_gnome_submenu() {
     TWEAK_NAMES+=("Disable Wayland");   TWEAK_DESCS+=("Switch to X11 (VNC/RDP compatibility)");                TWEAK_KEYS+=("GNOME_SUB_WAYLAND")
     TWEAK_NAMES+=("OpenSSH Server");    TWEAK_DESCS+=("Install + auto-start SSH server (port 22)");            TWEAK_KEYS+=("GNOME_SUB_SSH")
     TWEAK_NAMES+=("Change Hostname");   TWEAK_DESCS+=("Set computer's hostname (asked before install starts)"); TWEAK_KEYS+=("GNOME_SUB_HOSTNAME")
-    TWEAK_NAMES+=("CLI Aliases");       TWEAK_DESCS+=("Bash aliases (claude-skip, codex-skip, etc.)");         TWEAK_KEYS+=("GNOME_SUB_ALIASES")
+    TWEAK_NAMES+=("CLI Aliases");       TWEAK_DESCS+=("Bash aliases + cckimi/ccglm (Kimi/GLM Claude backends)");  TWEAK_KEYS+=("GNOME_SUB_ALIASES")
     TWEAK_NAMES+=("English Language");  TWEAK_DESCS+=("Set system language to English (US)");                   TWEAK_KEYS+=("GNOME_SUB_ENGLISH")
     TWEAK_NAMES+=("Screen Off: Never"); TWEAK_DESCS+=("Disable screen timeout + auto suspend");                TWEAK_KEYS+=("GNOME_SUB_SCREEN")
     TWEAK_NAMES+=("Show Hidden Files"); TWEAK_DESCS+=("Show hidden files in file manager");                    TWEAK_KEYS+=("GNOME_SUB_HIDDEN")
@@ -5182,6 +5182,86 @@ setup_cli_shortcuts() {
         if $_claude_avail; then
             echo "alias claude-skip='claude --dangerously-skip-permissions --effort max'"
             echo "alias ccskip='claude --dangerously-skip-permissions --effort max'"
+            # Claude Code on alternate backends (Kimi / Z.AI GLM) + secure token setters.
+            # Single-quoted heredoc: $VARS are written literally for runtime expansion.
+            cat <<'CCFUNCS'
+
+# cckimi -> runs Claude Code on the Kimi backend (token lives in ~/.kimi_token, chmod 600)
+cckimi() {
+    local token_file="$HOME/.kimi_token"
+    local token
+    if [ ! -r "$token_file" ]; then
+        printf 'cckimi: token file not found or unreadable: %s\n' "$token_file" >&2
+        return 1
+    fi
+    token="$(tr -d '[:space:]' < "$token_file")"
+    if [ -z "$token" ]; then
+        printf 'cckimi: token file is empty: %s\n' "$token_file" >&2
+        return 1
+    fi
+    ANTHROPIC_BASE_URL="https://api.kimi.com/coding/" \
+    ANTHROPIC_AUTH_TOKEN="$token" \
+    ANTHROPIC_MODEL="kimi-k3[1m]" \
+    ANTHROPIC_DEFAULT_OPUS_MODEL="kimi-k3[1m]" \
+    ANTHROPIC_DEFAULT_SONNET_MODEL="kimi-k3[1m]" \
+    ANTHROPIC_DEFAULT_HAIKU_MODEL="kimi-k3[1m]" \
+    ANTHROPIC_DEFAULT_FABLE_MODEL="kimi-k3[1m]" \
+    CLAUDE_CODE_SUBAGENT_MODEL="kimi-k3[1m]" \
+    ENABLE_TOOL_SEARCH="false" \
+    CLAUDE_CODE_AUTO_COMPACT_WINDOW="1048576" \
+    CLAUDE_CODE_EFFORT_LEVEL="max" \
+    command claude --dangerously-skip-permissions --effort max "$@"
+}
+
+# ccglm -> runs Claude Code on the Z.AI GLM backend (token lives in ~/.zai_token, chmod 600)
+ccglm() {
+    local token_file="$HOME/.zai_token"
+    local token
+    if [ ! -r "$token_file" ]; then
+        printf 'ccglm: token file not found or unreadable: %s\n' "$token_file" >&2
+        return 1
+    fi
+    token="$(tr -d '[:space:]' < "$token_file")"
+    if [ -z "$token" ]; then
+        printf 'ccglm: token file is empty. Write your Z.AI API key into it:\n' >&2
+        printf "  printf '%%s\\\\n' 'your_zai_api_key' > %s\n" "$token_file" >&2
+        return 1
+    fi
+    ANTHROPIC_BASE_URL="https://api.z.ai/api/anthropic" \
+    ANTHROPIC_AUTH_TOKEN="$token" \
+    ANTHROPIC_MODEL="glm-5.2[1m]" \
+    ANTHROPIC_DEFAULT_OPUS_MODEL="glm-5.2[1m]" \
+    ANTHROPIC_DEFAULT_SONNET_MODEL="glm-5.2[1m]" \
+    ANTHROPIC_DEFAULT_HAIKU_MODEL="glm-5.2[1m]" \
+    ANTHROPIC_DEFAULT_FABLE_MODEL="glm-5.2[1m]" \
+    CLAUDE_CODE_SUBAGENT_MODEL="glm-5.2[1m]" \
+    CLAUDE_CODE_AUTO_COMPACT_WINDOW="1000000" \
+    CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC="1" \
+    API_TIMEOUT_MS="3000000" \
+    command claude --dangerously-skip-permissions "$@"
+}
+
+# __cc_set_token <label> <token_file> [key] -- shared writer for the cc*-token helpers
+__cc_set_token() {
+    local label="$1" token_file="$2" key="$3"
+    if [ -z "$key" ]; then
+        read -r -p "$label - paste API key: " key
+    fi
+    key="$(printf '%s' "$key" | tr -d '[:space:]')"
+    if [ -z "$key" ]; then
+        printf '%s: no key given, %s left unchanged\n' "$label" "$token_file" >&2
+        return 1
+    fi
+    ( umask 177; printf '%s\n' "$key" > "$token_file" ) || return 1
+    chmod 600 "$token_file"
+    printf '%s: key written to %s (%d chars, mode %s). Verify with: %s -p "ok"\n' \
+        "$label" "$token_file" "${#key}" \
+        "$(stat -c '%a' "$token_file" 2>/dev/null || echo '600')" "$label"
+}
+
+cckimi-token() { __cc_set_token cckimi "$HOME/.kimi_token" "$1"; }
+ccglm-token() { __cc_set_token ccglm "$HOME/.zai_token" "$1"; }
+CCFUNCS
         fi
         if $_codex_avail; then
             echo "alias codex-skip='codex --sandbox danger-full-access -c model_reasoning_effort=\"xhigh\"'"
@@ -5191,7 +5271,7 @@ setup_cli_shortcuts() {
     } >> "$bashrc"
 
     local _alias_list=""
-    if $_claude_avail; then _alias_list+="claude-skip, ccskip"; fi
+    if $_claude_avail; then _alias_list+="claude-skip, ccskip, cckimi, ccglm"; fi
     if $_codex_avail; then
         [ -n "$_alias_list" ] && _alias_list+=", "
         _alias_list+="codex-skip, cxskip"
@@ -5760,8 +5840,9 @@ debloat_system() {
                 for rcfile in "$HOME/.bashrc" "$HOME/.zshrc" "$HOME/.profile"; do
                     [ -f "$rcfile" ] && sed -i '/\.claude\/bin/d; /# Added by Claude/d' "$rcfile" 2>/dev/null
                 done
-                # 2) Bash aliases (claude-skip, ccskip)
+                # 2) Bash aliases (claude-skip, ccskip) + cc backend helpers (cckimi/ccglm)
                 sed -i '/^alias claude-skip=/d; /^alias ccskip=/d' "$HOME/.bashrc" 2>/dev/null
+                sed -i '/^# cckimi ->/,/^}/d; /^# ccglm ->/,/^}/d; /^# __cc_set_token/,/^}/d; /^cckimi-token()/d; /^ccglm-token()/d' "$HOME/.bashrc" 2>/dev/null
                 # 3) VS Code extension
                 if command_exists code; then
                     code --uninstall-extension anthropic.claude-code 2>/dev/null || true

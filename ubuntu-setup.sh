@@ -16,7 +16,7 @@
 #===============================================================================
 
 SCRIPT_VERSION="2.5.0"
-SCRIPT_REVISION="155"
+SCRIPT_REVISION="156"
 SCRIPT_DATE="2026-03-27"
 
 # NOTE: We intentionally do NOT use set -e here.
@@ -5215,14 +5215,18 @@ setup_cli_shortcuts() {
 cckimi() {
     local token_file="$HOME/.kimi_token"
     local token
-    if [ ! -r "$token_file" ]; then
-        printf 'cckimi: token file not found or unreadable: %s\n' "$token_file" >&2
-        return 1
-    fi
-    token="$(tr -d '[:space:]' < "$token_file")"
+    token="$([ -r "$token_file" ] && tr -d '[:space:]' < "$token_file")"
     if [ -z "$token" ]; then
-        printf 'cckimi: token file is empty: %s\n' "$token_file" >&2
-        return 1
+        printf 'cckimi: no API key found. Enter your Kimi API key and press Enter: ' >&2
+        IFS= read -rs token < /dev/tty
+        printf '\n' >&2
+        token="$(printf '%s' "$token" | tr -d '[:space:]')"
+        if [ -z "$token" ]; then
+            printf 'cckimi: no key entered, aborting.\n' >&2
+            return 1
+        fi
+        ( umask 177; printf '%s\n' "$token" > "$token_file" ) && chmod 600 "$token_file"
+        printf 'cckimi: key saved to %s (mode 600).\n' "$token_file" >&2
     fi
     ANTHROPIC_BASE_URL="https://api.kimi.com/coding/" \
     ANTHROPIC_AUTH_TOKEN="$token" \
@@ -5242,15 +5246,18 @@ cckimi() {
 ccglm() {
     local token_file="$HOME/.zai_token"
     local token
-    if [ ! -r "$token_file" ]; then
-        printf 'ccglm: token file not found or unreadable: %s\n' "$token_file" >&2
-        return 1
-    fi
-    token="$(tr -d '[:space:]' < "$token_file")"
+    token="$([ -r "$token_file" ] && tr -d '[:space:]' < "$token_file")"
     if [ -z "$token" ]; then
-        printf 'ccglm: token file is empty. Write your Z.AI API key into it:\n' >&2
-        printf "  printf '%%s\\\\n' 'your_zai_api_key' > %s\n" "$token_file" >&2
-        return 1
+        printf 'ccglm: no API key found. Enter your Z.AI API key and press Enter: ' >&2
+        IFS= read -rs token < /dev/tty
+        printf '\n' >&2
+        token="$(printf '%s' "$token" | tr -d '[:space:]')"
+        if [ -z "$token" ]; then
+            printf 'ccglm: no key entered, aborting.\n' >&2
+            return 1
+        fi
+        ( umask 177; printf '%s\n' "$token" > "$token_file" ) && chmod 600 "$token_file"
+        printf 'ccglm: key saved to %s (mode 600).\n' "$token_file" >&2
     fi
     ANTHROPIC_BASE_URL="https://api.z.ai/api/anthropic" \
     ANTHROPIC_AUTH_TOKEN="$token" \

@@ -16,7 +16,7 @@
 #===============================================================================
 
 SCRIPT_VERSION="2.5.0"
-SCRIPT_REVISION="158"
+SCRIPT_REVISION="159"
 SCRIPT_DATE="2026-03-27"
 
 # NOTE: We intentionally do NOT use set -e here.
@@ -54,6 +54,7 @@ INSTALL_JTOP=false
 INSTALL_GH=false
 INSTALL_POSTMAN=false
 INSTALL_FILEZILLA=false
+INSTALL_LOCALSEND=false
 DO_CLI_LOGIN=false
 DO_REMOVE_FIREFOX=false
 DO_DEBLOAT=false
@@ -140,6 +141,9 @@ for arg in "$@"; do
         --filezilla)
             INSTALL_FILEZILLA=true
             ;;
+        --localsend)
+            INSTALL_LOCALSEND=true
+            ;;
         --login)
             DO_CLI_LOGIN=true
             ;;
@@ -195,6 +199,7 @@ if $INSTALL_ALL; then
     INSTALL_GH=true
     INSTALL_POSTMAN=true
     INSTALL_FILEZILLA=true
+    INSTALL_LOCALSEND=true
     DO_REMOVE_FIREFOX=true
 fi
 
@@ -1435,6 +1440,10 @@ show_debloat_submenu() {
     if dpkg -l filezilla 2>/dev/null | grep -q "^ii"; then
         BLOAT_NAMES+=("FileZilla");            BLOAT_DESCS+=("Remove FileZilla (FTP/SFTP client)");             BLOAT_PKGS+=("filezilla")
     fi
+    # LocalSend
+    if dpkg -l localsend 2>/dev/null | grep -q "^ii"; then
+        BLOAT_NAMES+=("LocalSend");            BLOAT_DESCS+=("Remove LocalSend (local file sharing)");          BLOAT_PKGS+=("localsend")
+    fi
     # Firefox (APT deb, including xtradeb PPA version)
     if dpkg -l firefox 2>/dev/null | grep -q "^ii"; then
         BLOAT_NAMES+=("Firefox");              BLOAT_DESCS+=("Remove Firefox APT (deb / xtradeb PPA)");           BLOAT_PKGS+=("firefox")
@@ -1512,6 +1521,7 @@ show_debloat_submenu() {
         "Docker Engine|Docker Engine + Compose plugin|docker-ce docker-ce-cli containerd.io docker-compose-plugin docker-buildx-plugin|docker-ce"
         "GitHub CLI (gh)|GitHub CLI (gh)|gh|gh"
         "FileZilla|FileZilla (FTP/SFTP client)|filezilla|filezilla"
+        "LocalSend|LocalSend (local file sharing)|localsend|localsend"
         "Firefox|Firefox APT (deb / xtradeb PPA)|firefox|firefox"
     )
     local _ga _gan _gad _gap _gadet
@@ -1705,6 +1715,7 @@ show_interactive_install_menu() {
     APP_NAMES+=("Git & GitHub CLI"); APP_DESCS+=("Git + GitHub CLI (gh)");               APP_VARS+=("INSTALL_GH")
     APP_NAMES+=("Postman");     APP_DESCS+=("Postman (API Testing Tool)");             APP_VARS+=("INSTALL_POSTMAN")
     APP_NAMES+=("FileZilla");   APP_DESCS+=("FileZilla (FTP/SFTP Client)");            APP_VARS+=("INSTALL_FILEZILLA")
+    APP_NAMES+=("LocalSend");   APP_DESCS+=("LocalSend (local network file sharing)"); APP_VARS+=("INSTALL_LOCALSEND")
     APP_NAMES+=("Debloat");     APP_DESCS+=("Debloat (Enter to expand sub-menu)");    APP_VARS+=("DO_DEBLOAT")
 
     # ARM Fix - only on Jetson devices (other ARM devices don't need snapd fix)
@@ -1755,7 +1766,7 @@ show_interactive_install_menu() {
                 gnome-todo remmina cups xterm gnome-font-viewer gucharmap \
                 gnome-characters gnome-calendar gnome-calculator vim \
                 gnome-power-manager code google-chrome-stable chromium python3-pip \
-                dbeaver-ce vlc cloudflared docker-ce gh filezilla firefox \
+                dbeaver-ce vlc cloudflared docker-ce gh filezilla localsend firefox \
                 rustdesk anydesk teamviewer; do
         _db_total=$((_db_total + 1))
         dpkg -l "$_dbp" 2>/dev/null | grep -q "^ii" || _db_gone=$((_db_gone + 1))
@@ -1783,6 +1794,7 @@ show_interactive_install_menu() {
             INSTALL_GH)         command_exists gh 2>/dev/null && ITEM_MARK[$_mi]="installed" ;;
             INSTALL_POSTMAN)    { command_exists postman || snap list postman 2>/dev/null | grep -q postman; } 2>/dev/null && ITEM_MARK[$_mi]="installed" ;;
             INSTALL_FILEZILLA)  command_exists filezilla 2>/dev/null && ITEM_MARK[$_mi]="installed" ;;
+            INSTALL_LOCALSEND)  dpkg -l localsend 2>/dev/null | grep -q "^ii" && ITEM_MARK[$_mi]="installed" ;;
             INSTALL_JTOP)       command_exists jtop 2>/dev/null && ITEM_MARK[$_mi]="installed" ;;
         esac
     done
@@ -2667,6 +2679,7 @@ menu_system_info() {
     command_exists gh && echo -e "  ${GREEN}✓${NC} GitHub CLI"
     (command_exists postman || snap list postman 2>/dev/null | grep -q postman) && echo -e "  ${GREEN}✓${NC} Postman"
     command_exists filezilla && echo -e "  ${GREEN}✓${NC} FileZilla"
+    dpkg -l localsend 2>/dev/null | grep -q "^ii" && echo -e "  ${GREEN}✓${NC} LocalSend"
     command_exists firefox && echo -e "  ${GREEN}✓${NC} Firefox"
 
     echo ""
@@ -2705,6 +2718,7 @@ check_already_installed() {
         "INSTALL_GH|GitHub CLI|command_exists gh"
         "INSTALL_POSTMAN|Postman|command_exists postman || snap list postman 2>/dev/null | grep -q postman"
         "INSTALL_FILEZILLA|FileZilla|command_exists filezilla"
+        "INSTALL_LOCALSEND|LocalSend|dpkg -l localsend 2>/dev/null | grep -q '^ii'"
     )
 
     local found_any=false
@@ -2827,6 +2841,7 @@ run_installations() {
     if $INSTALL_GH; then install_gh || handle_error "GitHub CLI installation failed"; fi
     if $INSTALL_POSTMAN; then install_postman || handle_error "Postman installation failed"; fi
     if $INSTALL_FILEZILLA; then install_filezilla || handle_error "FileZilla installation failed"; fi
+    if $INSTALL_LOCALSEND; then install_localsend || handle_error "LocalSend installation failed"; fi
     if $INSTALL_RUSTDESK; then install_rustdesk || handle_error "RustDesk installation failed"; fi
     if $INSTALL_ANYDESK; then install_anydesk || handle_error "AnyDesk installation failed"; fi
     if $INSTALL_TEAMVIEWER; then install_teamviewer || handle_error "TeamViewer installation failed"; fi
@@ -3573,6 +3588,59 @@ install_filezilla() {
         log_success "FileZilla installed successfully"
     else
         log_warning "FileZilla installation failed"
+        return 1
+    fi
+}
+
+#===============================================================================
+# LocalSend Installation (via GitHub .deb release)
+#===============================================================================
+install_localsend() {
+    log_step "Installing LocalSend"
+
+    if dpkg -l localsend 2>/dev/null | grep -q "^ii"; then
+        log_warning "LocalSend already installed, skipping..."
+        return 0
+    fi
+
+    log_info "Installing LocalSend..."
+
+    local temp_file="/tmp/localsend.deb"
+    local arch_suffix="" fallback_ver="1.17.0"
+
+    if [ "$DEB_ARCH" == "amd64" ]; then
+        arch_suffix="x86-64"
+    else
+        arch_suffix="arm-64"
+    fi
+
+    # Latest version from GitHub API (tag "v1.17.0" -> "1.17.0")
+    local latest_tag latest_ver
+    latest_tag=$(curl -fsSL -m 10 https://api.github.com/repos/localsend/localsend/releases/latest 2>/dev/null | grep -oP '"tag_name":\s*"\K[^"]+')
+    latest_ver="${latest_tag#v}"
+    [ -z "$latest_ver" ] && latest_ver="$fallback_ver"
+
+    local download_url="https://github.com/localsend/localsend/releases/download/v${latest_ver}/LocalSend-${latest_ver}-linux-${arch_suffix}.deb"
+    log_info "Downloading LocalSend ${latest_ver} (${arch_suffix})..."
+
+    if ! retry_curl_download "$download_url" "$temp_file" "Downloading LocalSend"; then
+        download_url="https://github.com/localsend/localsend/releases/download/v${fallback_ver}/LocalSend-${fallback_ver}-linux-${arch_suffix}.deb"
+        retry_curl_download "$download_url" "$temp_file" "Downloading LocalSend (fallback)"
+    fi
+
+    if [ ! -f "$temp_file" ]; then
+        log_warning "LocalSend download failed after 3 attempts"
+        return 1
+    fi
+
+    log_info "Installing LocalSend deb package..."
+    sudo DEBIAN_FRONTEND=noninteractive apt-get install -y "$temp_file"
+    rm -f "$temp_file"
+
+    if dpkg -l localsend 2>/dev/null | grep -q "^ii"; then
+        log_success "LocalSend installed successfully"
+    else
+        log_warning "LocalSend installation may have failed"
         return 1
     fi
 }
@@ -6302,6 +6370,7 @@ print_summary() {
 
     # FileZilla
     show_selected $INSTALL_FILEZILLA "FileZilla" "$(command_exists filezilla && echo true || echo false)"
+    show_selected $INSTALL_LOCALSEND "LocalSend" "$(dpkg -l localsend 2>/dev/null | grep -q '^ii' && echo true || echo false)"
 
     # Debloat
     if $DO_DEBLOAT; then
@@ -6518,7 +6587,7 @@ main() {
     if $INSTALL_VNC || $INSTALL_NODEJS || $INSTALL_CHROME || \
        $INSTALL_VSCODE || $INSTALL_PYTHON || $INSTALL_GNOME || \
        $INSTALL_DBEAVER || $INSTALL_VLC || $INSTALL_CLOUDFLARED || $INSTALL_DOCKER || \
-       $INSTALL_CLAUDE || $INSTALL_GH || $INSTALL_POSTMAN || $INSTALL_FILEZILLA || \
+       $INSTALL_CLAUDE || $INSTALL_GH || $INSTALL_POSTMAN || $INSTALL_FILEZILLA || $INSTALL_LOCALSEND || \
        $INSTALL_RUSTDESK || $INSTALL_ANYDESK || $INSTALL_TEAMVIEWER || \
        $DO_CLI_LOGIN || $DO_REMOVE_FIREFOX || $APPLY_JETSON_FIX || $DO_DEBLOAT; then
         has_install=true

@@ -61,6 +61,7 @@ Everything below is reachable through the interactive menu (`--menu`) or directl
 | `--gh` | GitHub CLI (`gh`) |
 | `--postman` | Postman |
 | `--filezilla` | FileZilla (FTP/SFTP client) |
+| `--localsend` | LocalSend (local-network file sharing) |
 | `--gnome` | GNOME desktop tweaks + extensions (submenu) |
 | `--debloat` | Remove pre-installed bloat (submenu) |
 | `--remove-firefox` | Remove Firefox Snap |
@@ -137,7 +138,7 @@ Remove pre-installed games, apps and stacks you don't need — 50+ selectable it
 - **Apps:** LibreOffice, Thunderbird, Remmina, GNOME To Do, Transmission, Shotwell, Document Scanner (Simple Scan), Rhythmbox, Totem (Videos), Cheese, Power Statistics, Calendar, Calculator, Fonts, Characters (gucharmap / GNOME Characters), XTerm, Vim
 - **Stacks:** Printer stack (CUPS + HPLIP, ~200 MB), Extensions stack, Script Launcher extension
 - **Remote:** RealVNC, AnyDesk, RustDesk, TeamViewer, RDP server (xrdp)
-- **Dev tools:** Claude Code CLI, Codex CLI, VS Code, Node.js (NVM), Python pip, DBeaver, Docker, GitHub CLI, Postman, FileZilla, jtop
+- **Dev tools:** Claude Code CLI, Codex CLI, VS Code, Node.js (NVM), Python pip, DBeaver, Docker, GitHub CLI, Postman, FileZilla, LocalSend, jtop
 - **Browsers:** Google Chrome, Chromium (apt + snap), Firefox (APT / ESR), Firefox Snap
 - **System:** Language packs, extra XKB keyboard layouts, virtual screen config, GDM auto-login, Apport, individual snaps, or **remove snap completely** (snaps + snapd + `/snap`, ~300 MB)
 

@@ -16,7 +16,7 @@
 #===============================================================================
 
 SCRIPT_VERSION="2.5.0"
-SCRIPT_REVISION="160"
+SCRIPT_REVISION="161"
 SCRIPT_DATE="2026-03-27"
 
 # NOTE: We intentionally do NOT use set -e here.
@@ -521,7 +521,7 @@ GNOME_SUB_SCRIPT=false; GNOME_SUB_WAYLAND=false; GNOME_SUB_SSH=false
 GNOME_SUB_ALIASES=false; GNOME_SUB_ENGLISH=false
 GNOME_SUB_SCREEN=false; GNOME_SUB_HIDDEN=false; GNOME_SUB_KB_TR=false; GNOME_SUB_KB_EN=false
 GNOME_SUB_VSCREEN=false; GNOME_SUB_AUTOLOGIN=false; GNOME_SUB_HOSTNAME=false
-GNOME_SUB_NO_IBUS=false; GNOME_SUB_APPORT=false; GNOME_SUB_CHEESE=false; GNOME_SUB_CLEANUP2Y=false
+GNOME_SUB_NO_IBUS=false; GNOME_SUB_APPORT=false; GNOME_SUB_CHEESE=false; GNOME_SUB_CLEANUP2Y=false; GNOME_SUB_NODE_SWITCH=false
 # Hostname value collected before install starts (when Tweaks + Change Hostname selected)
 NEW_HOSTNAME=""
 
@@ -535,6 +535,7 @@ gnome_tweak_applied() {
         GNOME_SUB_TWEAKS_APP) package_installed gnome-tweaks ;;
         GNOME_SUB_SCRIPT)     [ -d "$HOME/.local/share/gnome-shell/extensions/script-launcher@enginyilmaaz" ] ;;
         GNOME_SUB_WAYLAND)    grep -q "^WaylandEnable=false" /etc/gdm3/custom.conf 2>/dev/null ;;
+        GNOME_SUB_NODE_SWITCH) false ;;
         GNOME_SUB_SSH)        systemctl is-active ssh &>/dev/null ;;
         GNOME_SUB_ALIASES)    grep -q "^# BEGIN smai-aliases" "$HOME/.bashrc" 2>/dev/null ;;
         GNOME_SUB_SCREEN)     [ "$(gsettings get org.gnome.desktop.session idle-delay 2>/dev/null)" = "uint32 0" ] ;;
@@ -1037,6 +1038,11 @@ show_gnome_submenu() {
     TWEAK_NAMES+=("Dash to Dock");      TWEAK_DESCS+=("Dock settings, single workspace, performance mode");    TWEAK_KEYS+=("GNOME_SUB_DOCK")
     TWEAK_NAMES+=("Script Launcher");   TWEAK_DESCS+=("Right-click context menu (Claude, Codex, VS Code)");    TWEAK_KEYS+=("GNOME_SUB_SCRIPT")
     TWEAK_NAMES+=("Disable Wayland");   TWEAK_DESCS+=("Switch to X11 (VNC/RDP compatibility)");                TWEAK_KEYS+=("GNOME_SUB_WAYLAND")
+    # Node.js switch — only shown if Node.js is installed; label/action depend on current kind
+    case "$(nodejs_kind)" in
+        native) TWEAK_NAMES+=("Node.js: switch to NVM");    TWEAK_DESCS+=("Remove native Node.js (+NodeSource apt), install NVM + Node.js 22"); TWEAK_KEYS+=("GNOME_SUB_NODE_SWITCH") ;;
+        nvm)    TWEAK_NAMES+=("Node.js: switch to native"); TWEAK_DESCS+=("Remove NVM, install native Node.js (NodeSource apt, LTS)");            TWEAK_KEYS+=("GNOME_SUB_NODE_SWITCH") ;;
+    esac
     TWEAK_NAMES+=("OpenSSH Server");    TWEAK_DESCS+=("Install + auto-start SSH server (port 22)");            TWEAK_KEYS+=("GNOME_SUB_SSH")
     TWEAK_NAMES+=("Change Hostname");   TWEAK_DESCS+=("Set computer's hostname (asked before install starts)"); TWEAK_KEYS+=("GNOME_SUB_HOSTNAME")
     TWEAK_NAMES+=("CLI Aliases");       TWEAK_DESCS+=("Bash aliases + cckimi/ccglm (Kimi/GLM Claude backends)");  TWEAK_KEYS+=("GNOME_SUB_ALIASES")
@@ -1780,7 +1786,7 @@ show_interactive_install_menu() {
         ITEM_MARK+=("")
         case "${APP_VARS[$_mi]}" in
             INSTALL_REMOTE)     ITEM_MARK[$_mi]="$(group_marker "$_rm_inst" "$_rm_total" "installed")" ;;
-            INSTALL_NODEJS)     { [ -d "$HOME/.nvm" ] && command_exists node; } 2>/dev/null && ITEM_MARK[$_mi]="installed" ;;
+            INSTALL_NODEJS)     case "$(nodejs_kind)" in nvm) ITEM_MARK[$_mi]="installed (NVM)" ;; native) ITEM_MARK[$_mi]="installed (native)" ;; esac ;;
             INSTALL_CHROME)     { command_exists google-chrome || command_exists google-chrome-stable || command_exists chromium-browser || command_exists chromium; } 2>/dev/null && ITEM_MARK[$_mi]="installed" ;;
             INSTALL_VSCODE)     command_exists code 2>/dev/null && ITEM_MARK[$_mi]="installed" ;;
             INSTALL_PYTHON)     command_exists python3 2>/dev/null && ITEM_MARK[$_mi]="installed" ;;
@@ -1886,6 +1892,7 @@ show_interactive_install_menu() {
                         $GNOME_SUB_DOCK && _tw+="Dock,"
                         $GNOME_SUB_SCRIPT && _tw+="Script,"
                         $GNOME_SUB_WAYLAND && _tw+="Wayland,"
+                        $GNOME_SUB_NODE_SWITCH && _tw+="NodeSwitch,"
                         $GNOME_SUB_SSH && _tw+="SSH,"
                         $GNOME_SUB_ALIASES && _tw+="Aliases,"
                         $GNOME_SUB_SCREEN && _tw+="Screen,"
@@ -2099,6 +2106,7 @@ show_interactive_install_menu() {
                                 $GNOME_SUB_DOCK        && tweaks_list+="Dash to Dock, "
                                 $GNOME_SUB_SCRIPT      && tweaks_list+="Script Launcher, "
                                 $GNOME_SUB_WAYLAND     && tweaks_list+="Disable Wayland, "
+                                $GNOME_SUB_NODE_SWITCH && tweaks_list+="Node.js switch, "
                                 $GNOME_SUB_SSH         && tweaks_list+="OpenSSH Server, "
                                 $GNOME_SUB_ALIASES     && tweaks_list+="CLI Aliases, "
                                 $GNOME_SUB_ENGLISH     && tweaks_list+="English Language, "
@@ -3309,6 +3317,83 @@ install_nvm_nodejs() {
 }
 
 #===============================================================================
+# Node.js: kind detection + NVM <-> native switch helpers
+#===============================================================================
+# Detect how Node.js is installed: prints "nvm" | "native" | "none".
+nodejs_kind() {
+    if [ -d "$HOME/.nvm/versions/node" ] && [ -n "$(ls -A "$HOME/.nvm/versions/node" 2>/dev/null)" ]; then
+        echo "nvm"; return
+    fi
+    if dpkg -l nodejs 2>/dev/null | grep -q "^ii" || [ -x /usr/bin/node ] || [ -x /usr/local/bin/node ]; then
+        echo "native"; return
+    fi
+    echo "none"
+}
+
+# Remove native (apt/NodeSource) Node.js + its apt source list.
+remove_native_nodejs() {
+    log_info "Removing native Node.js (apt)..."
+    sudo apt-get remove -y nodejs npm 2>/dev/null || true
+    sudo apt-get purge  -y nodejs 2>/dev/null || true
+    sudo rm -f /etc/apt/sources.list.d/nodesource.list /etc/apt/keyrings/nodesource.gpg 2>/dev/null || true
+    sudo apt-get autoremove -y 2>/dev/null || true
+    sudo apt-get update 2>/dev/null || true
+    log_success "Native Node.js removed"
+}
+
+# Remove NVM (and its Node versions) + shell rc lines.
+remove_nvm() {
+    log_info "Removing NVM..."
+    rm -rf "$HOME/.nvm" 2>/dev/null
+    for rcfile in "$HOME/.bashrc" "$HOME/.zshrc" "$HOME/.profile"; do
+        [ -f "$rcfile" ] && sed -i '/NVM_DIR/d; /nvm.sh/d; /bash_completion/d' "$rcfile" 2>/dev/null
+    done
+    log_success "NVM removed (~/.nvm deleted)"
+}
+
+# Install native Node.js via the NodeSource apt repo (current LTS).
+install_native_nodejs() {
+    log_step "Installing native Node.js (NodeSource apt repo)"
+    if dpkg -l nodejs 2>/dev/null | grep -q "^ii"; then
+        log_warning "Native Node.js already installed ($(node -v 2>/dev/null)), skipping..."
+        return 0
+    fi
+    log_info "Adding NodeSource repository (Node.js 22 LTS)..."
+    if ! curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -; then
+        log_warning "NodeSource setup failed"
+        return 1
+    fi
+    if retry_apt_install nodejs; then
+        log_success "Native Node.js installed ($(node -v 2>/dev/null))"
+    else
+        log_warning "Native Node.js installation failed"
+        return 1
+    fi
+}
+
+# Switch Node.js between NVM and native (does the opposite of the current kind).
+switch_nodejs() {
+    local kind
+    kind="$(nodejs_kind)"
+    log_step "Switching Node.js (current: ${kind})"
+    case "$kind" in
+        native)
+            log_info "native -> NVM"
+            remove_native_nodejs
+            install_nvm_nodejs
+            ;;
+        nvm)
+            log_info "NVM -> native"
+            remove_nvm
+            install_native_nodejs
+            ;;
+        *)
+            log_warning "No Node.js detected; nothing to switch."
+            ;;
+    esac
+}
+
+#===============================================================================
 # Codex CLI Installation (requires Node.js)
 #===============================================================================
 install_codex() {
@@ -4350,6 +4435,11 @@ ACCOUNTSEOF
     # 9. Disable Wayland
     if $GNOME_SUB_WAYLAND; then
         disable_wayland
+    fi
+
+    # 9.5 Node.js switch (NVM <-> native)
+    if $GNOME_SUB_NODE_SWITCH; then
+        switch_nodejs
     fi
 
     # 10. OpenSSH Server
@@ -6281,6 +6371,7 @@ print_summary() {
         $GNOME_SUB_DOCK       && any_tweak=true
         $GNOME_SUB_SCRIPT     && any_tweak=true
         $GNOME_SUB_WAYLAND    && any_tweak=true
+        $GNOME_SUB_NODE_SWITCH && any_tweak=true
         $GNOME_SUB_SSH        && any_tweak=true
         $GNOME_SUB_ALIASES    && any_tweak=true
         $GNOME_SUB_ENGLISH    && any_tweak=true
@@ -6304,6 +6395,7 @@ print_summary() {
             $GNOME_SUB_DOCK       && echo -e "    ${GREEN}✓${NC} Dash to Dock"
             $GNOME_SUB_SCRIPT     && [ -d "$HOME/.local/share/gnome-shell/extensions/script-launcher@enginyilmaaz" ] && echo -e "    ${GREEN}✓${NC} Script Launcher"
             $GNOME_SUB_WAYLAND    && grep -q "^WaylandEnable=false" /etc/gdm3/custom.conf 2>/dev/null && echo -e "    ${GREEN}✓${NC} Wayland Disabled"
+            $GNOME_SUB_NODE_SWITCH && echo -e "    ${GREEN}✓${NC} Node.js switched (now: $(nodejs_kind))"
             $GNOME_SUB_SSH        && systemctl is-active ssh &>/dev/null                && echo -e "    ${GREEN}✓${NC} OpenSSH Server"
             $GNOME_SUB_ALIASES    && grep -q "^# BEGIN smai-aliases" "$HOME/.bashrc" 2>/dev/null && echo -e "    ${GREEN}✓${NC} CLI Aliases"
             $GNOME_SUB_ENGLISH    && echo -e "    ${GREEN}✓${NC} English Language"

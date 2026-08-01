@@ -50,7 +50,7 @@ Everything below is reachable through the interactive menu (`--menu`) or directl
 |------|----------|
 | `--all` | Install everything (non-interactive) |
 | `--menu` | Interactive menu to pick & choose |
-| `--nodejs` | Node.js (via NVM) |
+| `--nodejs` | Node.js 22 via NVM (NVM ⇄ native switch available in Tweaks) |
 | `--python` | Python 3 + pip + venv |
 | `--docker` | Docker Engine + Compose plugin |
 | `--chrome` | Google Chrome |
@@ -106,6 +106,7 @@ Grouped under **AI CLI Tools** in the interactive menu, or install directly:
 | Dash to Dock | Dock settings, single workspace, performance mode |
 | Script Launcher | Right-click context menu (Claude, Codex, VS Code) |
 | Disable Wayland | Switch to X11 (VNC/RDP compatibility) |
+| Node.js: switch NVM ⇄ native | Shown only when Node.js is installed — swaps between NVM and native (NodeSource apt) |
 | OpenSSH Server | Install + auto-start SSH server (port 22) |
 | Change Hostname | Set the computer's hostname |
 | CLI Aliases | Bash aliases (`claude-skip`, `codex-skip`, etc.) |

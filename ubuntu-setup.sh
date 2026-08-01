@@ -16,7 +16,7 @@
 #===============================================================================
 
 SCRIPT_VERSION="2.5.0"
-SCRIPT_REVISION="163"
+SCRIPT_REVISION="164"
 SCRIPT_DATE="2026-03-27"
 
 # NOTE: We intentionally do NOT use set -e here.
@@ -685,9 +685,8 @@ show_remote_submenu() {
     local rcursor=0
     tput civis 2>/dev/null || true
 
-    clear    # in-place redraw: full clear once, then cursor-home each frame
     while true; do
-        printf '\033[H'
+        clear
         echo -e "${CYAN}╔═══════════════════════════════════════════════════════════════════════════╗${NC}"
         echo -e "${CYAN}║                 ${GREEN}Remote Support Tools - Select Options${CYAN}                     ║${NC}"
         echo -e "${CYAN}╚═══════════════════════════════════════════════════════════════════════════╝${NC}"
@@ -723,9 +722,9 @@ show_remote_submenu() {
             [ "${RSELECTED[$ri]}" = "1" ] && { rcount=$((rcount+1)); rsel_names+="${R_NAMES[$ri]}, "; }
         done
         if [ $rcount -gt 0 ]; then
-            echo -e "  ${GREEN}Selected ($rcount):${NC} ${rsel_names%, }\033[K"
+            echo -e "  ${GREEN}Selected ($rcount):${NC} ${rsel_names%, }"
         else
-            echo -e "  ${YELLOW}Selected: None${NC}\033[K"
+            echo -e "  ${YELLOW}Selected: None${NC}"
         fi
         echo -e "${YELLOW}───────────────────────────────────────────────────────────────${NC}"
         echo ""
@@ -805,9 +804,8 @@ show_vscode_submenu() {
     local vcursor=0
     tput civis 2>/dev/null || true
 
-    clear    # in-place redraw: full clear once, then cursor-home each frame
     while true; do
-        printf '\033[H'
+        clear
         echo -e "${CYAN}╔═══════════════════════════════════════════════════════════════════════════╗${NC}"
         echo -e "${CYAN}║                 ${GREEN}VS Code - Extensions & Tweaks${CYAN}                             ║${NC}"
         echo -e "${CYAN}╚═══════════════════════════════════════════════════════════════════════════╝${NC}"
@@ -839,9 +837,9 @@ show_vscode_submenu() {
             [ "${VSELECTED[$vi]}" = "1" ] && { vcount=$((vcount+1)); vsel_names+="${V_NAMES[$vi]}, "; }
         done
         if [ $vcount -gt 0 ]; then
-            echo -e "  ${GREEN}Selected ($vcount):${NC} ${vsel_names%, }\033[K"
+            echo -e "  ${GREEN}Selected ($vcount):${NC} ${vsel_names%, }"
         else
-            echo -e "  ${YELLOW}Selected: None${NC}\033[K"
+            echo -e "  ${YELLOW}Selected: None${NC}"
         fi
         echo -e "${YELLOW}───────────────────────────────────────────────────────────────${NC}"
         echo ""
@@ -914,9 +912,8 @@ show_aicli_submenu() {
 
     tput civis 2>/dev/null || true
 
-    clear    # in-place redraw: full clear once, then cursor-home each frame
     while true; do
-        printf '\033[H'
+        clear
         echo -e "${CYAN}╔═══════════════════════════════════════════════════════════════════════════╗${NC}"
         echo -e "${CYAN}║                    ${GREEN}AI CLI Tools - Select Options${CYAN}                          ║${NC}"
         echo -e "${CYAN}╚═══════════════════════════════════════════════════════════════════════════╝${NC}"
@@ -962,9 +959,9 @@ show_aicli_submenu() {
 
         if [ $acount -gt 0 ]; then
             asel_names="${asel_names%, }"
-            echo -e "  ${GREEN}Selected ($acount):${NC} $asel_names\033[K"
+            echo -e "  ${GREEN}Selected ($acount):${NC} $asel_names"
         else
-            echo -e "  ${YELLOW}Selected: None${NC}\033[K"
+            echo -e "  ${YELLOW}Selected: None${NC}"
         fi
 
         echo -e "${YELLOW}───────────────────────────────────────────────────────────────${NC}"
@@ -1087,9 +1084,8 @@ show_gnome_submenu() {
 
     tput civis 2>/dev/null || true
 
-    clear    # in-place redraw: full clear once, then cursor-home each frame
     while true; do
-        printf '\033[H'
+        clear
         echo -e "${CYAN}╔═══════════════════════════════════════════════════════════════════════════╗${NC}"
         echo -e "${CYAN}║                    ${GREEN}GNOME Tweaks - Select Options${CYAN}                          ║${NC}"
         echo -e "${CYAN}╚═══════════════════════════════════════════════════════════════════════════╝${NC}"
@@ -1136,9 +1132,9 @@ show_gnome_submenu() {
 
         if [ $tcount -gt 0 ]; then
             tsel_names="${tsel_names%, }"
-            echo -e "  ${GREEN}Selected ($tcount):${NC} $tsel_names\033[K"
+            echo -e "  ${GREEN}Selected ($tcount):${NC} $tsel_names"
         else
-            echo -e "  ${YELLOW}Selected: None${NC}\033[K"
+            echo -e "  ${YELLOW}Selected: None${NC}"
         fi
 
         echo -e "${YELLOW}───────────────────────────────────────────────────────────────${NC}"
@@ -1572,9 +1568,8 @@ show_debloat_submenu() {
 
     tput civis 2>/dev/null || true
 
-    clear    # in-place redraw: full clear once, then cursor-home each frame
     while true; do
-        printf '\033[H'
+        clear
         echo -e "${CYAN}╔═══════════════════════════════════════════════════════════════════════════╗${NC}"
         echo -e "${CYAN}║                    ${RED}Debloat - Remove Bloatware${CYAN}                             ║${NC}"
         echo -e "${CYAN}╚═══════════════════════════════════════════════════════════════════════════╝${NC}"
@@ -1819,9 +1814,8 @@ show_interactive_install_menu() {
     # Hide cursor
     tput civis 2>/dev/null || true
 
-    clear    # in-place redraw: full clear once, then cursor-home each frame
     while true; do
-        printf '\033[H'
+        clear
         show_system_header
 
         echo -e "${GREEN}═══════════════════════════════════════════════════════════════${NC}"
@@ -1956,9 +1950,9 @@ show_interactive_install_menu() {
 
         if [ $count -gt 0 ]; then
             selected_names="${selected_names%, }"
-            echo -e "  ${GREEN}Selected ($count):${NC} $selected_names\033[K"
+            echo -e "  ${GREEN}Selected ($count):${NC} $selected_names"
         else
-            echo -e "  ${YELLOW}Selected: None${NC}\033[K"
+            echo -e "  ${YELLOW}Selected: None${NC}"
         fi
 
         echo -e "${YELLOW}───────────────────────────────────────────────────────────────${NC}"

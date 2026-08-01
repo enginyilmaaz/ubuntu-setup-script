@@ -16,7 +16,7 @@
 #===============================================================================
 
 SCRIPT_VERSION="2.5.0"
-SCRIPT_REVISION="159"
+SCRIPT_REVISION="160"
 SCRIPT_DATE="2026-03-27"
 
 # NOTE: We intentionally do NOT use set -e here.
@@ -5214,7 +5214,6 @@ setup_cli_shortcuts() {
         echo ""
         echo "# BEGIN smai-aliases"
         if $_claude_avail; then
-            echo "alias claude-skip='claude --dangerously-skip-permissions --effort max'"
             echo "alias ccskip='claude --dangerously-skip-permissions --effort max'"
             # Claude Code on alternate backends (Kimi / Z.AI GLM) + secure token setters.
             # Single-quoted heredoc: $VARS are written literally for runtime expansion.
@@ -5305,17 +5304,16 @@ ccglm-token() { __cc_set_token ccglm "$HOME/.zai_token" "$1"; }
 CCFUNCS
         fi
         if $_codex_avail; then
-            echo "alias codex-skip='codex --sandbox danger-full-access -c model_reasoning_effort=\"xhigh\"'"
             echo "alias cxskip='codex --sandbox danger-full-access -c model_reasoning_effort=\"xhigh\"'"
         fi
         echo "# END smai-aliases"
     } >> "$bashrc"
 
     local _alias_list=""
-    if $_claude_avail; then _alias_list+="claude-skip, ccskip, cckimi, ccglm"; fi
+    if $_claude_avail; then _alias_list+="ccskip, cckimi, ccglm"; fi
     if $_codex_avail; then
         [ -n "$_alias_list" ] && _alias_list+=", "
-        _alias_list+="codex-skip, cxskip"
+        _alias_list+="cxskip"
     fi
     if [ -n "$_alias_list" ]; then
         log_success "Aliases added: $_alias_list"

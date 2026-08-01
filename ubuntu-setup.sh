@@ -16,7 +16,7 @@
 #===============================================================================
 
 SCRIPT_VERSION="2.5.0"
-SCRIPT_REVISION="161"
+SCRIPT_REVISION="162"
 SCRIPT_DATE="2026-03-27"
 
 # NOTE: We intentionally do NOT use set -e here.
@@ -518,7 +518,7 @@ show_system_header() {
 # GNOME Tweaks sub-menu selections (global so install_gnome_extensions can read them)
 GNOME_SUB_EXTENSIONS=false; GNOME_SUB_UPDATE=false; GNOME_SUB_TWEAKS_APP=false; GNOME_SUB_DOCK=false
 GNOME_SUB_SCRIPT=false; GNOME_SUB_WAYLAND=false; GNOME_SUB_SSH=false
-GNOME_SUB_ALIASES=false; GNOME_SUB_ENGLISH=false
+GNOME_SUB_CCSKIP=false; GNOME_SUB_CXSKIP=false; GNOME_SUB_CCKIMI=false; GNOME_SUB_CCGLM=false; GNOME_SUB_ENGLISH=false
 GNOME_SUB_SCREEN=false; GNOME_SUB_HIDDEN=false; GNOME_SUB_KB_TR=false; GNOME_SUB_KB_EN=false
 GNOME_SUB_VSCREEN=false; GNOME_SUB_AUTOLOGIN=false; GNOME_SUB_HOSTNAME=false
 GNOME_SUB_NO_IBUS=false; GNOME_SUB_APPORT=false; GNOME_SUB_CHEESE=false; GNOME_SUB_CLEANUP2Y=false; GNOME_SUB_NODE_SWITCH=false
@@ -537,7 +537,10 @@ gnome_tweak_applied() {
         GNOME_SUB_WAYLAND)    grep -q "^WaylandEnable=false" /etc/gdm3/custom.conf 2>/dev/null ;;
         GNOME_SUB_NODE_SWITCH) false ;;
         GNOME_SUB_SSH)        systemctl is-active ssh &>/dev/null ;;
-        GNOME_SUB_ALIASES)    grep -q "^# BEGIN smai-aliases" "$HOME/.bashrc" 2>/dev/null ;;
+        GNOME_SUB_CCSKIP)     grep -q "^alias ccskip=" "$HOME/.bashrc" 2>/dev/null ;;
+        GNOME_SUB_CXSKIP)     grep -q "^alias cxskip=" "$HOME/.bashrc" 2>/dev/null ;;
+        GNOME_SUB_CCKIMI)     grep -q "^cckimi()" "$HOME/.bashrc" 2>/dev/null ;;
+        GNOME_SUB_CCGLM)      grep -q "^ccglm()" "$HOME/.bashrc" 2>/dev/null ;;
         GNOME_SUB_SCREEN)     [ "$(gsettings get org.gnome.desktop.session idle-delay 2>/dev/null)" = "uint32 0" ] ;;
         GNOME_SUB_HIDDEN)     [ "$(gsettings get org.gtk.Settings.FileChooser show-hidden 2>/dev/null)" = "true" ] ;;
         GNOME_SUB_KB_TR)      gsettings get org.gnome.desktop.input-sources sources 2>/dev/null | grep -q "'tr'" ;;
@@ -1045,7 +1048,10 @@ show_gnome_submenu() {
     esac
     TWEAK_NAMES+=("OpenSSH Server");    TWEAK_DESCS+=("Install + auto-start SSH server (port 22)");            TWEAK_KEYS+=("GNOME_SUB_SSH")
     TWEAK_NAMES+=("Change Hostname");   TWEAK_DESCS+=("Set computer's hostname (asked before install starts)"); TWEAK_KEYS+=("GNOME_SUB_HOSTNAME")
-    TWEAK_NAMES+=("CLI Aliases");       TWEAK_DESCS+=("Bash aliases + cckimi/ccglm (Kimi/GLM Claude backends)");  TWEAK_KEYS+=("GNOME_SUB_ALIASES")
+    TWEAK_NAMES+=("Alias: ccskip");     TWEAK_DESCS+=("claude --dangerously-skip-permissions --effort max");   TWEAK_KEYS+=("GNOME_SUB_CCSKIP")
+    TWEAK_NAMES+=("Alias: cxskip");     TWEAK_DESCS+=("codex --sandbox danger-full-access (xhigh)");           TWEAK_KEYS+=("GNOME_SUB_CXSKIP")
+    TWEAK_NAMES+=("Alias: cckimi");     TWEAK_DESCS+=("Claude Code on Kimi backend (+cckimi-token)");           TWEAK_KEYS+=("GNOME_SUB_CCKIMI")
+    TWEAK_NAMES+=("Alias: ccglm");      TWEAK_DESCS+=("Claude Code on Z.AI GLM backend (+ccglm-token)");        TWEAK_KEYS+=("GNOME_SUB_CCGLM")
     TWEAK_NAMES+=("English Language");  TWEAK_DESCS+=("Set system language to English (US)");                   TWEAK_KEYS+=("GNOME_SUB_ENGLISH")
     TWEAK_NAMES+=("Screen Off: Never"); TWEAK_DESCS+=("Disable screen timeout + auto suspend");                TWEAK_KEYS+=("GNOME_SUB_SCREEN")
     TWEAK_NAMES+=("Show Hidden Files"); TWEAK_DESCS+=("Show hidden files in file manager");                    TWEAK_KEYS+=("GNOME_SUB_HIDDEN")
@@ -1751,7 +1757,7 @@ show_interactive_install_menu() {
     done
     local _tw_applied=0 _tw_total=0
     for _gk in GNOME_SUB_EXTENSIONS GNOME_SUB_TWEAKS_APP GNOME_SUB_SCRIPT GNOME_SUB_WAYLAND \
-               GNOME_SUB_SSH GNOME_SUB_ALIASES GNOME_SUB_SCREEN GNOME_SUB_HIDDEN \
+               GNOME_SUB_SSH GNOME_SUB_CCSKIP GNOME_SUB_CXSKIP GNOME_SUB_CCKIMI GNOME_SUB_CCGLM GNOME_SUB_SCREEN GNOME_SUB_HIDDEN \
                GNOME_SUB_KB_TR GNOME_SUB_KB_EN GNOME_SUB_NO_IBUS GNOME_SUB_APPORT \
                GNOME_SUB_CHEESE GNOME_SUB_CLEANUP2Y GNOME_SUB_VSCREEN GNOME_SUB_AUTOLOGIN; do
         _tw_total=$((_tw_total + 1))
@@ -1894,7 +1900,10 @@ show_interactive_install_menu() {
                         $GNOME_SUB_WAYLAND && _tw+="Wayland,"
                         $GNOME_SUB_NODE_SWITCH && _tw+="NodeSwitch,"
                         $GNOME_SUB_SSH && _tw+="SSH,"
-                        $GNOME_SUB_ALIASES && _tw+="Aliases,"
+                        $GNOME_SUB_CCSKIP && _tw+="ccskip,"
+                        $GNOME_SUB_CXSKIP && _tw+="cxskip,"
+                        $GNOME_SUB_CCKIMI && _tw+="cckimi,"
+                        $GNOME_SUB_CCGLM && _tw+="ccglm,"
                         $GNOME_SUB_SCREEN && _tw+="Screen,"
                         $GNOME_SUB_KB_TR && _tw+="KB:TR,"
                         $GNOME_SUB_KB_EN && _tw+="KB:EN,"
@@ -2108,7 +2117,10 @@ show_interactive_install_menu() {
                                 $GNOME_SUB_WAYLAND     && tweaks_list+="Disable Wayland, "
                                 $GNOME_SUB_NODE_SWITCH && tweaks_list+="Node.js switch, "
                                 $GNOME_SUB_SSH         && tweaks_list+="OpenSSH Server, "
-                                $GNOME_SUB_ALIASES     && tweaks_list+="CLI Aliases, "
+                                $GNOME_SUB_CCSKIP     && tweaks_list+="ccskip, "
+                                $GNOME_SUB_CXSKIP     && tweaks_list+="cxskip, "
+                                $GNOME_SUB_CCKIMI     && tweaks_list+="cckimi, "
+                                $GNOME_SUB_CCGLM      && tweaks_list+="ccglm, "
                                 $GNOME_SUB_ENGLISH     && tweaks_list+="English Language, "
                                 $GNOME_SUB_SCREEN      && tweaks_list+="Screen Off: Never, "
                                 $GNOME_SUB_HIDDEN      && tweaks_list+="Show Hidden Files, "
@@ -4448,7 +4460,7 @@ ACCOUNTSEOF
     fi
 
     # 11. CLI Aliases
-    if $GNOME_SUB_ALIASES; then
+    if $GNOME_SUB_CCSKIP || $GNOME_SUB_CXSKIP || $GNOME_SUB_CCKIMI || $GNOME_SUB_CCGLM; then
         setup_cli_shortcuts
     fi
 
@@ -5284,30 +5296,19 @@ setup_cli_shortcuts() {
 
     local bashrc="$HOME/.bashrc"
 
-    # --- Bash Aliases ---
-    # Remove old versions (both legacy single-line and marker-based)
-    sed -i '/^alias claude-skip=/d' "$bashrc" 2>/dev/null
-    sed -i '/^alias ccskip=/d' "$bashrc" 2>/dev/null
-    sed -i '/^alias codex-skip=/d' "$bashrc" 2>/dev/null
-    sed -i '/^alias cxskip=/d' "$bashrc" 2>/dev/null
-    sed -i '/^# Claude Code aliases/d' "$bashrc" 2>/dev/null
-    sed -i '/^# Codex aliases/d' "$bashrc" 2>/dev/null
+    # --- Bash Aliases (per-item, selected in the Tweaks sub-menu) ---
+    # Remove old versions (legacy single-line + marker-based block)
+    sed -i '/^alias claude-skip=/d; /^alias ccskip=/d; /^alias codex-skip=/d; /^alias cxskip=/d' "$bashrc" 2>/dev/null
+    sed -i '/^# Claude Code aliases/d; /^# Codex aliases/d' "$bashrc" 2>/dev/null
     sed -i '/^# BEGIN smai-aliases/,/^# END smai-aliases/d' "$bashrc" 2>/dev/null
-
-    # Add aliases only for selected tools (Claude / Codex CLIs)
-    # Detect what's actually selected/installed (skip aliases for things not present)
-    local _claude_avail=false _codex_avail=false
-    if $INSTALL_CLAUDE || command_exists claude; then _claude_avail=true; fi
-    if $INSTALL_CODEX  || command_exists codex;  then _codex_avail=true;  fi
 
     {
         echo ""
         echo "# BEGIN smai-aliases"
-        if $_claude_avail; then
-            echo "alias ccskip='claude --dangerously-skip-permissions --effort max'"
-            # Claude Code on alternate backends (Kimi / Z.AI GLM) + secure token setters.
-            # Single-quoted heredoc: $VARS are written literally for runtime expansion.
-            cat <<'CCFUNCS'
+        $GNOME_SUB_CCSKIP && echo "alias ccskip='claude --dangerously-skip-permissions --effort max'"
+        $GNOME_SUB_CXSKIP && echo "alias cxskip='codex --sandbox danger-full-access -c model_reasoning_effort=\"xhigh\"'"
+        if $GNOME_SUB_CCKIMI; then
+            cat <<'CCKIMI'
 
 # cckimi -> runs Claude Code on the Kimi backend (token lives in ~/.kimi_token, chmod 600)
 cckimi() {
@@ -5340,6 +5341,12 @@ cckimi() {
     command claude --dangerously-skip-permissions --effort max "$@"
 }
 
+cckimi-token() { __cc_set_token cckimi "$HOME/.kimi_token" "$1"; }
+CCKIMI
+        fi
+        if $GNOME_SUB_CCGLM; then
+            cat <<'CCGLM'
+
 # ccglm -> runs Claude Code on the Z.AI GLM backend (token lives in ~/.zai_token, chmod 600)
 ccglm() {
     local token_file="$HOME/.zai_token"
@@ -5371,6 +5378,12 @@ ccglm() {
     command claude --dangerously-skip-permissions "$@"
 }
 
+ccglm-token() { __cc_set_token ccglm "$HOME/.zai_token" "$1"; }
+CCGLM
+        fi
+        if $GNOME_SUB_CCKIMI || $GNOME_SUB_CCGLM; then
+            cat <<'CCSET'
+
 # __cc_set_token <label> <token_file> [key] -- shared writer for the cc*-token helpers
 __cc_set_token() {
     local label="$1" token_file="$2" key="$3"
@@ -5388,27 +5401,21 @@ __cc_set_token() {
         "$label" "$token_file" "${#key}" \
         "$(stat -c '%a' "$token_file" 2>/dev/null || echo '600')" "$label"
 }
-
-cckimi-token() { __cc_set_token cckimi "$HOME/.kimi_token" "$1"; }
-ccglm-token() { __cc_set_token ccglm "$HOME/.zai_token" "$1"; }
-CCFUNCS
-        fi
-        if $_codex_avail; then
-            echo "alias cxskip='codex --sandbox danger-full-access -c model_reasoning_effort=\"xhigh\"'"
+CCSET
         fi
         echo "# END smai-aliases"
     } >> "$bashrc"
 
     local _alias_list=""
-    if $_claude_avail; then _alias_list+="ccskip, cckimi, ccglm"; fi
-    if $_codex_avail; then
-        [ -n "$_alias_list" ] && _alias_list+=", "
-        _alias_list+="cxskip"
-    fi
+    $GNOME_SUB_CCSKIP && _alias_list+="ccskip, "
+    $GNOME_SUB_CXSKIP && _alias_list+="cxskip, "
+    $GNOME_SUB_CCKIMI && _alias_list+="cckimi (+cckimi-token), "
+    $GNOME_SUB_CCGLM  && _alias_list+="ccglm (+ccglm-token), "
+    _alias_list="${_alias_list%, }"
     if [ -n "$_alias_list" ]; then
         log_success "Aliases added: $_alias_list"
     else
-        log_info "No aliases added (neither Claude Code nor Codex selected/installed)"
+        log_info "No CLI aliases selected"
     fi
 
     # --- npm/yarn/pnpm package.json scripts tab-completion ---
@@ -6373,7 +6380,10 @@ print_summary() {
         $GNOME_SUB_WAYLAND    && any_tweak=true
         $GNOME_SUB_NODE_SWITCH && any_tweak=true
         $GNOME_SUB_SSH        && any_tweak=true
-        $GNOME_SUB_ALIASES    && any_tweak=true
+        $GNOME_SUB_CCSKIP    && any_tweak=true
+        $GNOME_SUB_CXSKIP    && any_tweak=true
+        $GNOME_SUB_CCKIMI    && any_tweak=true
+        $GNOME_SUB_CCGLM     && any_tweak=true
         $GNOME_SUB_ENGLISH    && any_tweak=true
         $GNOME_SUB_SCREEN     && any_tweak=true
         $GNOME_SUB_HIDDEN     && any_tweak=true
@@ -6397,7 +6407,10 @@ print_summary() {
             $GNOME_SUB_WAYLAND    && grep -q "^WaylandEnable=false" /etc/gdm3/custom.conf 2>/dev/null && echo -e "    ${GREEN}✓${NC} Wayland Disabled"
             $GNOME_SUB_NODE_SWITCH && echo -e "    ${GREEN}✓${NC} Node.js switched (now: $(nodejs_kind))"
             $GNOME_SUB_SSH        && systemctl is-active ssh &>/dev/null                && echo -e "    ${GREEN}✓${NC} OpenSSH Server"
-            $GNOME_SUB_ALIASES    && grep -q "^# BEGIN smai-aliases" "$HOME/.bashrc" 2>/dev/null && echo -e "    ${GREEN}✓${NC} CLI Aliases"
+            $GNOME_SUB_CCSKIP    && grep -q "^alias ccskip=" "$HOME/.bashrc" 2>/dev/null && echo -e "    ${GREEN}✓${NC} Alias ccskip"
+            $GNOME_SUB_CXSKIP    && grep -q "^alias cxskip=" "$HOME/.bashrc" 2>/dev/null && echo -e "    ${GREEN}✓${NC} Alias cxskip"
+            $GNOME_SUB_CCKIMI    && grep -q "^cckimi()" "$HOME/.bashrc" 2>/dev/null && echo -e "    ${GREEN}✓${NC} Alias cckimi"
+            $GNOME_SUB_CCGLM     && grep -q "^ccglm()" "$HOME/.bashrc" 2>/dev/null && echo -e "    ${GREEN}✓${NC} Alias ccglm"
             $GNOME_SUB_ENGLISH    && echo -e "    ${GREEN}✓${NC} English Language"
             $GNOME_SUB_SCREEN     && echo -e "    ${GREEN}✓${NC} Screen Off: Never"
             $GNOME_SUB_HIDDEN     && echo -e "    ${GREEN}✓${NC} Show Hidden Files"

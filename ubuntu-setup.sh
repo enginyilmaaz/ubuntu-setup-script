@@ -16,7 +16,7 @@
 #===============================================================================
 
 SCRIPT_VERSION="2.5.0"
-SCRIPT_REVISION="164"
+SCRIPT_REVISION="165"
 SCRIPT_DATE="2026-03-27"
 
 # NOTE: We intentionally do NOT use set -e here.
@@ -686,7 +686,7 @@ show_remote_submenu() {
     tput civis 2>/dev/null || true
 
     while true; do
-        clear
+        printf '\033[2J\033[H'
         echo -e "${CYAN}╔═══════════════════════════════════════════════════════════════════════════╗${NC}"
         echo -e "${CYAN}║                 ${GREEN}Remote Support Tools - Select Options${CYAN}                     ║${NC}"
         echo -e "${CYAN}╚═══════════════════════════════════════════════════════════════════════════╝${NC}"
@@ -805,7 +805,7 @@ show_vscode_submenu() {
     tput civis 2>/dev/null || true
 
     while true; do
-        clear
+        printf '\033[2J\033[H'
         echo -e "${CYAN}╔═══════════════════════════════════════════════════════════════════════════╗${NC}"
         echo -e "${CYAN}║                 ${GREEN}VS Code - Extensions & Tweaks${CYAN}                             ║${NC}"
         echo -e "${CYAN}╚═══════════════════════════════════════════════════════════════════════════╝${NC}"
@@ -913,7 +913,7 @@ show_aicli_submenu() {
     tput civis 2>/dev/null || true
 
     while true; do
-        clear
+        printf '\033[2J\033[H'
         echo -e "${CYAN}╔═══════════════════════════════════════════════════════════════════════════╗${NC}"
         echo -e "${CYAN}║                    ${GREEN}AI CLI Tools - Select Options${CYAN}                          ║${NC}"
         echo -e "${CYAN}╚═══════════════════════════════════════════════════════════════════════════╝${NC}"
@@ -1085,7 +1085,7 @@ show_gnome_submenu() {
     tput civis 2>/dev/null || true
 
     while true; do
-        clear
+        printf '\033[2J\033[H'
         echo -e "${CYAN}╔═══════════════════════════════════════════════════════════════════════════╗${NC}"
         echo -e "${CYAN}║                    ${GREEN}GNOME Tweaks - Select Options${CYAN}                          ║${NC}"
         echo -e "${CYAN}╚═══════════════════════════════════════════════════════════════════════════╝${NC}"
@@ -1569,7 +1569,7 @@ show_debloat_submenu() {
     tput civis 2>/dev/null || true
 
     while true; do
-        clear
+        printf '\033[2J\033[H'
         echo -e "${CYAN}╔═══════════════════════════════════════════════════════════════════════════╗${NC}"
         echo -e "${CYAN}║                    ${RED}Debloat - Remove Bloatware${CYAN}                             ║${NC}"
         echo -e "${CYAN}╚═══════════════════════════════════════════════════════════════════════════╝${NC}"
@@ -1815,7 +1815,7 @@ show_interactive_install_menu() {
     tput civis 2>/dev/null || true
 
     while true; do
-        clear
+        printf '\033[2J\033[H'
         show_system_header
 
         echo -e "${GREEN}═══════════════════════════════════════════════════════════════${NC}"
@@ -2228,7 +2228,7 @@ show_full_menu() {
     detect_system_silent
 
     while true; do
-        clear
+        printf '\033[2J\033[H'
         show_system_header
 
         echo -e "${GREEN}Main Menu:${NC}"
@@ -2271,7 +2271,7 @@ menu_remove_apps() {
     detect_system_silent
 
     while true; do
-        clear
+        printf '\033[2J\033[H'
         show_system_header
 
         echo -e "${GREEN}Remove Applications:${NC}"
@@ -2430,7 +2430,7 @@ remove_application() {
 # Backups submenu
 menu_backups() {
     while true; do
-        clear
+        printf '\033[2J\033[H'
         show_system_header
 
         echo -e "${GREEN}Backup Management:${NC}"

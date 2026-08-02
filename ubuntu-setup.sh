@@ -16,7 +16,7 @@
 #===============================================================================
 
 SCRIPT_VERSION="2.5.0"
-SCRIPT_REVISION="167"
+SCRIPT_REVISION="168"
 SCRIPT_DATE="2026-03-27"
 
 # NOTE: We intentionally do NOT use set -e here.
@@ -215,8 +215,9 @@ NC='\033[0m' # No Color
 # Real terminal height. Inside $(...) stdout is a pipe, so `tput lines` returns
 # the terminfo default (24); read the geometry straight from the controlling tty.
 _tty_rows() {
-    local r
-    r=$(stty size < /dev/tty 2>/dev/null | awk '{print $1}')
+    local sz r
+    sz=$(stty size < /dev/tty 2>/dev/null) || sz=""
+    r=${sz%% *}
     if [ -n "$r" ] && [ "$r" -gt 0 ] 2>/dev/null; then echo "$r"; else echo "${LINES:-24}"; fi
 }
 
@@ -1951,10 +1952,10 @@ show_interactive_install_menu() {
         )"
 
         # Viewport: only the items that fit; keep the cursor visible
-        local _rows _hl _fl2 _avail _voff _vend _vp
+        local _rows _hl _fl2 _avail _voff _vend _vp _lc
         _rows=$(_tty_rows)
-        _hl=$(printf '%s\n' "$_hdr" | wc -l)
-        _fl2=$(printf '%s\n' "$_ftr" | wc -l)
+        mapfile -t _lc <<< "$_hdr"; _hl=${#_lc[@]}
+        mapfile -t _lc <<< "$_ftr"; _fl2=${#_lc[@]}
         _avail=$(( _rows - _hl - _fl2 - 3 )); [ "$_avail" -lt 1 ] && _avail=1
         _vp=$(_viewport "$cursor" "$TOTAL_ITEMS" "$_avail")
         _voff=${_vp%% *}; _vend=${_vp##* }

@@ -16,7 +16,7 @@
 #===============================================================================
 
 SCRIPT_VERSION="2.5.0"
-SCRIPT_REVISION="168"
+SCRIPT_REVISION="169"
 SCRIPT_DATE="2026-03-27"
 
 # NOTE: We intentionally do NOT use set -e here.
@@ -210,37 +210,27 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 CYAN='\033[0;36m'
 NC='\033[0m' # No Color
+_K=$'\033[K'  # clear cursor->EOL, for flicker-free in-place redraw
 
-# --- Interactive-menu rendering helpers (flicker-free redraw) --------------
-# Real terminal height. Inside $(...) stdout is a pipe, so `tput lines` returns
-# the terminfo default (24); read the geometry straight from the controlling tty.
+# --- Interactive-menu rendering helpers (flicker-free, fork-free redraw) ---
+# All set globals instead of echoing so callers avoid a $() capture subshell.
+# _ROWS: real terminal height (tput lines reads 24 inside $()); _VOFF/_VEND:
+# scroll window keeping the cursor visible without the frame overflowing.
 _tty_rows() {
-    local sz r
+    local sz
     sz=$(stty size < /dev/tty 2>/dev/null) || sz=""
-    r=${sz%% *}
-    if [ -n "$r" ] && [ "$r" -gt 0 ] 2>/dev/null; then echo "$r"; else echo "${LINES:-24}"; fi
+    _ROWS=${sz%% *}
+    { [ -n "$_ROWS" ] && [ "$_ROWS" -gt 0 ]; } 2>/dev/null || _ROWS=${LINES:-24}
 }
-
-# Scroll window. Args: cursor total visible -> prints "voff vend" so the cursor
-# stays visible and roughly centred while the frame never overflows the screen.
 _viewport() {
-    local cur=$1 total=$2 avail=$3 voff vend vmax
+    local cur=$1 total=$2 avail=$3 vmax
     if [ "$total" -le "$avail" ]; then
-        voff=0
+        _VOFF=0
     else
-        voff=$(( cur - avail / 2 )); [ "$voff" -lt 0 ] && voff=0
-        vmax=$(( total - avail )); [ "$voff" -gt "$vmax" ] && voff=$vmax
+        _VOFF=$(( cur - avail / 2 )); [ "$_VOFF" -lt 0 ] && _VOFF=0
+        vmax=$(( total - avail )); [ "$_VOFF" -gt "$vmax" ] && _VOFF=$vmax
     fi
-    vend=$(( voff + avail )); [ "$vend" -gt "$total" ] && vend=$total
-    printf '%s %s\n' "$voff" "$vend"
-}
-
-# Repaint a pre-built frame in place: home the cursor, clear each line as it is
-# overwritten, then clear whatever is left below. No full wipe -> no flash.
-_render_frame() {
-    printf '\033[H'
-    printf '%s\n' "$1" | while IFS= read -r _fl; do printf '%s\033[K\n' "$_fl"; done
-    printf '\033[J'
+    _VEND=$(( _VOFF + avail )); [ "$_VEND" -gt "$total" ] && _VEND=$total
 }
 
 # Logging functions
@@ -1602,10 +1592,11 @@ show_debloat_submenu() {
 
     printf '\033[2J\033[H'
     while true; do
+        printf '\033[H'
         # Viewport: draw only the items that fit the terminal so the frame never
         # exceeds the screen -> no terminal scroll -> cursor-home redraw stays aligned.
         local _rows _avail _voff _vend _over=12
-        _rows=$(_tty_rows)
+        _tty_rows; _rows=$_ROWS
         _avail=$(( _rows - _over )); [ "$_avail" -lt 1 ] && _avail=1
         if [ "$TOTAL_BLOAT" -le "$_avail" ]; then
             _voff=0
@@ -1615,18 +1606,16 @@ show_debloat_submenu() {
         fi
         _vend=$(( _voff + _avail )); [ "$_vend" -gt "$TOTAL_BLOAT" ] && _vend=$TOTAL_BLOAT
 
-        local _fr
-        _fr="$(
-        echo -e "${CYAN}╔═══════════════════════════════════════════════════════════════════════════╗${NC}"
-        echo -e "${CYAN}║                    ${RED}Debloat - Remove Bloatware${CYAN}                             ║${NC}"
-        echo -e "${CYAN}╚═══════════════════════════════════════════════════════════════════════════╝${NC}"
-        echo -e "${YELLOW}  ${TOTAL_BLOAT} item(s)  (**debloated = already removed)  ·  ↑↓ move  SPACE toggle${NC}"
-        if [ "$_voff" -gt 0 ]; then echo -e "  ${CYAN}▲ $_voff more above${NC}"; else echo ""; fi
+        echo -e "${CYAN}╔═══════════════════════════════════════════════════════════════════════════╗${NC}${_K}"
+        echo -e "${CYAN}║                    ${RED}Debloat - Remove Bloatware${CYAN}                             ║${NC}${_K}"
+        echo -e "${CYAN}╚═══════════════════════════════════════════════════════════════════════════╝${NC}${_K}"
+        echo -e "${YELLOW}  ${TOTAL_BLOAT} item(s)  (**debloated = already removed)  ·  ↑↓ move  SPACE toggle${NC}${_K}"
+        if [ "$_voff" -gt 0 ]; then echo -e "  ${CYAN}▲ $_voff more above${NC}${_K}"; else echo -e "${_K}"; fi
         local bi
         for ((bi=_voff; bi<_vend; bi++)); do
             local bname="${BLOAT_NAMES[$bi]}"
             local bdesc="${BLOAT_DESCS[$bi]}"
-            local bnum; bnum=$(printf "%2d" $((bi + 1)))
+            local bnum; printf -v bnum "%2d" $((bi + 1))
             local bcheck="[ ]"
             local bline="   "
             [ "${BSELECTED[$bi]}" = "1" ] && bcheck="${RED}[✗]${NC}"
@@ -1634,25 +1623,24 @@ show_debloat_submenu() {
             local bmark=""
             [ "${BLOAT_DONE[$bi]}" = "1" ] && bmark="  ${YELLOW}**debloated${NC}"
             if [ "${BSELECTED[$bi]}" = "1" ]; then
-                echo -e "${bline} ${BLUE}[$bnum]${NC} $bcheck ${RED}$bname${NC} - $bdesc$bmark"
+                echo -e "${bline} ${BLUE}[$bnum]${NC} $bcheck ${RED}$bname${NC} - $bdesc$bmark${_K}"
             else
-                echo -e "${bline} ${BLUE}[$bnum]${NC} $bcheck $bname - $bdesc$bmark"
+                echo -e "${bline} ${BLUE}[$bnum]${NC} $bcheck $bname - $bdesc$bmark${_K}"
             fi
         done
-        if [ "$_vend" -lt "$TOTAL_BLOAT" ]; then echo -e "  ${CYAN}▼ $(( TOTAL_BLOAT - _vend )) more below${NC}"; else echo ""; fi
-        echo -e "${YELLOW}───────────────────────────────────────────────────────────────${NC}"
+        if [ "$_vend" -lt "$TOTAL_BLOAT" ]; then echo -e "  ${CYAN}▼ $(( TOTAL_BLOAT - _vend )) more below${NC}${_K}"; else echo -e "${_K}"; fi
+        echo -e "${YELLOW}───────────────────────────────────────────────────────────────${NC}${_K}"
         local bcount=0 bsel_names=""
         for ((bi=0; bi<TOTAL_BLOAT; bi++)); do
             if [ "${BSELECTED[$bi]}" = "1" ]; then bcount=$((bcount + 1)); bsel_names="${bsel_names}${BLOAT_NAMES[$bi]}, "; fi
         done
         if [ $bcount -gt 0 ]; then
-            echo -e "  ${RED}Removing ($bcount):${NC} ${bsel_names%, }"
+            echo -e "  ${RED}Removing ($bcount):${NC} ${bsel_names%, }${_K}"
         else
-            echo -e "  ${GREEN}Nothing selected for removal${NC}"
+            echo -e "  ${GREEN}Nothing selected for removal${NC}${_K}"
         fi
-        echo -e "  ${CYAN}CONTROLS:${NC} ${YELLOW}↑↓${NC}=Move ${YELLOW}SPACE${NC}=Toggle ${YELLOW}a${NC}=All ${YELLOW}n${NC}=None ${GREEN}c/ESC${NC}=Save ${RED}q${NC}=Discard"
-        )"
-        _render_frame "$_fr"
+        echo -e "  ${CYAN}CONTROLS:${NC} ${YELLOW}↑↓${NC}=Move ${YELLOW}SPACE${NC}=Toggle ${YELLOW}a${NC}=All ${YELLOW}n${NC}=None ${GREEN}c/ESC${NC}=Save ${RED}q${NC}=Discard${_K}"
+        printf '\033[J'
 
         IFS= read -rsn1 bkey < /dev/tty 2>/dev/null || bkey=""
         if [ "$bkey" = $'\x1b' ]; then
@@ -1839,27 +1827,25 @@ show_interactive_install_menu() {
     # Hide cursor
     tput civis 2>/dev/null || true
 
-    printf '\033[2J\033[H'
-    while true; do
-        # VS Code selection drives the AI CLI Tools description below
-        local vscode_selected=0
-        local _vi i
-        for ((_vi=0; _vi<TOTAL_ITEMS; _vi++)); do
-            if [ "${APP_VARS[$_vi]}" = "INSTALL_VSCODE" ] && [ "${SELECTED[$_vi]}" = "1" ]; then
-                vscode_selected=1; break
-            fi
-        done
-
-        # Header buffer (system info + nav bar; variable height)
-        local _hdr
-        _hdr="$(
+    # Header is constant during the menu -> build it once (system info + nav bar)
+    local _HDR _HDR_LINES _hlt
+    _HDR="$(
         show_system_header
         echo -e "${GREEN}═══════════════════════════════════════════════════════════════${NC}"
         echo -e "${GREEN}     Use ↑↓ arrows to navigate, SPACE to select${NC}"
         echo -e "${GREEN}═══════════════════════════════════════════════════════════════${NC}"
-        )"
-
-        # Selected summary (scans ALL items, independent of the visible window)
+    )"
+    mapfile -t _hlt <<< "$_HDR"; _HDR_LINES=${#_hlt[@]}
+    printf '\033[2J\033[H'
+    while true; do
+        printf '\033[H'
+        printf '%s\n' "$_HDR"
+        _tty_rows
+        local vscode_selected=0 _vi i
+        for ((_vi=0; _vi<TOTAL_ITEMS; _vi++)); do
+            if [ "${APP_VARS[$_vi]}" = "INSTALL_VSCODE" ] && [ "${SELECTED[$_vi]}" = "1" ]; then vscode_selected=1; break; fi
+        done
+        # Selected summary (scans ALL items; pure bash, no forks)
         count=0
         local selected_names=""
         for ((i=0; i<TOTAL_ITEMS; i++)); do
@@ -1936,38 +1922,14 @@ show_interactive_install_menu() {
                 esac
             fi
         done
-
-        # Footer buffer (Selected line + controls)
-        local _ftr
-        _ftr="$(
-        echo -e "${YELLOW}───────────────────────────────────────────────────────────────${NC}"
-        if [ $count -gt 0 ]; then
-            selected_names="${selected_names%, }"
-            echo -e "  ${GREEN}Selected ($count):${NC} $selected_names"
-        else
-            echo -e "  ${YELLOW}Selected: None${NC}"
-        fi
-        echo -e "${YELLOW}───────────────────────────────────────────────────────────────${NC}"
-        echo -e "  ${CYAN}CONTROLS:${NC}  ${YELLOW}↑↓${NC}=Move  ${YELLOW}SPACE${NC}=Toggle  ${YELLOW}ENTER${NC}=Sub-menu  ${YELLOW}a${NC}=All  ${YELLOW}n${NC}=None  ${GREEN}c${NC}=Confirm  ${RED}q${NC}=Quit"
-        )"
-
         # Viewport: only the items that fit; keep the cursor visible
-        local _rows _hl _fl2 _avail _voff _vend _vp _lc
-        _rows=$(_tty_rows)
-        mapfile -t _lc <<< "$_hdr"; _hl=${#_lc[@]}
-        mapfile -t _lc <<< "$_ftr"; _fl2=${#_lc[@]}
-        _avail=$(( _rows - _hl - _fl2 - 3 )); [ "$_avail" -lt 1 ] && _avail=1
-        _vp=$(_viewport "$cursor" "$TOTAL_ITEMS" "$_avail")
-        _voff=${_vp%% *}; _vend=${_vp##* }
-
-        # Items buffer (viewport window with up/down markers)
-        local _items
-        _items="$(
-        if [ "$_voff" -gt 0 ]; then echo -e "  ${CYAN}▲ $_voff more above${NC}"; else echo ""; fi
-        for ((i=_voff; i<_vend; i++)); do
+        local _avail=$(( _ROWS - _HDR_LINES - 7 )); [ "$_avail" -lt 1 ] && _avail=1
+        _viewport "$cursor" "$TOTAL_ITEMS" "$_avail"
+        if [ "$_VOFF" -gt 0 ]; then echo -e "  ${CYAN}▲ $_VOFF more above${NC}${_K}"; else echo -e "${_K}"; fi
+        for ((i=_VOFF; i<_VEND; i++)); do
             local name="${APP_NAMES[$i]}"
             local desc="${APP_DESCS[$i]}"
-            local num_display=$(printf "%2d" $((i + 1)))
+            local num_display; printf -v num_display "%2d" $((i + 1))
             local checkbox="[ ]"
             local line_start="   "
 
@@ -1990,18 +1952,22 @@ show_interactive_install_menu() {
             fi
 
             if [ "${SELECTED[$i]}" = "1" ]; then
-                echo -e "${line_start} ${BLUE}[$num_display]${NC} $checkbox ${GREEN}$name${NC} - $desc$mark_str"
+                echo -e "${line_start} ${BLUE}[$num_display]${NC} $checkbox ${GREEN}$name${NC} - $desc$mark_str${_K}"
             else
-                echo -e "${line_start} ${BLUE}[$num_display]${NC} $checkbox $name - $desc$mark_str"
+                echo -e "${line_start} ${BLUE}[$num_display]${NC} $checkbox $name - $desc$mark_str${_K}"
             fi
         done
-        if [ "$_vend" -lt "$TOTAL_ITEMS" ]; then echo -e "  ${CYAN}▼ $(( TOTAL_ITEMS - _vend )) more below${NC}"; else echo ""; fi
-        )"
-
-        # Paint the whole frame in place (no full clear -> no flicker)
-        _render_frame "$_hdr
-$_items
-$_ftr"
+        if [ "$_VEND" -lt "$TOTAL_ITEMS" ]; then echo -e "  ${CYAN}▼ $(( TOTAL_ITEMS - _VEND )) more below${NC}${_K}"; else echo -e "${_K}"; fi
+        echo -e "${YELLOW}───────────────────────────────────────────────────────────────${NC}${_K}"
+        if [ $count -gt 0 ]; then
+            selected_names="${selected_names%, }"
+            echo -e "  ${GREEN}Selected ($count):${NC} $selected_names${_K}"
+        else
+            echo -e "  ${YELLOW}Selected: None${NC}${_K}"
+        fi
+        echo -e "${YELLOW}───────────────────────────────────────────────────────────────${NC}${_K}"
+        echo -e "  ${CYAN}CONTROLS:${NC}  ${YELLOW}↑↓${NC}=Move  ${YELLOW}SPACE${NC}=Toggle  ${YELLOW}ENTER${NC}=Sub-menu  ${YELLOW}a${NC}=All  ${YELLOW}n${NC}=None  ${GREEN}c${NC}=Confirm  ${RED}q${NC}=Quit${_K}"
+        printf '\033[J'
 
         # Read key
         IFS= read -rsn1 key < /dev/tty 2>/dev/null || key=""

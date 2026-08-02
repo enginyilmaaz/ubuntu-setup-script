@@ -16,7 +16,7 @@
 #===============================================================================
 
 SCRIPT_VERSION="2.5.0"
-SCRIPT_REVISION="166"
+SCRIPT_REVISION="167"
 SCRIPT_DATE="2026-03-27"
 
 # NOTE: We intentionally do NOT use set -e here.
@@ -210,6 +210,37 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 CYAN='\033[0;36m'
 NC='\033[0m' # No Color
+
+# --- Interactive-menu rendering helpers (flicker-free redraw) --------------
+# Real terminal height. Inside $(...) stdout is a pipe, so `tput lines` returns
+# the terminfo default (24); read the geometry straight from the controlling tty.
+_tty_rows() {
+    local r
+    r=$(stty size < /dev/tty 2>/dev/null | awk '{print $1}')
+    if [ -n "$r" ] && [ "$r" -gt 0 ] 2>/dev/null; then echo "$r"; else echo "${LINES:-24}"; fi
+}
+
+# Scroll window. Args: cursor total visible -> prints "voff vend" so the cursor
+# stays visible and roughly centred while the frame never overflows the screen.
+_viewport() {
+    local cur=$1 total=$2 avail=$3 voff vend vmax
+    if [ "$total" -le "$avail" ]; then
+        voff=0
+    else
+        voff=$(( cur - avail / 2 )); [ "$voff" -lt 0 ] && voff=0
+        vmax=$(( total - avail )); [ "$voff" -gt "$vmax" ] && voff=$vmax
+    fi
+    vend=$(( voff + avail )); [ "$vend" -gt "$total" ] && vend=$total
+    printf '%s %s\n' "$voff" "$vend"
+}
+
+# Repaint a pre-built frame in place: home the cursor, clear each line as it is
+# overwritten, then clear whatever is left below. No full wipe -> no flash.
+_render_frame() {
+    printf '\033[H'
+    printf '%s\n' "$1" | while IFS= read -r _fl; do printf '%s\033[K\n' "$_fl"; done
+    printf '\033[J'
+}
 
 # Logging functions
 log_info() {
@@ -1573,7 +1604,7 @@ show_debloat_submenu() {
         # Viewport: draw only the items that fit the terminal so the frame never
         # exceeds the screen -> no terminal scroll -> cursor-home redraw stays aligned.
         local _rows _avail _voff _vend _over=12
-        _rows=$(tput lines 2>/dev/null || echo 24)
+        _rows=$(_tty_rows)
         _avail=$(( _rows - _over )); [ "$_avail" -lt 1 ] && _avail=1
         if [ "$TOTAL_BLOAT" -le "$_avail" ]; then
             _voff=0
@@ -1620,9 +1651,7 @@ show_debloat_submenu() {
         fi
         echo -e "  ${CYAN}CONTROLS:${NC} ${YELLOW}↑↓${NC}=Move ${YELLOW}SPACE${NC}=Toggle ${YELLOW}a${NC}=All ${YELLOW}n${NC}=None ${GREEN}c/ESC${NC}=Save ${RED}q${NC}=Discard"
         )"
-        printf '\033[H'
-        printf '%s\n' "$_fr" | while IFS= read -r _fl; do printf '%s\033[K\n' "$_fl"; done
-        printf '\033[J'
+        _render_frame "$_fr"
 
         IFS= read -rsn1 bkey < /dev/tty 2>/dev/null || bkey=""
         if [ "$bkey" = $'\x1b' ]; then
@@ -1809,63 +1838,27 @@ show_interactive_install_menu() {
     # Hide cursor
     tput civis 2>/dev/null || true
 
+    printf '\033[2J\033[H'
     while true; do
-        printf '\033[2J\033[H'
-        show_system_header
+        # VS Code selection drives the AI CLI Tools description below
+        local vscode_selected=0
+        local _vi i
+        for ((_vi=0; _vi<TOTAL_ITEMS; _vi++)); do
+            if [ "${APP_VARS[$_vi]}" = "INSTALL_VSCODE" ] && [ "${SELECTED[$_vi]}" = "1" ]; then
+                vscode_selected=1; break
+            fi
+        done
 
+        # Header buffer (system info + nav bar; variable height)
+        local _hdr
+        _hdr="$(
+        show_system_header
         echo -e "${GREEN}═══════════════════════════════════════════════════════════════${NC}"
         echo -e "${GREEN}     Use ↑↓ arrows to navigate, SPACE to select${NC}"
         echo -e "${GREEN}═══════════════════════════════════════════════════════════════${NC}"
-        echo ""
+        )"
 
-        # Find VS Code selection state for dynamic Claude/Codex descriptions
-        local vscode_selected=0
-        local _vi
-        for ((_vi=0; _vi<TOTAL_ITEMS; _vi++)); do
-            if [ "${APP_VARS[$_vi]}" = "INSTALL_VSCODE" ] && [ "${SELECTED[$_vi]}" = "1" ]; then
-                vscode_selected=1
-                break
-            fi
-        done
-
-        # Draw menu items
-        local i
-        for ((i=0; i<TOTAL_ITEMS; i++)); do
-            local name="${APP_NAMES[$i]}"
-            local desc="${APP_DESCS[$i]}"
-            local num_display=$(printf "%2d" $((i + 1)))
-            local checkbox="[ ]"
-            local line_start="   "
-
-            # Dynamic description for AI CLI Tools based on VS Code selection
-            if [ "${APP_VARS[$i]}" = "INSTALL_AICLI" ] && [ "$vscode_selected" = "1" ]; then
-                desc="AI CLI Tools + VS Code Extensions (Enter to expand sub-menu)"
-            fi
-
-            if [ "${SELECTED[$i]}" = "1" ]; then
-                checkbox="${GREEN}[✓]${NC}"
-            fi
-
-            if [ "$cursor" = "$i" ]; then
-                line_start=" ${CYAN}▶${NC}"
-            fi
-
-            local mark_str=""
-            if [ -n "${ITEM_MARK[$i]}" ]; then
-                mark_str="  ${YELLOW}**${ITEM_MARK[$i]}${NC}"
-            fi
-
-            if [ "${SELECTED[$i]}" = "1" ]; then
-                echo -e "${line_start} ${BLUE}[$num_display]${NC} $checkbox ${GREEN}$name${NC} - $desc$mark_str"
-            else
-                echo -e "${line_start} ${BLUE}[$num_display]${NC} $checkbox $name - $desc$mark_str"
-            fi
-        done
-
-        echo ""
-        echo -e "${YELLOW}───────────────────────────────────────────────────────────────${NC}"
-
-        # Count selected and build descriptive string showing sub-picks
+        # Selected summary (scans ALL items, independent of the visible window)
         count=0
         local selected_names=""
         for ((i=0; i<TOTAL_ITEMS; i++)); do
@@ -1943,17 +1936,71 @@ show_interactive_install_menu() {
             fi
         done
 
+        # Footer buffer (Selected line + controls)
+        local _ftr
+        _ftr="$(
+        echo -e "${YELLOW}───────────────────────────────────────────────────────────────${NC}"
         if [ $count -gt 0 ]; then
             selected_names="${selected_names%, }"
             echo -e "  ${GREEN}Selected ($count):${NC} $selected_names"
         else
             echo -e "  ${YELLOW}Selected: None${NC}"
         fi
-
         echo -e "${YELLOW}───────────────────────────────────────────────────────────────${NC}"
-        echo ""
         echo -e "  ${CYAN}CONTROLS:${NC}  ${YELLOW}↑↓${NC}=Move  ${YELLOW}SPACE${NC}=Toggle  ${YELLOW}ENTER${NC}=Sub-menu  ${YELLOW}a${NC}=All  ${YELLOW}n${NC}=None  ${GREEN}c${NC}=Confirm  ${RED}q${NC}=Quit"
-        echo ""
+        )"
+
+        # Viewport: only the items that fit; keep the cursor visible
+        local _rows _hl _fl2 _avail _voff _vend _vp
+        _rows=$(_tty_rows)
+        _hl=$(printf '%s\n' "$_hdr" | wc -l)
+        _fl2=$(printf '%s\n' "$_ftr" | wc -l)
+        _avail=$(( _rows - _hl - _fl2 - 3 )); [ "$_avail" -lt 1 ] && _avail=1
+        _vp=$(_viewport "$cursor" "$TOTAL_ITEMS" "$_avail")
+        _voff=${_vp%% *}; _vend=${_vp##* }
+
+        # Items buffer (viewport window with up/down markers)
+        local _items
+        _items="$(
+        if [ "$_voff" -gt 0 ]; then echo -e "  ${CYAN}▲ $_voff more above${NC}"; else echo ""; fi
+        for ((i=_voff; i<_vend; i++)); do
+            local name="${APP_NAMES[$i]}"
+            local desc="${APP_DESCS[$i]}"
+            local num_display=$(printf "%2d" $((i + 1)))
+            local checkbox="[ ]"
+            local line_start="   "
+
+            # Dynamic description for AI CLI Tools based on VS Code selection
+            if [ "${APP_VARS[$i]}" = "INSTALL_AICLI" ] && [ "$vscode_selected" = "1" ]; then
+                desc="AI CLI Tools + VS Code Extensions (Enter to expand sub-menu)"
+            fi
+
+            if [ "${SELECTED[$i]}" = "1" ]; then
+                checkbox="${GREEN}[✓]${NC}"
+            fi
+
+            if [ "$cursor" = "$i" ]; then
+                line_start=" ${CYAN}▶${NC}"
+            fi
+
+            local mark_str=""
+            if [ -n "${ITEM_MARK[$i]}" ]; then
+                mark_str="  ${YELLOW}**${ITEM_MARK[$i]}${NC}"
+            fi
+
+            if [ "${SELECTED[$i]}" = "1" ]; then
+                echo -e "${line_start} ${BLUE}[$num_display]${NC} $checkbox ${GREEN}$name${NC} - $desc$mark_str"
+            else
+                echo -e "${line_start} ${BLUE}[$num_display]${NC} $checkbox $name - $desc$mark_str"
+            fi
+        done
+        if [ "$_vend" -lt "$TOTAL_ITEMS" ]; then echo -e "  ${CYAN}▼ $(( TOTAL_ITEMS - _vend )) more below${NC}"; else echo ""; fi
+        )"
+
+        # Paint the whole frame in place (no full clear -> no flicker)
+        _render_frame "$_hdr
+$_items
+$_ftr"
 
         # Read key
         IFS= read -rsn1 key < /dev/tty 2>/dev/null || key=""

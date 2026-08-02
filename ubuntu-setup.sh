@@ -16,7 +16,7 @@
 #===============================================================================
 
 SCRIPT_VERSION="2.5.0"
-SCRIPT_REVISION="165"
+SCRIPT_REVISION="166"
 SCRIPT_DATE="2026-03-27"
 
 # NOTE: We intentionally do NOT use set -e here.
@@ -1568,34 +1568,37 @@ show_debloat_submenu() {
 
     tput civis 2>/dev/null || true
 
+    printf '\033[2J\033[H'
     while true; do
-        printf '\033[2J\033[H'
+        # Viewport: draw only the items that fit the terminal so the frame never
+        # exceeds the screen -> no terminal scroll -> cursor-home redraw stays aligned.
+        local _rows _avail _voff _vend _over=12
+        _rows=$(tput lines 2>/dev/null || echo 24)
+        _avail=$(( _rows - _over )); [ "$_avail" -lt 1 ] && _avail=1
+        if [ "$TOTAL_BLOAT" -le "$_avail" ]; then
+            _voff=0
+        else
+            _voff=$(( bcursor - _avail / 2 )); [ "$_voff" -lt 0 ] && _voff=0
+            local _vmax=$(( TOTAL_BLOAT - _avail )); [ "$_voff" -gt "$_vmax" ] && _voff=$_vmax
+        fi
+        _vend=$(( _voff + _avail )); [ "$_vend" -gt "$TOTAL_BLOAT" ] && _vend=$TOTAL_BLOAT
+
+        local _fr
+        _fr="$(
         echo -e "${CYAN}╔═══════════════════════════════════════════════════════════════════════════╗${NC}"
         echo -e "${CYAN}║                    ${RED}Debloat - Remove Bloatware${CYAN}                             ║${NC}"
         echo -e "${CYAN}╚═══════════════════════════════════════════════════════════════════════════╝${NC}"
-        echo ""
-        echo -e "${YELLOW}  ${TOTAL_BLOAT} item(s) listed (items marked **debloated are already removed).${NC}"
-        echo -e "${YELLOW}  Select what you want to remove (nothing selected by default).${NC}"
-        echo ""
-        echo -e "${GREEN}═══════════════════════════════════════════════════════════════${NC}"
-        echo -e "${GREEN}     Use ↑↓ arrows to navigate, SPACE to toggle${NC}"
-        echo -e "${GREEN}═══════════════════════════════════════════════════════════════${NC}"
-        echo ""
-
+        echo -e "${YELLOW}  ${TOTAL_BLOAT} item(s)  (**debloated = already removed)  ·  ↑↓ move  SPACE toggle${NC}"
+        if [ "$_voff" -gt 0 ]; then echo -e "  ${CYAN}▲ $_voff more above${NC}"; else echo ""; fi
         local bi
-        for ((bi=0; bi<TOTAL_BLOAT; bi++)); do
+        for ((bi=_voff; bi<_vend; bi++)); do
             local bname="${BLOAT_NAMES[$bi]}"
             local bdesc="${BLOAT_DESCS[$bi]}"
-            local bnum=$(printf "%2d" $((bi + 1)))
+            local bnum; bnum=$(printf "%2d" $((bi + 1)))
             local bcheck="[ ]"
             local bline="   "
-
-            if [ "${BSELECTED[$bi]}" = "1" ]; then
-                bcheck="${RED}[✗]${NC}"
-            fi
-            if [ "$bcursor" = "$bi" ]; then
-                bline=" ${CYAN}▶${NC}"
-            fi
+            [ "${BSELECTED[$bi]}" = "1" ] && bcheck="${RED}[✗]${NC}"
+            [ "$bcursor" = "$bi" ] && bline=" ${CYAN}▶${NC}"
             local bmark=""
             [ "${BLOAT_DONE[$bi]}" = "1" ] && bmark="  ${YELLOW}**debloated${NC}"
             if [ "${BSELECTED[$bi]}" = "1" ]; then
@@ -1604,30 +1607,22 @@ show_debloat_submenu() {
                 echo -e "${bline} ${BLUE}[$bnum]${NC} $bcheck $bname - $bdesc$bmark"
             fi
         done
-
-        echo ""
+        if [ "$_vend" -lt "$TOTAL_BLOAT" ]; then echo -e "  ${CYAN}▼ $(( TOTAL_BLOAT - _vend )) more below${NC}"; else echo ""; fi
         echo -e "${YELLOW}───────────────────────────────────────────────────────────────${NC}"
-
-        local bcount=0
-        local bsel_names=""
+        local bcount=0 bsel_names=""
         for ((bi=0; bi<TOTAL_BLOAT; bi++)); do
-            if [ "${BSELECTED[$bi]}" = "1" ]; then
-                bcount=$((bcount + 1))
-                bsel_names="${bsel_names}${BLOAT_NAMES[$bi]}, "
-            fi
+            if [ "${BSELECTED[$bi]}" = "1" ]; then bcount=$((bcount + 1)); bsel_names="${bsel_names}${BLOAT_NAMES[$bi]}, "; fi
         done
-
         if [ $bcount -gt 0 ]; then
-            bsel_names="${bsel_names%, }"
-            echo -e "  ${RED}Removing ($bcount):${NC} $bsel_names"
+            echo -e "  ${RED}Removing ($bcount):${NC} ${bsel_names%, }"
         else
             echo -e "  ${GREEN}Nothing selected for removal${NC}"
         fi
-
-        echo -e "${YELLOW}───────────────────────────────────────────────────────────────${NC}"
-        echo ""
-        echo -e "  ${CYAN}CONTROLS:${NC}  ${YELLOW}↑↓${NC}=Move  ${YELLOW}SPACE${NC}=Toggle  ${YELLOW}a${NC}=All  ${YELLOW}n${NC}=None  ${GREEN}c/ESC${NC}=Save+Back  ${RED}q${NC}=Discard"
-        echo ""
+        echo -e "  ${CYAN}CONTROLS:${NC} ${YELLOW}↑↓${NC}=Move ${YELLOW}SPACE${NC}=Toggle ${YELLOW}a${NC}=All ${YELLOW}n${NC}=None ${GREEN}c/ESC${NC}=Save ${RED}q${NC}=Discard"
+        )"
+        printf '\033[H'
+        printf '%s\n' "$_fr" | while IFS= read -r _fl; do printf '%s\033[K\n' "$_fl"; done
+        printf '\033[J'
 
         IFS= read -rsn1 bkey < /dev/tty 2>/dev/null || bkey=""
         if [ "$bkey" = $'\x1b' ]; then

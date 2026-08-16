@@ -16,7 +16,7 @@
 #===============================================================================
 
 SCRIPT_VERSION="2.5.0"
-SCRIPT_REVISION="171"
+SCRIPT_REVISION="172"
 SCRIPT_DATE="2026-03-27"
 
 # NOTE: We intentionally do NOT use set -e here.
@@ -1062,7 +1062,7 @@ show_gnome_submenu() {
     esac
     TWEAK_NAMES+=("OpenSSH Server");    TWEAK_DESCS+=("Install + auto-start SSH server (port 22)");            TWEAK_KEYS+=("GNOME_SUB_SSH")
     TWEAK_NAMES+=("Change Hostname");   TWEAK_DESCS+=("Set computer's hostname (asked before install starts)"); TWEAK_KEYS+=("GNOME_SUB_HOSTNAME")
-    TWEAK_NAMES+=("Alias: ccskip");     TWEAK_DESCS+=("claude --dangerously-skip-permissions --effort max");   TWEAK_KEYS+=("GNOME_SUB_CCSKIP")
+    TWEAK_NAMES+=("Alias: ccskip");     TWEAK_DESCS+=("claude --dangerously-skip-permissions --effort max --model claude-opus-5");   TWEAK_KEYS+=("GNOME_SUB_CCSKIP")
     TWEAK_NAMES+=("Alias: cxskip");     TWEAK_DESCS+=("codex --sandbox danger-full-access (xhigh)");           TWEAK_KEYS+=("GNOME_SUB_CXSKIP")
     TWEAK_NAMES+=("Alias: cckimi");     TWEAK_DESCS+=("Claude Code on Kimi backend (+cckimi-token)");           TWEAK_KEYS+=("GNOME_SUB_CCKIMI")
     TWEAK_NAMES+=("Alias: ccglm");      TWEAK_DESCS+=("Claude Code on Z.AI GLM backend (+ccglm-token)");        TWEAK_KEYS+=("GNOME_SUB_CCGLM")
@@ -5229,7 +5229,7 @@ setup_cli_shortcuts() {
     {
         echo ""
         echo "# BEGIN smai-aliases"
-        $GNOME_SUB_CCSKIP && echo "alias ccskip='claude --dangerously-skip-permissions --effort max'"
+        $GNOME_SUB_CCSKIP && echo "alias ccskip='claude --dangerously-skip-permissions --effort max --model claude-opus-5'"
         $GNOME_SUB_CXSKIP && echo "alias cxskip='codex --sandbox danger-full-access -c model_reasoning_effort=\"xhigh\"'"
         if $GNOME_SUB_CCKIMI; then
             cat <<'CCKIMI'

@@ -106,7 +106,7 @@ Grouped under **AI CLI Tools** in the interactive menu, or install directly:
 | Node.js: switch NVM ⇄ native | Shown only when Node.js is installed — swaps between NVM and native (NodeSource apt) |
 | OpenSSH Server | Install + auto-start SSH server (port 22) |
 | Change Hostname | Set the computer's hostname |
-| Alias: ccskip | `claude --dangerously-skip-permissions --effort max` |
+| Alias: ccskip | `claude --dangerously-skip-permissions --effort max --model claude-opus-5` |
 | Alias: cxskip | `codex --sandbox danger-full-access` (xhigh) |
 | Alias: cckimi | Claude Code on Kimi backend (+`cckimi-token` auto) |
 | Alias: ccglm | Claude Code on Z.AI GLM backend (+`ccglm-token` auto) |

@@ -16,7 +16,7 @@
 #===============================================================================
 
 SCRIPT_VERSION="2.5.0"
-SCRIPT_REVISION="169"
+SCRIPT_REVISION="170"
 SCRIPT_DATE="2026-03-27"
 
 # NOTE: We intentionally do NOT use set -e here.
@@ -387,7 +387,7 @@ show_help() {
     echo "      Other AI CLI tools (interactive menu groups these under 'AI CLI Tools')"
     echo "      - Codex (OpenAI), Kimi Code (Moonshot), Grok (xAI),"
     echo "        Gemini (Google), Qwen Code (Alibaba),"
-    echo "        GLM With OpenCode (OpenCode + z.ai GLM-5.2)"
+    echo "        GLM With OpenCode (OpenCode + z.ai GLM-5.3)"
     echo ""
     echo -e "  ${YELLOW}--gh${NC}"
     echo "      GitHub CLI (gh)"
@@ -911,7 +911,7 @@ show_aicli_submenu() {
     AI_NAMES+=("Grok");        AI_DESCS+=("xAI Grok CLI (official x.ai installer)");        AI_KEYS+=("AICLI_SUB_GROK")
     AI_NAMES+=("Gemini CLI");  AI_DESCS+=("Google Gemini CLI (npm @google/gemini-cli)");    AI_KEYS+=("AICLI_SUB_GEMINI")
     AI_NAMES+=("Qwen CLI");    AI_DESCS+=("Alibaba Qwen Code CLI (npm @qwen-code/qwen-code)"); AI_KEYS+=("AICLI_SUB_QWEN")
-    AI_NAMES+=("GLM With OpenCode"); AI_DESCS+=("OpenCode agent, z.ai GLM-5.2 default (npm opencode-ai)"); AI_KEYS+=("AICLI_SUB_OPENCODE")
+    AI_NAMES+=("GLM With OpenCode"); AI_DESCS+=("OpenCode agent, z.ai GLM-5.3 default (npm opencode-ai)"); AI_KEYS+=("AICLI_SUB_OPENCODE")
 
     local TOTAL_AI=${#AI_NAMES[@]}
     local -a ASELECTED=()
@@ -3551,7 +3551,7 @@ install_qwen() {
 }
 
 install_glm_opencode() {
-    log_step "Installing GLM With OpenCode (z.ai GLM-5.2)"
+    log_step "Installing GLM With OpenCode (z.ai GLM-5.3)"
 
     if ! command_exists npm; then
         log_info "OpenCode requires Node.js. Installing NVM + Node.js first..."
@@ -3579,7 +3579,7 @@ install_glm_opencode() {
         fi
     fi
 
-    # 2) Preconfigure z.ai GLM-5.2 as the default model (no API key stored here)
+    # 2) Preconfigure z.ai GLM-5.3 as the default model (no API key stored here)
     local oc_dir="$HOME/.config/opencode"
     local oc_cfg="$oc_dir/opencode.json"
     mkdir -p "$oc_dir"
@@ -3588,7 +3588,7 @@ install_glm_opencode() {
             log_info "OpenCode already has a z.ai provider configured, leaving it as-is."
         else
             log_warning "Existing opencode.json found - not overwriting it."
-            log_info "  To default to GLM-5.2, add a 'zai' provider: https://docs.z.ai/scenario-example/develop-tools/opencode"
+            log_info "  To default to GLM-5.3, add a 'zai' provider: https://docs.z.ai/scenario-example/develop-tools/opencode"
         fi
     else
         cat > "$oc_cfg" <<'OPENCODE_JSON'
@@ -3603,22 +3603,22 @@ install_glm_opencode() {
         "apiKey": "{env:ZAI_API_KEY}"
       },
       "models": {
-        "glm-5.2": { "name": "GLM-5.2" },
+        "glm-5.3": { "name": "GLM-5.3" },
         "glm-5-turbo": { "name": "GLM-5-Turbo" }
       }
     }
   },
-  "model": "zai/glm-5.2"
+  "model": "zai/glm-5.3"
 }
 OPENCODE_JSON
-        log_success "OpenCode configured: default model = z.ai GLM-5.2"
+        log_success "OpenCode configured: default model = z.ai GLM-5.3"
     fi
 
     # 3) Auth is left to the user at runtime - this script stores no secret
     log_info "  Set your z.ai key (GLM Coding Plan) to start:"
     log_info "    export ZAI_API_KEY=<your-key>    (add to ~/.bashrc to persist)"
     log_info "  Subscribe + get API key: https://z.ai/subscribe"
-    log_info "  Then run: opencode   (defaults to GLM-5.2; use /models to switch)"
+    log_info "  Then run: opencode   (defaults to GLM-5.3; use /models to switch)"
     log_info "  Note: general (non-Coding-Plan) keys use baseURL .../api/paas/v4"
 }
 
@@ -5375,12 +5375,12 @@ ccglm() {
     fi
     ANTHROPIC_BASE_URL="https://api.z.ai/api/anthropic" \
     ANTHROPIC_AUTH_TOKEN="$token" \
-    ANTHROPIC_MODEL="glm-5.2[1m]" \
-    ANTHROPIC_DEFAULT_OPUS_MODEL="glm-5.2[1m]" \
-    ANTHROPIC_DEFAULT_SONNET_MODEL="glm-5.2[1m]" \
-    ANTHROPIC_DEFAULT_HAIKU_MODEL="glm-5.2[1m]" \
-    ANTHROPIC_DEFAULT_FABLE_MODEL="glm-5.2[1m]" \
-    CLAUDE_CODE_SUBAGENT_MODEL="glm-5.2[1m]" \
+    ANTHROPIC_MODEL="glm-5.3[1m]" \
+    ANTHROPIC_DEFAULT_OPUS_MODEL="glm-5.3[1m]" \
+    ANTHROPIC_DEFAULT_SONNET_MODEL="glm-5.3[1m]" \
+    ANTHROPIC_DEFAULT_HAIKU_MODEL="glm-5.3[1m]" \
+    ANTHROPIC_DEFAULT_FABLE_MODEL="glm-5.3[1m]" \
+    CLAUDE_CODE_SUBAGENT_MODEL="glm-5.3[1m]" \
     CLAUDE_CODE_AUTO_COMPACT_WINDOW="1000000" \
     CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC="1" \
     API_TIMEOUT_MS="3000000" \

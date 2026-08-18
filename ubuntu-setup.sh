@@ -16,7 +16,7 @@
 #===============================================================================
 
 SCRIPT_VERSION="2.5.0"
-SCRIPT_REVISION="172"
+SCRIPT_REVISION="173"
 SCRIPT_DATE="2026-03-27"
 
 # NOTE: We intentionally do NOT use set -e here.
@@ -3073,7 +3073,8 @@ retry_curl_download() {
     while [ $attempt -le $max_attempts ]; do
         log_info "Attempt $attempt of $max_attempts: $description"
 
-        if curl -L --progress-bar --connect-timeout 30 --max-time 300 -o "$output" "$url"; then
+        # -f: fail on HTTP errors instead of saving the error page as the payload
+        if curl -fL --progress-bar --connect-timeout 30 --max-time 300 -o "$output" "$url"; then
             if [ -s "$output" ]; then
                 log_success "Download completed"
                 return 0
@@ -3627,7 +3628,7 @@ install_localsend() {
     log_info "Installing LocalSend..."
 
     local temp_file="/tmp/localsend.deb"
-    local arch_suffix="" fallback_ver="1.17.0"
+    local arch_suffix="" fallback_ver="1.18.0"
 
     if [ "$DEB_ARCH" == "amd64" ]; then
         arch_suffix="x86-64"
@@ -3635,22 +3636,30 @@ install_localsend() {
         arch_suffix="arm-64"
     fi
 
-    # Latest version from GitHub API (tag "v1.17.0" -> "1.17.0")
-    local latest_tag latest_ver
-    latest_tag=$(curl -fsSL -m 10 https://api.github.com/repos/localsend/localsend/releases/latest 2>/dev/null | grep -oP '"tag_name":\s*"\K[^"]+')
-    latest_ver="${latest_tag#v}"
-    [ -z "$latest_ver" ] && latest_ver="$fallback_ver"
+    # Some releases ship no Linux .deb at all (v1.18.1 was Android-only), so ask
+    # the API for the newest release that actually has a matching .deb asset
+    # instead of guessing a URL from the "latest" tag.
+    local download_url=""
+    download_url=$(curl -fsSL -m 15 "https://api.github.com/repos/localsend/localsend/releases?per_page=15" 2>/dev/null \
+        | grep -oP '"browser_download_url":\s*"\K[^"]+' \
+        | grep -F "linux-${arch_suffix}.deb" | head -1)
 
-    local download_url="https://github.com/localsend/localsend/releases/download/v${latest_ver}/LocalSend-${latest_ver}-linux-${arch_suffix}.deb"
-    log_info "Downloading LocalSend ${latest_ver} (${arch_suffix})..."
-
-    if ! retry_curl_download "$download_url" "$temp_file" "Downloading LocalSend"; then
+    if [ -n "$download_url" ]; then
+        log_info "Downloading $(basename "$download_url")..."
+    else
         download_url="https://github.com/localsend/localsend/releases/download/v${fallback_ver}/LocalSend-${fallback_ver}-linux-${arch_suffix}.deb"
-        retry_curl_download "$download_url" "$temp_file" "Downloading LocalSend (fallback)"
+        log_info "Downloading LocalSend ${fallback_ver} (${arch_suffix}) [fallback]..."
     fi
 
-    if [ ! -f "$temp_file" ]; then
+    if ! retry_curl_download "$download_url" "$temp_file" "Downloading LocalSend"; then
         log_warning "LocalSend download failed after 3 attempts"
+        return 1
+    fi
+
+    # Never hand a truncated or non-deb response to apt
+    if ! dpkg-deb --info "$temp_file" >/dev/null 2>&1; then
+        log_warning "Downloaded file is not a valid .deb package - skipping LocalSend"
+        rm -f "$temp_file"
         return 1
     fi
 

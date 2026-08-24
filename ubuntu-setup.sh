@@ -16,7 +16,7 @@
 #===============================================================================
 
 SCRIPT_VERSION="2.5.0"
-SCRIPT_REVISION="176"
+SCRIPT_REVISION="177"
 SCRIPT_DATE="2026-03-27"
 
 # NOTE: We intentionally do NOT use set -e here.
@@ -535,7 +535,7 @@ show_system_header() {
 # GNOME Tweaks sub-menu selections (global so install_gnome_extensions can read them)
 GNOME_SUB_EXTENSIONS=false; GNOME_SUB_UPDATE=false; GNOME_SUB_TWEAKS_APP=false; GNOME_SUB_DOCK=false
 GNOME_SUB_SCRIPT=false; GNOME_SUB_WAYLAND=false; GNOME_SUB_SSH=false
-GNOME_SUB_CCSKIP=false; GNOME_SUB_CXSKIP=false; GNOME_SUB_CCKIMI=false; GNOME_SUB_CCGLM=false; GNOME_SUB_CCOR=false; GNOME_SUB_CCART=false
+GNOME_SUB_CCSKIP=false; GNOME_SUB_CXSKIP=false; GNOME_SUB_CCKIMI=false; GNOME_SUB_CCGLM=false; GNOME_SUB_CCORT=false; GNOME_SUB_CCART=false
 GNOME_SUB_ENGLISH=false
 GNOME_SUB_SCREEN=false; GNOME_SUB_HIDDEN=false; GNOME_SUB_KB_TR=false; GNOME_SUB_KB_EN=false
 GNOME_SUB_VSCREEN=false; GNOME_SUB_AUTOLOGIN=false; GNOME_SUB_HOSTNAME=false
@@ -559,7 +559,7 @@ gnome_tweak_applied() {
         GNOME_SUB_CXSKIP)     grep -q "^alias cxskip=" "$HOME/.bashrc" 2>/dev/null ;;
         GNOME_SUB_CCKIMI)     grep -q "^cckimi()" "$HOME/.bashrc" 2>/dev/null ;;
         GNOME_SUB_CCGLM)      grep -q "^ccglm()" "$HOME/.bashrc" 2>/dev/null ;;
-        GNOME_SUB_CCOR)       grep -q "^ccor()" "$HOME/.bashrc" 2>/dev/null ;;
+        GNOME_SUB_CCORT)       grep -q "^ccort()" "$HOME/.bashrc" 2>/dev/null ;;
         GNOME_SUB_CCART)      grep -q "^ccart()" "$HOME/.bashrc" 2>/dev/null ;;
         GNOME_SUB_SCREEN)     [ "$(gsettings get org.gnome.desktop.session idle-delay 2>/dev/null)" = "uint32 0" ] ;;
         GNOME_SUB_HIDDEN)     [ "$(gsettings get org.gtk.Settings.FileChooser show-hidden 2>/dev/null)" = "true" ] ;;
@@ -1069,7 +1069,7 @@ show_gnome_submenu() {
     TWEAK_NAMES+=("Alias: cxskip");     TWEAK_DESCS+=("codex --sandbox danger-full-access (xhigh)");           TWEAK_KEYS+=("GNOME_SUB_CXSKIP")
     TWEAK_NAMES+=("Alias: cckimi");     TWEAK_DESCS+=("Claude Code on Kimi backend (+cckimi-token)");           TWEAK_KEYS+=("GNOME_SUB_CCKIMI")
     TWEAK_NAMES+=("Alias: ccglm");      TWEAK_DESCS+=("Claude Code on Z.AI GLM backend (+ccglm-token)");        TWEAK_KEYS+=("GNOME_SUB_CCGLM")
-    TWEAK_NAMES+=("Alias: ccor");       TWEAK_DESCS+=("Claude Code on OpenRouter, model set via ccor-model");    TWEAK_KEYS+=("GNOME_SUB_CCOR")
+    TWEAK_NAMES+=("Alias: ccort");       TWEAK_DESCS+=("Claude Code on OpenRouter, model set via ccort-model");    TWEAK_KEYS+=("GNOME_SUB_CCORT")
     TWEAK_NAMES+=("Alias: ccart");      TWEAK_DESCS+=("Claude Code on AgentRouter, model set via ccart-model");  TWEAK_KEYS+=("GNOME_SUB_CCART")
     TWEAK_NAMES+=("English Language");  TWEAK_DESCS+=("Set system language to English (US)");                   TWEAK_KEYS+=("GNOME_SUB_ENGLISH")
     TWEAK_NAMES+=("Screen Off: Never"); TWEAK_DESCS+=("Disable screen timeout + auto suspend");                TWEAK_KEYS+=("GNOME_SUB_SCREEN")
@@ -1767,7 +1767,7 @@ show_interactive_install_menu() {
     done
     local _tw_applied=0 _tw_total=0
     for _gk in GNOME_SUB_EXTENSIONS GNOME_SUB_TWEAKS_APP GNOME_SUB_SCRIPT GNOME_SUB_WAYLAND \
-               GNOME_SUB_SSH GNOME_SUB_CCSKIP GNOME_SUB_CXSKIP GNOME_SUB_CCKIMI GNOME_SUB_CCGLM GNOME_SUB_CCOR GNOME_SUB_CCART GNOME_SUB_SCREEN GNOME_SUB_HIDDEN \
+               GNOME_SUB_SSH GNOME_SUB_CCSKIP GNOME_SUB_CXSKIP GNOME_SUB_CCKIMI GNOME_SUB_CCGLM GNOME_SUB_CCORT GNOME_SUB_CCART GNOME_SUB_SCREEN GNOME_SUB_HIDDEN \
                GNOME_SUB_KB_TR GNOME_SUB_KB_EN GNOME_SUB_NO_IBUS GNOME_SUB_APPORT \
                GNOME_SUB_CHEESE GNOME_SUB_CLEANUP2Y GNOME_SUB_VSCREEN GNOME_SUB_AUTOLOGIN; do
         _tw_total=$((_tw_total + 1))
@@ -1876,7 +1876,7 @@ show_interactive_install_menu() {
                         $GNOME_SUB_CXSKIP && _tw+="cxskip,"
                         $GNOME_SUB_CCKIMI && _tw+="cckimi,"
                         $GNOME_SUB_CCGLM && _tw+="ccglm,"
-                        $GNOME_SUB_CCOR && _tw+="ccor,"
+                        $GNOME_SUB_CCORT && _tw+="ccort,"
                         $GNOME_SUB_CCART && _tw+="ccart,"
                         $GNOME_SUB_SCREEN && _tw+="Screen,"
                         $GNOME_SUB_KB_TR && _tw+="KB:TR,"
@@ -2128,7 +2128,7 @@ show_interactive_install_menu() {
                                 $GNOME_SUB_CXSKIP     && tweaks_list+="cxskip, "
                                 $GNOME_SUB_CCKIMI     && tweaks_list+="cckimi, "
                                 $GNOME_SUB_CCGLM      && tweaks_list+="ccglm, "
-                                $GNOME_SUB_CCOR       && tweaks_list+="ccor, "
+                                $GNOME_SUB_CCORT       && tweaks_list+="ccort, "
                                 $GNOME_SUB_CCART      && tweaks_list+="ccart, "
                                 $GNOME_SUB_ENGLISH     && tweaks_list+="English Language, "
                                 $GNOME_SUB_SCREEN      && tweaks_list+="Screen Off: Never, "
@@ -4402,7 +4402,7 @@ ACCOUNTSEOF
     fi
 
     # 11. CLI Aliases
-    if $GNOME_SUB_CCSKIP || $GNOME_SUB_CXSKIP || $GNOME_SUB_CCKIMI || $GNOME_SUB_CCGLM || $GNOME_SUB_CCOR || $GNOME_SUB_CCART; then
+    if $GNOME_SUB_CCSKIP || $GNOME_SUB_CXSKIP || $GNOME_SUB_CCKIMI || $GNOME_SUB_CCGLM || $GNOME_SUB_CCORT || $GNOME_SUB_CCART; then
         setup_cli_shortcuts
     fi
 
@@ -5241,6 +5241,13 @@ setup_cli_shortcuts() {
     # --- Bash Aliases (per-item, selected in the Tweaks sub-menu) ---
     # Remove old versions (legacy single-line + marker-based block)
     sed -i '/^alias claude-skip=/d; /^alias ccskip=/d; /^alias codex-skip=/d; /^alias cxskip=/d' "$bashrc" 2>/dev/null
+    # Deprecated: the ccor family was renamed to ccort -- drop any leftovers, no questions asked.
+    for _dep in ccor ccor-token ccor-model; do
+        sed -i -e "/^# ${_dep} ->/d" -e "/^# ${_dep} \[id\]/d" \
+               -e "/^${_dep}[[:space:]]*()[[:space:]]*{.*}[[:space:]]*$/d" \
+               -e "/^${_dep}[[:space:]]*()[[:space:]]*{[[:space:]]*$/,/^}$/d" "$bashrc" 2>/dev/null
+    done
+    unset _dep
     sed -i '/^# Claude Code aliases/d; /^# Codex aliases/d' "$bashrc" 2>/dev/null
     sed -i '/^# BEGIN smai-aliases/,/^# END smai-aliases/d' "$bashrc" 2>/dev/null
 
@@ -5323,30 +5330,30 @@ ccglm() {
 ccglm-token() { __cc_set_token ccglm "$HOME/.zai_token" "$1"; }
 CCGLM
         fi
-        if $GNOME_SUB_CCOR; then
-            cat <<'CCOR'
+        if $GNOME_SUB_CCORT; then
+            cat <<'CCORT'
 
-# ccor -> runs Claude Code on the OpenRouter gateway (key lives in ~/.openrouter_token, chmod 600)
-# The model id lives in ~/.openrouter_model -- set or change it with: ccor-model <id>
-ccor() {
+# ccort -> runs Claude Code on the OpenRouter gateway (key lives in ~/.openrouter_token, chmod 600)
+# The model id lives in ~/.openrouter_model -- set or change it with: ccort-model <id>
+ccort() {
     local token_file="$HOME/.openrouter_token"
     local model_file="$HOME/.openrouter_model"
     local token
     token="$([ -r "$token_file" ] && tr -d '[:space:]' < "$token_file")"
     if [ -z "$token" ]; then
-        printf 'ccor: no API key found. Enter your OpenRouter API key and press Enter: ' >&2
+        printf 'ccort: no API key found. Enter your OpenRouter API key and press Enter: ' >&2
         IFS= read -rs token < /dev/tty
         printf '\n' >&2
         token="$(printf '%s' "$token" | tr -d '[:space:]')"
         if [ -z "$token" ]; then
-            printf 'ccor: no key entered, aborting.\n' >&2
+            printf 'ccort: no key entered, aborting.\n' >&2
             return 1
         fi
         ( umask 177; printf '%s\n' "$token" > "$token_file" ) && chmod 600 "$token_file"
-        printf 'ccor: key saved to %s (mode 600).\n' "$token_file" >&2
+        printf 'ccort: key saved to %s (mode 600).\n' "$token_file" >&2
     fi
 
-    # ---- Models: leave these EMPTY to follow `ccor-model` / the default below --------
+    # ---- Models: leave these EMPTY to follow `ccort-model` / the default below --------
     # Fill a line in only to pin that tier here, e.g. or_haiku_model="z-ai/glm-4.7-flash".
     # Model ids come from https://openrouter.ai/models
     local or_model=""            # main + Opus tier
@@ -5362,7 +5369,7 @@ ccor() {
     fi
     if [ -z "$or_model" ]; then
         or_model="$or_default_model"
-        printf 'ccor: no model set, falling back to %s -- change it with: ccor-model <id>\n' "$or_model" >&2
+        printf 'ccort: no model set, falling back to %s -- change it with: ccort-model <id>\n' "$or_model" >&2
     fi
     : "${or_sonnet_model:=$or_model}"
     : "${or_haiku_model:=$or_model}"
@@ -5386,14 +5393,14 @@ ccor() {
     command claude --dangerously-skip-permissions "$@"
 }
 
-ccor-token() { __cc_set_token ccor "$HOME/.openrouter_token" "$1"; }
+ccort-token() { __cc_set_token ccort "$HOME/.openrouter_token" "$1"; }
 
-# ccor-model [id] -- set the model ccor runs on (kept in .openrouter_model).
+# ccort-model [id] -- set the model ccort runs on (kept in .openrouter_model).
 # With no argument it shows a numbered picker; option 0 takes any id from https://openrouter.ai/models
-ccor-model() {
+ccort-model() {
     local model_file="$HOME/.openrouter_model" id="$1"
     if [ -z "$id" ]; then
-        __cc_pick_model ccor-model "$model_file" \
+        __cc_pick_model ccort-model "$model_file" \
         stealth/ox-alpha \
         anthropic/claude-opus-4.8 \
         anthropic/claude-sonnet-5 \
@@ -5408,10 +5415,10 @@ ccor-model() {
     fi
     id="$(printf '%s' "$id" | tr -d '[:space:]')"
     printf '%s\n' "$id" > "$model_file" || return 1
-    printf 'ccor-model: model set to %s (%s)\n' "$id" "$model_file" >&2
+    printf 'ccort-model: model set to %s (%s)\n' "$id" "$model_file" >&2
 }
 
-CCOR
+CCORT
         fi
         if $GNOME_SUB_CCART; then
             cat <<'CCART'
@@ -5494,7 +5501,7 @@ ccart-model() {
 }
 CCART
         fi
-        if $GNOME_SUB_CCKIMI || $GNOME_SUB_CCGLM || $GNOME_SUB_CCOR || $GNOME_SUB_CCART; then
+        if $GNOME_SUB_CCKIMI || $GNOME_SUB_CCGLM || $GNOME_SUB_CCORT || $GNOME_SUB_CCART; then
             cat <<'CCSET'
 
 # __cc_set_token <label> <token_file> [key] -- shared writer for the cc*-token helpers
@@ -5562,7 +5569,7 @@ CCSET
     $GNOME_SUB_CXSKIP && _alias_list+="cxskip, "
     $GNOME_SUB_CCKIMI && _alias_list+="cckimi (+cckimi-token), "
     $GNOME_SUB_CCGLM  && _alias_list+="ccglm (+ccglm-token), "
-    $GNOME_SUB_CCOR   && _alias_list+="ccor (+ccor-token, ccor-model), "
+    $GNOME_SUB_CCORT   && _alias_list+="ccort (+ccort-token, ccort-model), "
     $GNOME_SUB_CCART  && _alias_list+="ccart (+ccart-token, ccart-model), "
     _alias_list="${_alias_list%, }"
     if [ -n "$_alias_list" ]; then
@@ -6129,9 +6136,9 @@ debloat_system() {
                 for rcfile in "$HOME/.bashrc" "$HOME/.zshrc" "$HOME/.profile"; do
                     [ -f "$rcfile" ] && sed -i '/\.claude\/bin/d; /# Added by Claude/d' "$rcfile" 2>/dev/null
                 done
-                # 2) Bash aliases (claude-skip, ccskip) + cc backend helpers (cckimi/ccglm/ccor)
+                # 2) Bash aliases (claude-skip, ccskip) + cc backend helpers (cckimi/ccglm/ccort)
                 sed -i '/^alias claude-skip=/d; /^alias ccskip=/d' "$HOME/.bashrc" 2>/dev/null
-                sed -i '/^# cckimi ->/,/^}/d; /^# ccglm ->/,/^}/d; /^# ccor ->/,/^}/d; /^# ccor-model /,/^}/d; /^# ccart ->/,/^}/d; /^# ccart-model /,/^}/d; /^# __cc_set_token/,/^}/d; /^# __cc_pick_model/,/^}/d; /^cckimi-token()/d; /^ccglm-token()/d; /^ccor-token()/d; /^ccart-token()/d' "$HOME/.bashrc" 2>/dev/null
+                sed -i '/^# cckimi ->/,/^}/d; /^# ccglm ->/,/^}/d; /^# ccort ->/,/^}/d; /^# ccort-model /,/^}/d; /^# ccart ->/,/^}/d; /^# ccart-model /,/^}/d; /^# __cc_set_token/,/^}/d; /^# __cc_pick_model/,/^}/d; /^cckimi-token()/d; /^ccglm-token()/d; /^ccort-token()/d; /^ccart-token()/d' "$HOME/.bashrc" 2>/dev/null
                 # 3) VS Code extension
                 if command_exists code; then
                     code --uninstall-extension anthropic.claude-code 2>/dev/null || true
@@ -6537,7 +6544,7 @@ print_summary() {
         $GNOME_SUB_CXSKIP    && any_tweak=true
         $GNOME_SUB_CCKIMI    && any_tweak=true
         $GNOME_SUB_CCGLM     && any_tweak=true
-        $GNOME_SUB_CCOR      && any_tweak=true
+        $GNOME_SUB_CCORT      && any_tweak=true
         $GNOME_SUB_CCART     && any_tweak=true
         $GNOME_SUB_ENGLISH    && any_tweak=true
         $GNOME_SUB_SCREEN     && any_tweak=true
@@ -6566,7 +6573,7 @@ print_summary() {
             $GNOME_SUB_CXSKIP    && grep -q "^alias cxskip=" "$HOME/.bashrc" 2>/dev/null && echo -e "    ${GREEN}✓${NC} Alias cxskip"
             $GNOME_SUB_CCKIMI    && grep -q "^cckimi()" "$HOME/.bashrc" 2>/dev/null && echo -e "    ${GREEN}✓${NC} Alias cckimi"
             $GNOME_SUB_CCGLM     && grep -q "^ccglm()" "$HOME/.bashrc" 2>/dev/null && echo -e "    ${GREEN}✓${NC} Alias ccglm"
-            $GNOME_SUB_CCOR      && grep -q "^ccor()" "$HOME/.bashrc" 2>/dev/null && echo -e "    ${GREEN}✓${NC} Alias ccor"
+            $GNOME_SUB_CCORT      && grep -q "^ccort()" "$HOME/.bashrc" 2>/dev/null && echo -e "    ${GREEN}✓${NC} Alias ccort"
             $GNOME_SUB_CCART     && grep -q "^ccart()" "$HOME/.bashrc" 2>/dev/null && echo -e "    ${GREEN}✓${NC} Alias ccart"
             $GNOME_SUB_ENGLISH    && echo -e "    ${GREEN}✓${NC} English Language"
             $GNOME_SUB_SCREEN     && echo -e "    ${GREEN}✓${NC} Screen Off: Never"

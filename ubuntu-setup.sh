@@ -16,7 +16,7 @@
 #===============================================================================
 
 SCRIPT_VERSION="2.5.0"
-SCRIPT_REVISION="175"
+SCRIPT_REVISION="176"
 SCRIPT_DATE="2026-03-27"
 
 # NOTE: We intentionally do NOT use set -e here.
@@ -535,7 +535,7 @@ show_system_header() {
 # GNOME Tweaks sub-menu selections (global so install_gnome_extensions can read them)
 GNOME_SUB_EXTENSIONS=false; GNOME_SUB_UPDATE=false; GNOME_SUB_TWEAKS_APP=false; GNOME_SUB_DOCK=false
 GNOME_SUB_SCRIPT=false; GNOME_SUB_WAYLAND=false; GNOME_SUB_SSH=false
-GNOME_SUB_CCSKIP=false; GNOME_SUB_CXSKIP=false; GNOME_SUB_CCKIMI=false; GNOME_SUB_CCGLM=false; GNOME_SUB_CCOR=false
+GNOME_SUB_CCSKIP=false; GNOME_SUB_CXSKIP=false; GNOME_SUB_CCKIMI=false; GNOME_SUB_CCGLM=false; GNOME_SUB_CCOR=false; GNOME_SUB_CCART=false
 GNOME_SUB_ENGLISH=false
 GNOME_SUB_SCREEN=false; GNOME_SUB_HIDDEN=false; GNOME_SUB_KB_TR=false; GNOME_SUB_KB_EN=false
 GNOME_SUB_VSCREEN=false; GNOME_SUB_AUTOLOGIN=false; GNOME_SUB_HOSTNAME=false
@@ -560,6 +560,7 @@ gnome_tweak_applied() {
         GNOME_SUB_CCKIMI)     grep -q "^cckimi()" "$HOME/.bashrc" 2>/dev/null ;;
         GNOME_SUB_CCGLM)      grep -q "^ccglm()" "$HOME/.bashrc" 2>/dev/null ;;
         GNOME_SUB_CCOR)       grep -q "^ccor()" "$HOME/.bashrc" 2>/dev/null ;;
+        GNOME_SUB_CCART)      grep -q "^ccart()" "$HOME/.bashrc" 2>/dev/null ;;
         GNOME_SUB_SCREEN)     [ "$(gsettings get org.gnome.desktop.session idle-delay 2>/dev/null)" = "uint32 0" ] ;;
         GNOME_SUB_HIDDEN)     [ "$(gsettings get org.gtk.Settings.FileChooser show-hidden 2>/dev/null)" = "true" ] ;;
         GNOME_SUB_KB_TR)      gsettings get org.gnome.desktop.input-sources sources 2>/dev/null | grep -q "'tr'" ;;
@@ -1069,6 +1070,7 @@ show_gnome_submenu() {
     TWEAK_NAMES+=("Alias: cckimi");     TWEAK_DESCS+=("Claude Code on Kimi backend (+cckimi-token)");           TWEAK_KEYS+=("GNOME_SUB_CCKIMI")
     TWEAK_NAMES+=("Alias: ccglm");      TWEAK_DESCS+=("Claude Code on Z.AI GLM backend (+ccglm-token)");        TWEAK_KEYS+=("GNOME_SUB_CCGLM")
     TWEAK_NAMES+=("Alias: ccor");       TWEAK_DESCS+=("Claude Code on OpenRouter, model set via ccor-model");    TWEAK_KEYS+=("GNOME_SUB_CCOR")
+    TWEAK_NAMES+=("Alias: ccart");      TWEAK_DESCS+=("Claude Code on AgentRouter, model set via ccart-model");  TWEAK_KEYS+=("GNOME_SUB_CCART")
     TWEAK_NAMES+=("English Language");  TWEAK_DESCS+=("Set system language to English (US)");                   TWEAK_KEYS+=("GNOME_SUB_ENGLISH")
     TWEAK_NAMES+=("Screen Off: Never"); TWEAK_DESCS+=("Disable screen timeout + auto suspend");                TWEAK_KEYS+=("GNOME_SUB_SCREEN")
     TWEAK_NAMES+=("Show Hidden Files"); TWEAK_DESCS+=("Show hidden files in file manager");                    TWEAK_KEYS+=("GNOME_SUB_HIDDEN")
@@ -1765,7 +1767,7 @@ show_interactive_install_menu() {
     done
     local _tw_applied=0 _tw_total=0
     for _gk in GNOME_SUB_EXTENSIONS GNOME_SUB_TWEAKS_APP GNOME_SUB_SCRIPT GNOME_SUB_WAYLAND \
-               GNOME_SUB_SSH GNOME_SUB_CCSKIP GNOME_SUB_CXSKIP GNOME_SUB_CCKIMI GNOME_SUB_CCGLM GNOME_SUB_CCOR GNOME_SUB_SCREEN GNOME_SUB_HIDDEN \
+               GNOME_SUB_SSH GNOME_SUB_CCSKIP GNOME_SUB_CXSKIP GNOME_SUB_CCKIMI GNOME_SUB_CCGLM GNOME_SUB_CCOR GNOME_SUB_CCART GNOME_SUB_SCREEN GNOME_SUB_HIDDEN \
                GNOME_SUB_KB_TR GNOME_SUB_KB_EN GNOME_SUB_NO_IBUS GNOME_SUB_APPORT \
                GNOME_SUB_CHEESE GNOME_SUB_CLEANUP2Y GNOME_SUB_VSCREEN GNOME_SUB_AUTOLOGIN; do
         _tw_total=$((_tw_total + 1))
@@ -1875,6 +1877,7 @@ show_interactive_install_menu() {
                         $GNOME_SUB_CCKIMI && _tw+="cckimi,"
                         $GNOME_SUB_CCGLM && _tw+="ccglm,"
                         $GNOME_SUB_CCOR && _tw+="ccor,"
+                        $GNOME_SUB_CCART && _tw+="ccart,"
                         $GNOME_SUB_SCREEN && _tw+="Screen,"
                         $GNOME_SUB_KB_TR && _tw+="KB:TR,"
                         $GNOME_SUB_KB_EN && _tw+="KB:EN,"
@@ -2126,6 +2129,7 @@ show_interactive_install_menu() {
                                 $GNOME_SUB_CCKIMI     && tweaks_list+="cckimi, "
                                 $GNOME_SUB_CCGLM      && tweaks_list+="ccglm, "
                                 $GNOME_SUB_CCOR       && tweaks_list+="ccor, "
+                                $GNOME_SUB_CCART      && tweaks_list+="ccart, "
                                 $GNOME_SUB_ENGLISH     && tweaks_list+="English Language, "
                                 $GNOME_SUB_SCREEN      && tweaks_list+="Screen Off: Never, "
                                 $GNOME_SUB_HIDDEN      && tweaks_list+="Show Hidden Files, "
@@ -4398,7 +4402,7 @@ ACCOUNTSEOF
     fi
 
     # 11. CLI Aliases
-    if $GNOME_SUB_CCSKIP || $GNOME_SUB_CXSKIP || $GNOME_SUB_CCKIMI || $GNOME_SUB_CCGLM || $GNOME_SUB_CCOR; then
+    if $GNOME_SUB_CCSKIP || $GNOME_SUB_CXSKIP || $GNOME_SUB_CCKIMI || $GNOME_SUB_CCGLM || $GNOME_SUB_CCOR || $GNOME_SUB_CCART; then
         setup_cli_shortcuts
     fi
 
@@ -5384,24 +5388,113 @@ ccor() {
 
 ccor-token() { __cc_set_token ccor "$HOME/.openrouter_token" "$1"; }
 
-# ccor-model [id] -- set the OpenRouter model ccor runs on (kept in ~/.openrouter_model)
+# ccor-model [id] -- set the model ccor runs on (kept in .openrouter_model).
+# With no argument it shows a numbered picker; option 0 takes any id from https://openrouter.ai/models
 ccor-model() {
     local model_file="$HOME/.openrouter_model" id="$1"
     if [ -z "$id" ]; then
-        printf 'ccor-model - paste an OpenRouter model id (browse https://openrouter.ai/models): ' >&2
-        IFS= read -r id < /dev/tty
+        __cc_pick_model ccor-model "$model_file" \
+        stealth/ox-alpha \
+        anthropic/claude-opus-4.8 \
+        anthropic/claude-sonnet-5 \
+        anthropic/claude-haiku-4.5 \
+        x-ai/grok-4.20 \
+        openai/gpt-5.6-sol \
+        google/gemini-3.1-pro-preview \
+        deepseek/deepseek-v4-pro \
+        moonshotai/kimi-k3 \
+        z-ai/glm-5
+        return
     fi
     id="$(printf '%s' "$id" | tr -d '[:space:]')"
-    if [ -z "$id" ]; then
-        printf 'ccor-model: no id given, %s left unchanged\n' "$model_file" >&2
-        return 1
-    fi
     printf '%s\n' "$id" > "$model_file" || return 1
-    printf 'ccor-model: model set to %s (%s). Verify with: ccor -p "ok"\n' "$id" "$model_file" >&2
+    printf 'ccor-model: model set to %s (%s)\n' "$id" "$model_file" >&2
 }
+
 CCOR
         fi
-        if $GNOME_SUB_CCKIMI || $GNOME_SUB_CCGLM || $GNOME_SUB_CCOR; then
+        if $GNOME_SUB_CCART; then
+            cat <<'CCART'
+
+# ccart -> runs Claude Code on the AgentRouter gateway (key lives in ~/.agentrouter_token, chmod 600)
+# The model id lives in ~/.agentrouter_model -- set or change it with: ccart-model <id>
+ccart() {
+    local token_file="$HOME/.agentrouter_token"
+    local model_file="$HOME/.agentrouter_model"
+    local token
+    token="$([ -r "$token_file" ] && tr -d '[:space:]' < "$token_file")"
+    if [ -z "$token" ]; then
+        printf 'ccart: no API key found. Enter your AgentRouter API key and press Enter: ' >&2
+        IFS= read -rs token < /dev/tty
+        printf '\n' >&2
+        token="$(printf '%s' "$token" | tr -d '[:space:]')"
+        if [ -z "$token" ]; then
+            printf 'ccart: no key entered, aborting.\n' >&2
+            return 1
+        fi
+        ( umask 177; printf '%s\n' "$token" > "$token_file" ) && chmod 600 "$token_file"
+        printf 'ccart: key saved to %s (mode 600).\n' "$token_file" >&2
+    fi
+
+    # ---- Models: leave these EMPTY to follow `ccart-model` / the default below -------
+    # AgentRouter serves a short list -- claude-opus-5, claude-opus-4-8, gpt-5.6-sol,
+    # deepseek-v4f. Fill a line in only to pin that tier here.
+    local ar_model=""            # main + Opus tier
+    local ar_sonnet_model=""     # Sonnet tier
+    local ar_haiku_model=""      # Haiku tier -- background work (summaries, titles)
+    local ar_fable_model=""      # Fable tier -- fast
+    local ar_subagent_model=""   # subagents
+    local ar_default_model="claude-opus-5"   # used when nothing else is set
+    # ---------------------------------------------------------------------------------
+    # Resolution order for the main model: pinned above -> ~/.agentrouter_model -> default.
+    if [ -z "$ar_model" ] && [ -r "$model_file" ]; then
+        ar_model="$(tr -d '[:space:]' < "$model_file")"
+    fi
+    if [ -z "$ar_model" ]; then
+        ar_model="$ar_default_model"
+        printf 'ccart: no model set, falling back to %s -- change it with: ccart-model <id>\n' "$ar_model" >&2
+    fi
+    : "${ar_sonnet_model:=$ar_model}"
+    : "${ar_haiku_model:=$ar_model}"
+    : "${ar_fable_model:=$ar_model}"
+    : "${ar_subagent_model:=$ar_model}"
+
+    # ANTHROPIC_API_KEY is blanked so the gateway only ever sees the Bearer token:
+    # Claude Code sends ANTHROPIC_API_KEY as x-api-key, a direct-Anthropic credential.
+    ANTHROPIC_BASE_URL="https://agentrouter.org" \
+    ANTHROPIC_AUTH_TOKEN="$token" \
+    ANTHROPIC_API_KEY="" \
+    ANTHROPIC_MODEL="$ar_model" \
+    ANTHROPIC_DEFAULT_OPUS_MODEL="$ar_model" \
+    ANTHROPIC_DEFAULT_SONNET_MODEL="$ar_sonnet_model" \
+    ANTHROPIC_DEFAULT_HAIKU_MODEL="$ar_haiku_model" \
+    ANTHROPIC_DEFAULT_FABLE_MODEL="$ar_fable_model" \
+    CLAUDE_CODE_SUBAGENT_MODEL="$ar_subagent_model" \
+    API_TIMEOUT_MS="3000000" \
+    command claude --dangerously-skip-permissions "$@"
+}
+
+ccart-token() { __cc_set_token ccart "$HOME/.agentrouter_token" "$1"; }
+
+# ccart-model [id] -- set the model ccart runs on (kept in .agentrouter_model).
+# With no argument it shows a numbered picker; the list is AgentRouter's full catalogue.
+ccart-model() {
+    local model_file="$HOME/.agentrouter_model" id="$1"
+    if [ -z "$id" ]; then
+        __cc_pick_model ccart-model "$model_file" \
+        claude-opus-5 \
+        claude-opus-4-8 \
+        gpt-5.6-sol \
+        deepseek-v4f
+        return
+    fi
+    id="$(printf '%s' "$id" | tr -d '[:space:]')"
+    printf '%s\n' "$id" > "$model_file" || return 1
+    printf 'ccart-model: model set to %s (%s)\n' "$id" "$model_file" >&2
+}
+CCART
+        fi
+        if $GNOME_SUB_CCKIMI || $GNOME_SUB_CCGLM || $GNOME_SUB_CCOR || $GNOME_SUB_CCART; then
             cat <<'CCSET'
 
 # __cc_set_token <label> <token_file> [key] -- shared writer for the cc*-token helpers
@@ -5421,6 +5514,44 @@ __cc_set_token() {
         "$label" "$token_file" "${#key}" \
         "$(stat -c '%a' "$token_file" 2>/dev/null || echo '600')" "$label"
 }
+
+# __cc_pick_model <label> <model_file> <id...> -- numbered picker shared by the cc*-model
+# helpers. Prints to stderr, reads from /dev/tty, writes the chosen id to <model_file>.
+__cc_pick_model() {
+    local label="$1" model_file="$2"; shift 2
+    local current="" m pick chosen="" n=1 total=0
+    [ -r "$model_file" ] && current="$(tr -d '[:space:]' < "$model_file")"
+    printf '%s - pick a model:\n' "$label" >&2
+    for m in "$@"; do
+        if [ "$m" = "$current" ]; then
+            printf '  %2d. %s   <- current\n' "$n" "$m" >&2
+        else
+            printf '  %2d. %s\n' "$n" "$m" >&2
+        fi
+        n=$((n + 1)); total=$((total + 1))
+    done
+    printf '   0. type a different id by hand\n' >&2
+    printf 'choice [1-%d, 0]: ' "$total" >&2
+    IFS= read -r pick < /dev/tty
+    pick="$(printf '%s' "$pick" | tr -d '[:space:]')"
+    if [ "$pick" = "0" ]; then
+        printf 'model id: ' >&2
+        IFS= read -r chosen < /dev/tty
+    else
+        n=1
+        for m in "$@"; do
+            [ "$pick" = "$n" ] && chosen="$m"
+            n=$((n + 1))
+        done
+    fi
+    chosen="$(printf '%s' "$chosen" | tr -d '[:space:]')"
+    if [ -z "$chosen" ]; then
+        printf '%s: nothing picked, %s left unchanged\n' "$label" "$model_file" >&2
+        return 1
+    fi
+    printf '%s\n' "$chosen" > "$model_file" || return 1
+    printf '%s: model set to %s (%s)\n' "$label" "$chosen" "$model_file" >&2
+}
 CCSET
         fi
         echo "# END smai-aliases"
@@ -5432,6 +5563,7 @@ CCSET
     $GNOME_SUB_CCKIMI && _alias_list+="cckimi (+cckimi-token), "
     $GNOME_SUB_CCGLM  && _alias_list+="ccglm (+ccglm-token), "
     $GNOME_SUB_CCOR   && _alias_list+="ccor (+ccor-token, ccor-model), "
+    $GNOME_SUB_CCART  && _alias_list+="ccart (+ccart-token, ccart-model), "
     _alias_list="${_alias_list%, }"
     if [ -n "$_alias_list" ]; then
         log_success "Aliases added: $_alias_list"
@@ -5999,7 +6131,7 @@ debloat_system() {
                 done
                 # 2) Bash aliases (claude-skip, ccskip) + cc backend helpers (cckimi/ccglm/ccor)
                 sed -i '/^alias claude-skip=/d; /^alias ccskip=/d' "$HOME/.bashrc" 2>/dev/null
-                sed -i '/^# cckimi ->/,/^}/d; /^# ccglm ->/,/^}/d; /^# ccor ->/,/^}/d; /^# ccor-model /,/^}/d; /^# __cc_set_token/,/^}/d; /^cckimi-token()/d; /^ccglm-token()/d; /^ccor-token()/d' "$HOME/.bashrc" 2>/dev/null
+                sed -i '/^# cckimi ->/,/^}/d; /^# ccglm ->/,/^}/d; /^# ccor ->/,/^}/d; /^# ccor-model /,/^}/d; /^# ccart ->/,/^}/d; /^# ccart-model /,/^}/d; /^# __cc_set_token/,/^}/d; /^# __cc_pick_model/,/^}/d; /^cckimi-token()/d; /^ccglm-token()/d; /^ccor-token()/d; /^ccart-token()/d' "$HOME/.bashrc" 2>/dev/null
                 # 3) VS Code extension
                 if command_exists code; then
                     code --uninstall-extension anthropic.claude-code 2>/dev/null || true
@@ -6406,6 +6538,7 @@ print_summary() {
         $GNOME_SUB_CCKIMI    && any_tweak=true
         $GNOME_SUB_CCGLM     && any_tweak=true
         $GNOME_SUB_CCOR      && any_tweak=true
+        $GNOME_SUB_CCART     && any_tweak=true
         $GNOME_SUB_ENGLISH    && any_tweak=true
         $GNOME_SUB_SCREEN     && any_tweak=true
         $GNOME_SUB_HIDDEN     && any_tweak=true
@@ -6434,6 +6567,7 @@ print_summary() {
             $GNOME_SUB_CCKIMI    && grep -q "^cckimi()" "$HOME/.bashrc" 2>/dev/null && echo -e "    ${GREEN}✓${NC} Alias cckimi"
             $GNOME_SUB_CCGLM     && grep -q "^ccglm()" "$HOME/.bashrc" 2>/dev/null && echo -e "    ${GREEN}✓${NC} Alias ccglm"
             $GNOME_SUB_CCOR      && grep -q "^ccor()" "$HOME/.bashrc" 2>/dev/null && echo -e "    ${GREEN}✓${NC} Alias ccor"
+            $GNOME_SUB_CCART     && grep -q "^ccart()" "$HOME/.bashrc" 2>/dev/null && echo -e "    ${GREEN}✓${NC} Alias ccart"
             $GNOME_SUB_ENGLISH    && echo -e "    ${GREEN}✓${NC} English Language"
             $GNOME_SUB_SCREEN     && echo -e "    ${GREEN}✓${NC} Screen Off: Never"
             $GNOME_SUB_HIDDEN     && echo -e "    ${GREEN}✓${NC} Show Hidden Files"

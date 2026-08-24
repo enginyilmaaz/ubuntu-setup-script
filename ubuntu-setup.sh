@@ -16,7 +16,7 @@
 #===============================================================================
 
 SCRIPT_VERSION="2.5.0"
-SCRIPT_REVISION="174"
+SCRIPT_REVISION="175"
 SCRIPT_DATE="2026-03-27"
 
 # NOTE: We intentionally do NOT use set -e here.
@@ -1068,7 +1068,7 @@ show_gnome_submenu() {
     TWEAK_NAMES+=("Alias: cxskip");     TWEAK_DESCS+=("codex --sandbox danger-full-access (xhigh)");           TWEAK_KEYS+=("GNOME_SUB_CXSKIP")
     TWEAK_NAMES+=("Alias: cckimi");     TWEAK_DESCS+=("Claude Code on Kimi backend (+cckimi-token)");           TWEAK_KEYS+=("GNOME_SUB_CCKIMI")
     TWEAK_NAMES+=("Alias: ccglm");      TWEAK_DESCS+=("Claude Code on Z.AI GLM backend (+ccglm-token)");        TWEAK_KEYS+=("GNOME_SUB_CCGLM")
-    TWEAK_NAMES+=("Alias: ccor");       TWEAK_DESCS+=("Claude Code on OpenRouter, model left blank (+ccor-token)"); TWEAK_KEYS+=("GNOME_SUB_CCOR")
+    TWEAK_NAMES+=("Alias: ccor");       TWEAK_DESCS+=("Claude Code on OpenRouter, model set via ccor-model");    TWEAK_KEYS+=("GNOME_SUB_CCOR")
     TWEAK_NAMES+=("English Language");  TWEAK_DESCS+=("Set system language to English (US)");                   TWEAK_KEYS+=("GNOME_SUB_ENGLISH")
     TWEAK_NAMES+=("Screen Off: Never"); TWEAK_DESCS+=("Disable screen timeout + auto suspend");                TWEAK_KEYS+=("GNOME_SUB_SCREEN")
     TWEAK_NAMES+=("Show Hidden Files"); TWEAK_DESCS+=("Show hidden files in file manager");                    TWEAK_KEYS+=("GNOME_SUB_HIDDEN")
@@ -5323,8 +5323,10 @@ CCGLM
             cat <<'CCOR'
 
 # ccor -> runs Claude Code on the OpenRouter gateway (key lives in ~/.openrouter_token, chmod 600)
+# The model id lives in ~/.openrouter_model -- set or change it with: ccor-model <id>
 ccor() {
     local token_file="$HOME/.openrouter_token"
+    local model_file="$HOME/.openrouter_model"
     local token
     token="$([ -r "$token_file" ] && tr -d '[:space:]' < "$token_file")"
     if [ -z "$token" ]; then
@@ -5340,21 +5342,23 @@ ccor() {
         printf 'ccor: key saved to %s (mode 600).\n' "$token_file" >&2
     fi
 
-    # ---- OpenRouter models: intentionally LEFT EMPTY -- fill them in yourself -------
-    # Model ids come from https://openrouter.ai/models, e.g. "anthropic/claude-opus-4.5"
-    # or the tilde "latest" form "~anthropic/claude-opus-latest". Only or_model is
-    # required; every tier left blank falls back to it.
+    # ---- Models: leave these EMPTY to follow `ccor-model` / the default below --------
+    # Fill a line in only to pin that tier here, e.g. or_haiku_model="z-ai/glm-4.7-flash".
+    # Model ids come from https://openrouter.ai/models
     local or_model=""            # main + Opus tier
     local or_sonnet_model=""     # Sonnet tier
     local or_haiku_model=""      # Haiku tier -- background work (summaries, titles)
     local or_fable_model=""      # Fable tier -- fast
     local or_subagent_model=""   # subagents
-    # --------------------------------------------------------------------------------
+    local or_default_model="stealth/ox-alpha"   # used when nothing else is set
+    # ---------------------------------------------------------------------------------
+    # Resolution order for the main model: pinned above -> ~/.openrouter_model -> default.
+    if [ -z "$or_model" ] && [ -r "$model_file" ]; then
+        or_model="$(tr -d '[:space:]' < "$model_file")"
+    fi
     if [ -z "$or_model" ]; then
-        printf 'ccor: no model set yet. Edit the ccor() block in ~/.bashrc and fill in\n' >&2
-        printf '      or_model= with an OpenRouter model id -- pick one at\n' >&2
-        printf '      https://openrouter.ai/models\n' >&2
-        return 1
+        or_model="$or_default_model"
+        printf 'ccor: no model set, falling back to %s -- change it with: ccor-model <id>\n' "$or_model" >&2
     fi
     : "${or_sonnet_model:=$or_model}"
     : "${or_haiku_model:=$or_model}"
@@ -5379,6 +5383,22 @@ ccor() {
 }
 
 ccor-token() { __cc_set_token ccor "$HOME/.openrouter_token" "$1"; }
+
+# ccor-model [id] -- set the OpenRouter model ccor runs on (kept in ~/.openrouter_model)
+ccor-model() {
+    local model_file="$HOME/.openrouter_model" id="$1"
+    if [ -z "$id" ]; then
+        printf 'ccor-model - paste an OpenRouter model id (browse https://openrouter.ai/models): ' >&2
+        IFS= read -r id < /dev/tty
+    fi
+    id="$(printf '%s' "$id" | tr -d '[:space:]')"
+    if [ -z "$id" ]; then
+        printf 'ccor-model: no id given, %s left unchanged\n' "$model_file" >&2
+        return 1
+    fi
+    printf '%s\n' "$id" > "$model_file" || return 1
+    printf 'ccor-model: model set to %s (%s). Verify with: ccor -p "ok"\n' "$id" "$model_file" >&2
+}
 CCOR
         fi
         if $GNOME_SUB_CCKIMI || $GNOME_SUB_CCGLM || $GNOME_SUB_CCOR; then
@@ -5411,7 +5431,7 @@ CCSET
     $GNOME_SUB_CXSKIP && _alias_list+="cxskip, "
     $GNOME_SUB_CCKIMI && _alias_list+="cckimi (+cckimi-token), "
     $GNOME_SUB_CCGLM  && _alias_list+="ccglm (+ccglm-token), "
-    $GNOME_SUB_CCOR   && _alias_list+="ccor (+ccor-token), "
+    $GNOME_SUB_CCOR   && _alias_list+="ccor (+ccor-token, ccor-model), "
     _alias_list="${_alias_list%, }"
     if [ -n "$_alias_list" ]; then
         log_success "Aliases added: $_alias_list"
@@ -5979,7 +5999,7 @@ debloat_system() {
                 done
                 # 2) Bash aliases (claude-skip, ccskip) + cc backend helpers (cckimi/ccglm/ccor)
                 sed -i '/^alias claude-skip=/d; /^alias ccskip=/d' "$HOME/.bashrc" 2>/dev/null
-                sed -i '/^# cckimi ->/,/^}/d; /^# ccglm ->/,/^}/d; /^# ccor ->/,/^}/d; /^# __cc_set_token/,/^}/d; /^cckimi-token()/d; /^ccglm-token()/d; /^ccor-token()/d' "$HOME/.bashrc" 2>/dev/null
+                sed -i '/^# cckimi ->/,/^}/d; /^# ccglm ->/,/^}/d; /^# ccor ->/,/^}/d; /^# ccor-model /,/^}/d; /^# __cc_set_token/,/^}/d; /^cckimi-token()/d; /^ccglm-token()/d; /^ccor-token()/d' "$HOME/.bashrc" 2>/dev/null
                 # 3) VS Code extension
                 if command_exists code; then
                     code --uninstall-extension anthropic.claude-code 2>/dev/null || true

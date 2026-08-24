@@ -2,7 +2,7 @@
 
 A comprehensive, modular Bash script that automates Ubuntu post-installation setup. Install your favorite tools, configure your desktop environment, debloat the system, and get a fresh Ubuntu machine ready for development in minutes — from a single command.
 
-**Version:** 2.5.0 (rev-151)
+**Version:** 2.5.0 (rev-174)
 
 ## 🚀 Quick Start
 
@@ -110,6 +110,7 @@ Grouped under **AI CLI Tools** in the interactive menu, or install directly:
 | Alias: cxskip | `codex --sandbox danger-full-access` (xhigh) |
 | Alias: cckimi | Claude Code on Kimi backend (+`cckimi-token` auto) |
 | Alias: ccglm | Claude Code on Z.AI GLM backend (+`ccglm-token` auto) |
+| Alias: ccor | Claude Code on the OpenRouter gateway (+`ccor-token` auto) — ships with **no model set**, you fill one in from [openrouter.ai/models](https://openrouter.ai/models) |
 | English Language | Set system language to English (US) |
 | Screen Off: Never | Disable screen timeout + auto suspend |
 | Show Hidden Files | Show hidden files in the file manager |

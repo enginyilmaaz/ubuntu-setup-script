@@ -16,7 +16,7 @@
 #===============================================================================
 
 SCRIPT_VERSION="2.5.0"
-SCRIPT_REVISION="177"
+SCRIPT_REVISION="178"
 SCRIPT_DATE="2026-03-27"
 
 # NOTE: We intentionally do NOT use set -e here.
@@ -5355,21 +5355,26 @@ ccort() {
 
     # ---- Models: leave these EMPTY to follow `ccort-model` / the default below --------
     # Fill a line in only to pin that tier here, e.g. or_haiku_model="z-ai/glm-4.7-flash".
-    # Model ids come from https://openrouter.ai/models
+    # Model ids come from https://openrouter.ai/models. Append [1m] to an id whose context
+    # window is 1M -- without it Claude Code does not recognise the gateway model, assumes
+    # 200k and starts auto-compacting far too early.
     local or_model=""            # main + Opus tier
     local or_sonnet_model=""     # Sonnet tier
     local or_haiku_model=""      # Haiku tier -- background work (summaries, titles)
     local or_fable_model=""      # Fable tier -- fast
     local or_subagent_model=""   # subagents
-    local or_default_model="stealth/ox-alpha"   # used when nothing else is set
+    local or_default_model="stealth/ox-alpha[1m]"   # used when nothing else is set
     # ---------------------------------------------------------------------------------
     # Resolution order for the main model: pinned above -> ~/.openrouter_model -> default.
     if [ -z "$or_model" ] && [ -r "$model_file" ]; then
         or_model="$(tr -d '[:space:]' < "$model_file")"
     fi
     if [ -z "$or_model" ]; then
+        # Adopt the default once and record it, so this notice shows on the FIRST run only.
         or_model="$or_default_model"
-        printf 'ccort: no model set, falling back to %s -- change it with: ccort-model <id>\n' "$or_model" >&2
+        printf '%s\n' "$or_model" > "$model_file" 2>/dev/null || true
+        printf 'ccort: no model set -- adopting the default %s (saved to %s).\n' "$or_model" "$model_file" >&2
+        printf '       pick another any time with: ccort-model\n' >&2
     fi
     : "${or_sonnet_model:=$or_model}"
     : "${or_haiku_model:=$or_model}"
@@ -5401,16 +5406,16 @@ ccort-model() {
     local model_file="$HOME/.openrouter_model" id="$1"
     if [ -z "$id" ]; then
         __cc_pick_model ccort-model "$model_file" \
-        stealth/ox-alpha \
-        anthropic/claude-opus-4.8 \
-        anthropic/claude-sonnet-5 \
-        anthropic/claude-haiku-4.5 \
-        x-ai/grok-4.20 \
-        openai/gpt-5.6-sol \
-        google/gemini-3.1-pro-preview \
-        deepseek/deepseek-v4-pro \
-        moonshotai/kimi-k3 \
-        z-ai/glm-5
+        'stealth/ox-alpha[1m]' \
+        'anthropic/claude-opus-4.8[1m]' \
+        'anthropic/claude-sonnet-5[1m]' \
+        'anthropic/claude-haiku-4.5' \
+        'x-ai/grok-4.20[1m]' \
+        'openai/gpt-5.6-sol[1m]' \
+        'google/gemini-3.1-pro-preview[1m]' \
+        'deepseek/deepseek-v4-pro[1m]' \
+        'moonshotai/kimi-k3[1m]' \
+        'z-ai/glm-5'
         return
     fi
     id="$(printf '%s' "$id" | tr -d '[:space:]')"
@@ -5458,8 +5463,11 @@ ccart() {
         ar_model="$(tr -d '[:space:]' < "$model_file")"
     fi
     if [ -z "$ar_model" ]; then
+        # Adopt the default once and record it, so this notice shows on the FIRST run only.
         ar_model="$ar_default_model"
-        printf 'ccart: no model set, falling back to %s -- change it with: ccart-model <id>\n' "$ar_model" >&2
+        printf '%s\n' "$ar_model" > "$model_file" 2>/dev/null || true
+        printf 'ccart: no model set -- adopting the default %s (saved to %s).\n' "$ar_model" "$model_file" >&2
+        printf '       pick another any time with: ccart-model\n' >&2
     fi
     : "${ar_sonnet_model:=$ar_model}"
     : "${ar_haiku_model:=$ar_model}"
@@ -5489,10 +5497,10 @@ ccart-model() {
     local model_file="$HOME/.agentrouter_model" id="$1"
     if [ -z "$id" ]; then
         __cc_pick_model ccart-model "$model_file" \
-        claude-opus-5 \
-        claude-opus-4-8 \
-        gpt-5.6-sol \
-        deepseek-v4f
+        'claude-opus-5' \
+        'claude-opus-4-8' \
+        'gpt-5.6-sol[1m]' \
+        'deepseek-v4f[1m]'
         return
     fi
     id="$(printf '%s' "$id" | tr -d '[:space:]')"

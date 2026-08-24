@@ -2,7 +2,7 @@
 
 A comprehensive, modular Bash script that automates Ubuntu post-installation setup. Install your favorite tools, configure your desktop environment, debloat the system, and get a fresh Ubuntu machine ready for development in minutes — from a single command.
 
-**Version:** 2.5.0 (rev-177)
+**Version:** 2.5.0 (rev-178)
 
 ## 🚀 Quick Start
 

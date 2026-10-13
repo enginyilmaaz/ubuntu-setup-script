@@ -16,7 +16,7 @@
 #===============================================================================
 
 SCRIPT_VERSION="2.5.0"
-SCRIPT_REVISION="178"
+SCRIPT_REVISION="179"
 SCRIPT_DATE="2026-03-27"
 
 # NOTE: We intentionally do NOT use set -e here.
@@ -535,7 +535,7 @@ show_system_header() {
 # GNOME Tweaks sub-menu selections (global so install_gnome_extensions can read them)
 GNOME_SUB_EXTENSIONS=false; GNOME_SUB_UPDATE=false; GNOME_SUB_TWEAKS_APP=false; GNOME_SUB_DOCK=false
 GNOME_SUB_SCRIPT=false; GNOME_SUB_WAYLAND=false; GNOME_SUB_SSH=false
-GNOME_SUB_CCSKIP=false; GNOME_SUB_CXSKIP=false; GNOME_SUB_CCKIMI=false; GNOME_SUB_CCGLM=false; GNOME_SUB_CCORT=false; GNOME_SUB_CCART=false
+GNOME_SUB_CCSKIP=false; GNOME_SUB_CXSKIP=false; GNOME_SUB_CCAPI=false; GNOME_SUB_CCKIMI=false; GNOME_SUB_CCGLM=false; GNOME_SUB_CCORT=false; GNOME_SUB_CCART=false
 GNOME_SUB_ENGLISH=false
 GNOME_SUB_SCREEN=false; GNOME_SUB_HIDDEN=false; GNOME_SUB_KB_TR=false; GNOME_SUB_KB_EN=false
 GNOME_SUB_VSCREEN=false; GNOME_SUB_AUTOLOGIN=false; GNOME_SUB_HOSTNAME=false
@@ -557,6 +557,7 @@ gnome_tweak_applied() {
         GNOME_SUB_SSH)        systemctl is-active ssh &>/dev/null ;;
         GNOME_SUB_CCSKIP)     grep -q "^alias ccskip=" "$HOME/.bashrc" 2>/dev/null ;;
         GNOME_SUB_CXSKIP)     grep -q "^alias cxskip=" "$HOME/.bashrc" 2>/dev/null ;;
+        GNOME_SUB_CCAPI)      grep -q "^ccapi()" "$HOME/.bashrc" 2>/dev/null ;;
         GNOME_SUB_CCKIMI)     grep -q "^cckimi()" "$HOME/.bashrc" 2>/dev/null ;;
         GNOME_SUB_CCGLM)      grep -q "^ccglm()" "$HOME/.bashrc" 2>/dev/null ;;
         GNOME_SUB_CCORT)       grep -q "^ccort()" "$HOME/.bashrc" 2>/dev/null ;;
@@ -1067,6 +1068,7 @@ show_gnome_submenu() {
     TWEAK_NAMES+=("Change Hostname");   TWEAK_DESCS+=("Set computer's hostname (asked before install starts)"); TWEAK_KEYS+=("GNOME_SUB_HOSTNAME")
     TWEAK_NAMES+=("Alias: ccskip");     TWEAK_DESCS+=("claude --dangerously-skip-permissions --effort max --model claude-opus-5");   TWEAK_KEYS+=("GNOME_SUB_CCSKIP")
     TWEAK_NAMES+=("Alias: cxskip");     TWEAK_DESCS+=("codex --sandbox danger-full-access (xhigh)");           TWEAK_KEYS+=("GNOME_SUB_CXSKIP")
+    TWEAK_NAMES+=("Alias: ccapi");      TWEAK_DESCS+=("Claude Code on an Anthropic Console API key, no subscription (+ccapi-token)"); TWEAK_KEYS+=("GNOME_SUB_CCAPI")
     TWEAK_NAMES+=("Alias: cckimi");     TWEAK_DESCS+=("Claude Code on Kimi backend (+cckimi-token)");           TWEAK_KEYS+=("GNOME_SUB_CCKIMI")
     TWEAK_NAMES+=("Alias: ccglm");      TWEAK_DESCS+=("Claude Code on Z.AI GLM backend (+ccglm-token)");        TWEAK_KEYS+=("GNOME_SUB_CCGLM")
     TWEAK_NAMES+=("Alias: ccort");       TWEAK_DESCS+=("Claude Code on OpenRouter, model set via ccort-model");    TWEAK_KEYS+=("GNOME_SUB_CCORT")
@@ -1767,7 +1769,7 @@ show_interactive_install_menu() {
     done
     local _tw_applied=0 _tw_total=0
     for _gk in GNOME_SUB_EXTENSIONS GNOME_SUB_TWEAKS_APP GNOME_SUB_SCRIPT GNOME_SUB_WAYLAND \
-               GNOME_SUB_SSH GNOME_SUB_CCSKIP GNOME_SUB_CXSKIP GNOME_SUB_CCKIMI GNOME_SUB_CCGLM GNOME_SUB_CCORT GNOME_SUB_CCART GNOME_SUB_SCREEN GNOME_SUB_HIDDEN \
+               GNOME_SUB_SSH GNOME_SUB_CCSKIP GNOME_SUB_CXSKIP GNOME_SUB_CCAPI GNOME_SUB_CCKIMI GNOME_SUB_CCGLM GNOME_SUB_CCORT GNOME_SUB_CCART GNOME_SUB_SCREEN GNOME_SUB_HIDDEN \
                GNOME_SUB_KB_TR GNOME_SUB_KB_EN GNOME_SUB_NO_IBUS GNOME_SUB_APPORT \
                GNOME_SUB_CHEESE GNOME_SUB_CLEANUP2Y GNOME_SUB_VSCREEN GNOME_SUB_AUTOLOGIN; do
         _tw_total=$((_tw_total + 1))
@@ -1874,6 +1876,7 @@ show_interactive_install_menu() {
                         $GNOME_SUB_SSH && _tw+="SSH,"
                         $GNOME_SUB_CCSKIP && _tw+="ccskip,"
                         $GNOME_SUB_CXSKIP && _tw+="cxskip,"
+                        $GNOME_SUB_CCAPI && _tw+="ccapi,"
                         $GNOME_SUB_CCKIMI && _tw+="cckimi,"
                         $GNOME_SUB_CCGLM && _tw+="ccglm,"
                         $GNOME_SUB_CCORT && _tw+="ccort,"
@@ -2126,6 +2129,7 @@ show_interactive_install_menu() {
                                 $GNOME_SUB_SSH         && tweaks_list+="OpenSSH Server, "
                                 $GNOME_SUB_CCSKIP     && tweaks_list+="ccskip, "
                                 $GNOME_SUB_CXSKIP     && tweaks_list+="cxskip, "
+                                $GNOME_SUB_CCAPI      && tweaks_list+="ccapi, "
                                 $GNOME_SUB_CCKIMI     && tweaks_list+="cckimi, "
                                 $GNOME_SUB_CCGLM      && tweaks_list+="ccglm, "
                                 $GNOME_SUB_CCORT       && tweaks_list+="ccort, "
@@ -4402,7 +4406,7 @@ ACCOUNTSEOF
     fi
 
     # 11. CLI Aliases
-    if $GNOME_SUB_CCSKIP || $GNOME_SUB_CXSKIP || $GNOME_SUB_CCKIMI || $GNOME_SUB_CCGLM || $GNOME_SUB_CCORT || $GNOME_SUB_CCART; then
+    if $GNOME_SUB_CCSKIP || $GNOME_SUB_CXSKIP || $GNOME_SUB_CCAPI || $GNOME_SUB_CCKIMI || $GNOME_SUB_CCGLM || $GNOME_SUB_CCORT || $GNOME_SUB_CCART; then
         setup_cli_shortcuts
     fi
 
@@ -5256,6 +5260,42 @@ setup_cli_shortcuts() {
         echo "# BEGIN smai-aliases"
         $GNOME_SUB_CCSKIP && echo "alias ccskip='claude --dangerously-skip-permissions --effort max --model claude-opus-5'"
         $GNOME_SUB_CXSKIP && echo "alias cxskip='codex --sandbox danger-full-access -c model_reasoning_effort=\"xhigh\"'"
+        if $GNOME_SUB_CCAPI; then
+            cat <<'CCAPI'
+
+# ccapi -> runs Claude Code on the Anthropic Console API (key lives in ~/.anthropic_token,
+# chmod 600). Billed per token to that key's Console credit, NOT to a Claude subscription:
+# ANTHROPIC_API_KEY outranks the /login credential, so it bills the key while you stay
+# logged in -- and ccskip, on the same machine, keeps using the subscription.
+ccapi() {
+    local token_file="$HOME/.anthropic_token"
+    local token
+    token="$([ -r "$token_file" ] && tr -d '[:space:]' < "$token_file")"
+    if [ -z "$token" ]; then
+        printf 'ccapi: no API key found. Enter your Anthropic Console API key and press Enter: ' >&2
+        IFS= read -rs token < /dev/tty
+        printf '\n' >&2
+        token="$(printf '%s' "$token" | tr -d '[:space:]')"
+        if [ -z "$token" ]; then
+            printf 'ccapi: no key entered, aborting.\n' >&2
+            return 1
+        fi
+        ( umask 177; printf '%s\n' "$token" > "$token_file" ) && chmod 600 "$token_file"
+        printf 'ccapi: key saved to %s (mode 600).\n' "$token_file" >&2
+    fi
+    # ANTHROPIC_AUTH_TOKEN ranks ABOVE the API key, so blank it in case a gateway left one
+    # in the environment; the base URL is pinned to first-party for the same reason.
+    # The first interactive run asks once to approve the key before it overrides the
+    # subscription -- say yes (reversible later via /config "Use custom API key").
+    ANTHROPIC_API_KEY="$token" \
+    ANTHROPIC_AUTH_TOKEN="" \
+    ANTHROPIC_BASE_URL="https://api.anthropic.com" \
+    command claude --dangerously-skip-permissions --model claude-opus-5-5 "$@"
+}
+
+ccapi-token() { __cc_set_token ccapi "$HOME/.anthropic_token" "$1"; }
+CCAPI
+        fi
         if $GNOME_SUB_CCKIMI; then
             cat <<'CCKIMI'
 
@@ -5509,7 +5549,7 @@ ccart-model() {
 }
 CCART
         fi
-        if $GNOME_SUB_CCKIMI || $GNOME_SUB_CCGLM || $GNOME_SUB_CCORT || $GNOME_SUB_CCART; then
+        if $GNOME_SUB_CCAPI || $GNOME_SUB_CCKIMI || $GNOME_SUB_CCGLM || $GNOME_SUB_CCORT || $GNOME_SUB_CCART; then
             cat <<'CCSET'
 
 # __cc_set_token <label> <token_file> [key] -- shared writer for the cc*-token helpers
@@ -5575,6 +5615,7 @@ CCSET
     local _alias_list=""
     $GNOME_SUB_CCSKIP && _alias_list+="ccskip, "
     $GNOME_SUB_CXSKIP && _alias_list+="cxskip, "
+    $GNOME_SUB_CCAPI  && _alias_list+="ccapi (+ccapi-token), "
     $GNOME_SUB_CCKIMI && _alias_list+="cckimi (+cckimi-token), "
     $GNOME_SUB_CCGLM  && _alias_list+="ccglm (+ccglm-token), "
     $GNOME_SUB_CCORT   && _alias_list+="ccort (+ccort-token, ccort-model), "
@@ -6146,7 +6187,7 @@ debloat_system() {
                 done
                 # 2) Bash aliases (claude-skip, ccskip) + cc backend helpers (cckimi/ccglm/ccort)
                 sed -i '/^alias claude-skip=/d; /^alias ccskip=/d' "$HOME/.bashrc" 2>/dev/null
-                sed -i '/^# cckimi ->/,/^}/d; /^# ccglm ->/,/^}/d; /^# ccort ->/,/^}/d; /^# ccort-model /,/^}/d; /^# ccart ->/,/^}/d; /^# ccart-model /,/^}/d; /^# __cc_set_token/,/^}/d; /^# __cc_pick_model/,/^}/d; /^cckimi-token()/d; /^ccglm-token()/d; /^ccort-token()/d; /^ccart-token()/d' "$HOME/.bashrc" 2>/dev/null
+                sed -i '/^# ccapi ->/,/^}/d; /^# cckimi ->/,/^}/d; /^# ccglm ->/,/^}/d; /^# ccort ->/,/^}/d; /^# ccort-model /,/^}/d; /^# ccart ->/,/^}/d; /^# ccart-model /,/^}/d; /^# __cc_set_token/,/^}/d; /^# __cc_pick_model/,/^}/d; /^ccapi-token()/d; /^cckimi-token()/d; /^ccglm-token()/d; /^ccort-token()/d; /^ccart-token()/d' "$HOME/.bashrc" 2>/dev/null
                 # 3) VS Code extension
                 if command_exists code; then
                     code --uninstall-extension anthropic.claude-code 2>/dev/null || true
@@ -6550,6 +6591,7 @@ print_summary() {
         $GNOME_SUB_SSH        && any_tweak=true
         $GNOME_SUB_CCSKIP    && any_tweak=true
         $GNOME_SUB_CXSKIP    && any_tweak=true
+        $GNOME_SUB_CCAPI     && any_tweak=true
         $GNOME_SUB_CCKIMI    && any_tweak=true
         $GNOME_SUB_CCGLM     && any_tweak=true
         $GNOME_SUB_CCORT      && any_tweak=true
@@ -6579,6 +6621,7 @@ print_summary() {
             $GNOME_SUB_SSH        && systemctl is-active ssh &>/dev/null                && echo -e "    ${GREEN}✓${NC} OpenSSH Server"
             $GNOME_SUB_CCSKIP    && grep -q "^alias ccskip=" "$HOME/.bashrc" 2>/dev/null && echo -e "    ${GREEN}✓${NC} Alias ccskip"
             $GNOME_SUB_CXSKIP    && grep -q "^alias cxskip=" "$HOME/.bashrc" 2>/dev/null && echo -e "    ${GREEN}✓${NC} Alias cxskip"
+            $GNOME_SUB_CCAPI     && grep -q "^ccapi()" "$HOME/.bashrc" 2>/dev/null && echo -e "    ${GREEN}✓${NC} Alias ccapi"
             $GNOME_SUB_CCKIMI    && grep -q "^cckimi()" "$HOME/.bashrc" 2>/dev/null && echo -e "    ${GREEN}✓${NC} Alias cckimi"
             $GNOME_SUB_CCGLM     && grep -q "^ccglm()" "$HOME/.bashrc" 2>/dev/null && echo -e "    ${GREEN}✓${NC} Alias ccglm"
             $GNOME_SUB_CCORT      && grep -q "^ccort()" "$HOME/.bashrc" 2>/dev/null && echo -e "    ${GREEN}✓${NC} Alias ccort"

@@ -2,7 +2,7 @@
 
 A comprehensive, modular Bash script that automates Ubuntu post-installation setup. Install your favorite tools, configure your desktop environment, debloat the system, and get a fresh Ubuntu machine ready for development in minutes — from a single command.
 
-**Version:** 2.5.0 (rev-179)
+**Version:** 2.5.0 (rev-180)
 
 ## 🚀 Quick Start
 
@@ -108,11 +108,9 @@ Grouped under **AI CLI Tools** in the interactive menu, or install directly:
 | Change Hostname | Set the computer's hostname |
 | Alias: ccskip | `claude --dangerously-skip-permissions --effort max --model claude-opus-5` |
 | Alias: cxskip | `codex --sandbox danger-full-access` (xhigh) |
-| Alias: ccapi | Claude Code on an **[Anthropic Console](https://platform.claude.com/settings/keys) API key** (+`ccapi-token` auto) — billed per token to that key, independent of any Claude subscription: `ANTHROPIC_API_KEY` outranks the `/login` credential, so `ccapi` spends API credit while `ccskip` keeps using your Pro/Max plan. Key cached in `~/.anthropic_token` (chmod 600), model pinned to `claude-opus-5-5`. The first interactive run asks once to approve the key over your login |
 | Alias: cckimi | Claude Code on Kimi backend (+`cckimi-token` auto) |
 | Alias: ccglm | Claude Code on Z.AI GLM backend (+`ccglm-token` auto) |
 | Alias: ccort | Claude Code on the OpenRouter gateway (+`ccort-token` / `ccort-model` auto) — defaults to the free `stealth/ox-alpha`; run `ccort-model` for a numbered picker, or pass any id from [openrouter.ai/models](https://openrouter.ai/models) |
-| Alias: ccart | Claude Code on the [AgentRouter](https://agentrouter.org) gateway (+`ccart-token` / `ccart-model` auto) — defaults to `claude-opus-5`; run `ccart-model` to pick from its catalogue |
 | English Language | Set system language to English (US) |
 | Screen Off: Never | Disable screen timeout + auto suspend |
 | Show Hidden Files | Show hidden files in the file manager |

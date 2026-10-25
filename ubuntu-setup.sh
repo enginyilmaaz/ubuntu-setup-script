@@ -1064,7 +1064,7 @@ show_gnome_submenu() {
     esac
     TWEAK_NAMES+=("OpenSSH Server");    TWEAK_DESCS+=("Install + auto-start SSH server (port 22)");            TWEAK_KEYS+=("GNOME_SUB_SSH")
     TWEAK_NAMES+=("Change Hostname");   TWEAK_DESCS+=("Set computer's hostname (asked before install starts)"); TWEAK_KEYS+=("GNOME_SUB_HOSTNAME")
-    TWEAK_NAMES+=("Alias: ccskip");     TWEAK_DESCS+=("claude --dangerously-skip-permissions --effort max --model claude-opus-5");   TWEAK_KEYS+=("GNOME_SUB_CCSKIP")
+    TWEAK_NAMES+=("Alias: ccskip");     TWEAK_DESCS+=("claude --dangerously-skip-permissions --effort max --model claude-opus-5-5");   TWEAK_KEYS+=("GNOME_SUB_CCSKIP")
     TWEAK_NAMES+=("Alias: cxskip");     TWEAK_DESCS+=("codex --sandbox danger-full-access (xhigh)");           TWEAK_KEYS+=("GNOME_SUB_CXSKIP")
     TWEAK_NAMES+=("Alias: cckimi");     TWEAK_DESCS+=("Claude Code on Kimi backend (+cckimi-token)");           TWEAK_KEYS+=("GNOME_SUB_CCKIMI")
     TWEAK_NAMES+=("Alias: ccglm");      TWEAK_DESCS+=("Claude Code on Z.AI GLM backend (+ccglm-token)");        TWEAK_KEYS+=("GNOME_SUB_CCGLM")
@@ -5251,7 +5251,7 @@ setup_cli_shortcuts() {
     {
         echo ""
         echo "# BEGIN smai-aliases"
-        $GNOME_SUB_CCSKIP && echo "alias ccskip='claude --dangerously-skip-permissions --effort max --model claude-opus-5'"
+        $GNOME_SUB_CCSKIP && echo "alias ccskip='claude --dangerously-skip-permissions --effort max --model claude-opus-5-5'"
         $GNOME_SUB_CXSKIP && echo "alias cxskip='codex --sandbox danger-full-access -c model_reasoning_effort=\"xhigh\"'"
         if $GNOME_SUB_CCKIMI; then
             cat <<'CCKIMI'
@@ -5275,12 +5275,12 @@ cckimi() {
     fi
     ANTHROPIC_BASE_URL="https://api.kimi.com/coding/" \
     ANTHROPIC_AUTH_TOKEN="$token" \
-    ANTHROPIC_MODEL="kimi-k3[1m]" \
-    ANTHROPIC_DEFAULT_OPUS_MODEL="kimi-k3[1m]" \
-    ANTHROPIC_DEFAULT_SONNET_MODEL="kimi-k3[1m]" \
-    ANTHROPIC_DEFAULT_HAIKU_MODEL="kimi-k3[1m]" \
-    ANTHROPIC_DEFAULT_FABLE_MODEL="kimi-k3[1m]" \
-    CLAUDE_CODE_SUBAGENT_MODEL="kimi-k3[1m]" \
+    ANTHROPIC_MODEL="kimi-k3.1-pro[1m]" \
+    ANTHROPIC_DEFAULT_OPUS_MODEL="kimi-k3.1-pro[1m]" \
+    ANTHROPIC_DEFAULT_SONNET_MODEL="kimi-k2.7-code" \
+    ANTHROPIC_DEFAULT_HAIKU_MODEL="kimi-k2.7-code" \
+    ANTHROPIC_DEFAULT_FABLE_MODEL="kimi-k3.1-pro-highspeed[1m]" \
+    CLAUDE_CODE_SUBAGENT_MODEL="kimi-k3.1-pro[1m]" \
     ENABLE_TOOL_SEARCH="false" \
     CLAUDE_CODE_AUTO_COMPACT_WINDOW="1048576" \
     CLAUDE_CODE_EFFORT_LEVEL="max" \
@@ -5314,9 +5314,9 @@ ccglm() {
     ANTHROPIC_AUTH_TOKEN="$token" \
     ANTHROPIC_MODEL="glm-5.3[1m]" \
     ANTHROPIC_DEFAULT_OPUS_MODEL="glm-5.3[1m]" \
-    ANTHROPIC_DEFAULT_SONNET_MODEL="glm-5.3[1m]" \
-    ANTHROPIC_DEFAULT_HAIKU_MODEL="glm-5.3[1m]" \
-    ANTHROPIC_DEFAULT_FABLE_MODEL="glm-5.3[1m]" \
+    ANTHROPIC_DEFAULT_SONNET_MODEL="glm-5.3-flash[1m]" \
+    ANTHROPIC_DEFAULT_HAIKU_MODEL="glm-5.3-flash[1m]" \
+    ANTHROPIC_DEFAULT_FABLE_MODEL="glm-5.3-flashx[1m]" \
     CLAUDE_CODE_SUBAGENT_MODEL="glm-5.3[1m]" \
     CLAUDE_CODE_AUTO_COMPACT_WINDOW="1000000" \
     CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC="1" \
@@ -5404,15 +5404,15 @@ ccort-model() {
     if [ -z "$id" ]; then
         __cc_pick_model ccort-model "$model_file" \
         'stealth/ox-alpha[1m]' \
-        'anthropic/claude-opus-4.8[1m]' \
-        'anthropic/claude-sonnet-5[1m]' \
-        'anthropic/claude-haiku-4.5' \
+        'anthropic/claude-opus-5.5[1m]' \
+        'anthropic/claude-sonnet-5.5[1m]' \
+        'anthropic/claude-haiku-5.5[1m]' \
         'x-ai/grok-4.20[1m]' \
         'openai/gpt-5.6-sol[1m]' \
         'google/gemini-3.1-pro-preview[1m]' \
         'deepseek/deepseek-v4-pro[1m]' \
-        'moonshotai/kimi-k3[1m]' \
-        'z-ai/glm-5'
+        'moonshotai/kimi-k3.1-pro[1m]' \
+        'z-ai/glm-5.3[1m]'
         return
     fi
     id="$(printf '%s' "$id" | tr -d '[:space:]')"

@@ -2,7 +2,7 @@
 
 A comprehensive, modular Bash script that automates Ubuntu post-installation setup. Install your favorite tools, configure your desktop environment, debloat the system, and get a fresh Ubuntu machine ready for development in minutes — from a single command.
 
-**Version:** 2.5.0 (rev-180)
+**Version:** 2.5.1 (rev-181)
 
 ## 🚀 Quick Start
 
@@ -122,6 +122,7 @@ Grouped under **AI CLI Tools** in the interactive menu, or install directly:
 | Virtual Screen 1080p | Create a virtual 1920×1080 display (VNC/RDP/headless) |
 | Cleanup Period: 2Y | Auto-cleanup 730 days (Tweaks default is 365) |
 | GDM Auto-Login | Auto-login to GUI on boot (needed for VNC tray icon) |
+| Hide Session Error | One-shot: unmap the *"Oh no! Something has gone wrong"* overlay instead of logging out. `gnome-session-failed` is left running — only its window is hidden, so the session survives. `DISPLAY`/`XAUTHORITY` are read from that process, so it also works over SSH. X11 only, and the row only appears while the overlay is actually up |
 
 </details>
 

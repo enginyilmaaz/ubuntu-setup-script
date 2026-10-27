@@ -15,9 +15,9 @@
 #   ./ubuntu-setup.sh --version                # Show version
 #===============================================================================
 
-SCRIPT_VERSION="2.5.0"
-SCRIPT_REVISION="180"
-SCRIPT_DATE="2026-03-27"
+SCRIPT_VERSION="2.5.1"
+SCRIPT_REVISION="181"
+SCRIPT_DATE="2026-10-28"
 
 # NOTE: We intentionally do NOT use set -e here.
 # Instead, errors are handled interactively via handle_error() so the user
@@ -540,6 +540,7 @@ GNOME_SUB_ENGLISH=false
 GNOME_SUB_SCREEN=false; GNOME_SUB_HIDDEN=false; GNOME_SUB_KB_TR=false; GNOME_SUB_KB_EN=false
 GNOME_SUB_VSCREEN=false; GNOME_SUB_AUTOLOGIN=false; GNOME_SUB_HOSTNAME=false
 GNOME_SUB_NO_IBUS=false; GNOME_SUB_APPORT=false; GNOME_SUB_CHEESE=false; GNOME_SUB_CLEANUP2Y=false; GNOME_SUB_NODE_SWITCH=false
+GNOME_SUB_SESSION_ERR=false
 # Hostname value collected before install starts (when Tweaks + Change Hostname selected)
 NEW_HOSTNAME=""
 
@@ -554,6 +555,8 @@ gnome_tweak_applied() {
         GNOME_SUB_SCRIPT)     [ -d "$HOME/.local/share/gnome-shell/extensions/script-launcher@enginyilmaaz" ] ;;
         GNOME_SUB_WAYLAND)    grep -q "^WaylandEnable=false" /etc/gdm3/custom.conf 2>/dev/null ;;
         GNOME_SUB_NODE_SWITCH) false ;;
+        # One-shot action: it unmaps a window, so nothing stays "applied".
+        GNOME_SUB_SESSION_ERR) false ;;
         GNOME_SUB_SSH)        systemctl is-active ssh &>/dev/null ;;
         GNOME_SUB_CCSKIP)     grep -q "^alias ccskip=" "$HOME/.bashrc" 2>/dev/null ;;
         GNOME_SUB_CXSKIP)     grep -q "^alias cxskip=" "$HOME/.bashrc" 2>/dev/null ;;
@@ -1076,6 +1079,10 @@ show_gnome_submenu() {
     TWEAK_NAMES+=("Keyboard: English Q"); TWEAK_DESCS+=("Add English (US) keyboard layout");                   TWEAK_KEYS+=("GNOME_SUB_KB_EN")
     TWEAK_NAMES+=("IBus Leak Fix");      TWEAK_DESCS+=("Disable ibus-daemon, use XKB only (fix memory leak)");   TWEAK_KEYS+=("GNOME_SUB_NO_IBUS")
     TWEAK_NAMES+=("Activate Apport");    TWEAK_DESCS+=("Install + enable Ubuntu crash reporting (apport)");      TWEAK_KEYS+=("GNOME_SUB_APPORT")
+    # Only worth offering while the overlay is actually up - otherwise it is a no-op.
+    if pgrep -x gnome-session-failed &>/dev/null; then
+        TWEAK_NAMES+=("Hide Session Error"); TWEAK_DESCS+=("Dismiss the 'Something has gone wrong' window (one-shot, no logout)"); TWEAK_KEYS+=("GNOME_SUB_SESSION_ERR")
+    fi
     # Camera (cheese) - only listed if NOT already installed
     if ! dpkg -l cheese 2>/dev/null | grep -q "^ii"; then
         TWEAK_NAMES+=("Install Camera (Cheese)"); TWEAK_DESCS+=("Install cheese webcam app");                       TWEAK_KEYS+=("GNOME_SUB_CHEESE")
@@ -2138,6 +2145,7 @@ show_interactive_install_menu() {
                                 $GNOME_SUB_APPORT      && tweaks_list+="Activate Apport, "
                                 $GNOME_SUB_CHEESE      && tweaks_list+="Install Cheese, "
                                 $GNOME_SUB_CLEANUP2Y   && tweaks_list+="Cleanup Period: 2Y, "
+                                $GNOME_SUB_SESSION_ERR && tweaks_list+="Hide Session Error, "
                                 tweaks_list="${tweaks_list%, }"
                                 if [ -n "$tweaks_list" ]; then
                                     echo -e "  ${GREEN}✓${NC} ${GREEN}Tweaks:${NC}"
@@ -4224,6 +4232,64 @@ force_enable_extension() {
 #===============================================================================
 # 8. GNOME Shell Extensions
 #===============================================================================
+# Dismiss the GNOME "Oh no! Something has gone wrong." overlay without logging out.
+# gnome-session-failed owns that window and killing it can take the whole session
+# down with it, so the window is only unmapped - the process is left alone.
+# One-shot: nothing persists, so there is nothing to revert.
+#
+# The setup script is often run over SSH, where $DISPLAY either is unset or points
+# at the wrong session. DISPLAY/XAUTHORITY are therefore lifted out of the failing
+# process's own environment, inside a subshell so they never leak into the rest of
+# the run. X11 only: under a pure Wayland session the overlay has no X window for
+# xdotool to find.
+hide_gnome_session_error() {
+    local pids
+    pids=$(pgrep -x gnome-session-failed 2>/dev/null)
+    if [ -z "$pids" ]; then
+        log_info "No 'Something has gone wrong' window is open - nothing to hide."
+        return 0
+    fi
+
+    if ! command_exists xdotool; then
+        log_info "Installing xdotool (needed to unmap the window)..."
+        sudo apt-get install -y --no-install-recommends xdotool 2>&1 | tail -3
+    fi
+    if ! command_exists xdotool; then
+        log_error "xdotool is not available - cannot hide the window."
+        return 1
+    fi
+
+    local hidden=0 pid n
+    for pid in $pids; do
+        n=$(
+            unset DISPLAY XAUTHORITY
+            # /proc/<pid>/environ is NUL-separated; readable only for our own
+            # processes, which is the normal case for a desktop session.
+            while IFS= read -r -d '' entry; do
+                case "$entry" in
+                    DISPLAY=*|XAUTHORITY=*) export "$entry" ;;
+                esac
+            # stderr is silenced BEFORE the input redirect: the process can exit
+            # between pgrep and this read, and a vanished environ must stay quiet.
+            done 2>/dev/null < "/proc/$pid/environ"
+            [ -n "${DISPLAY:-}" ] || exit 0
+            c=0
+            for wid in $(xdotool search --all --onlyvisible --pid "$pid" --name '.*' 2>/dev/null); do
+                xdotool windowunmap "$wid" 2>/dev/null && c=$((c + 1))
+            done
+            echo "$c"
+        )
+        hidden=$((hidden + ${n:-0}))
+    done
+
+    if [ "$hidden" -gt 0 ]; then
+        log_success "Hidden $hidden session-error window(s). The session itself was left running."
+    else
+        log_warning "Found gnome-session-failed but no X window to unmap (Wayland session, or no access to its display)."
+    fi
+    return 0
+}
+
 install_gnome_extensions() {
     log_step "Tweaks"
 
@@ -4472,6 +4538,10 @@ ACCOUNTSEOF
     gsettings set org.gnome.desktop.privacy remove-old-trash-files true 2>/dev/null || true
     log_success "Cleanup period set to $_cleanup_age days"
 
+    # 20. Hide the "Something has gone wrong" overlay (one-shot, nothing to revert)
+    if $GNOME_SUB_SESSION_ERR; then
+        hide_gnome_session_error
+    fi
 
     log_success "GNOME Tweaks setup completed"
 }
@@ -6479,6 +6549,7 @@ print_summary() {
         $GNOME_SUB_APPORT     && any_tweak=true
         $GNOME_SUB_CHEESE     && any_tweak=true
         $GNOME_SUB_CLEANUP2Y && any_tweak=true
+        $GNOME_SUB_SESSION_ERR && any_tweak=true
 
         if $any_tweak; then
             echo -e "  ${GREEN}✓${NC} Tweaks"
@@ -6507,6 +6578,7 @@ print_summary() {
             $GNOME_SUB_APPORT     && systemctl is-active apport &>/dev/null && echo -e "    ${GREEN}✓${NC} Apport activated"
             $GNOME_SUB_CHEESE     && command_exists cheese && echo -e "    ${GREEN}✓${NC} Cheese installed"
             $GNOME_SUB_CLEANUP2Y  && echo -e "    ${GREEN}✓${NC} Cleanup Period: 2 years (730 days)"
+            $GNOME_SUB_SESSION_ERR && echo -e "    ${GREEN}✓${NC} Session error window hidden"
         fi
     fi
 
